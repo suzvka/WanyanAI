@@ -19,7 +19,25 @@ export interface ConfigValidationResult {
 export interface ModelTestResult {
   success: boolean;
   error?: string;
-  response?: any;
+  response?: unknown;
+}
+
+export interface ModelConfigStore {
+  getConfig(): ModelConfig | null;
+  saveConfig(config: ModelConfig): void;
+  clearConfig(): void;
+}
+
+export interface ModelConfigProvider {
+  validateAndFetchModels(baseUrl: string, apiKey: string): Promise<ConfigValidationResult>;
+  testModelConnection(baseUrl: string, apiKey: string, model: string): Promise<ModelTestResult>;
+}
+
+export interface ModelListResponse {
+  data?: Array<{
+    id: string;
+    description?: string;
+  }>;
 }
 
 export const STORAGE_KEY = 'ai-text-diagnosis-model-config';

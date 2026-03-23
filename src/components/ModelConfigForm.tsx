@@ -29,7 +29,7 @@ interface ModelConfigFormProps {
   initialConfig?: ModelConfig | null;
 }
 
-type Step = 'input' | 'validate' | 'select-model' | 'test' | 'success';
+type Step = 'input' | 'select-model' | 'test' | 'success';
 
 export default function ModelConfigForm({ onConfigSaved, initialConfig }: ModelConfigFormProps) {
   const [step, setStep] = useState<Step>('input');
@@ -79,6 +79,7 @@ export default function ModelConfigForm({ onConfigSaved, initialConfig }: ModelC
       return;
     }
 
+    setStep('test');
     setIsLoading(true);
     setError(null);
 
@@ -93,9 +94,11 @@ export default function ModelConfigForm({ onConfigSaved, initialConfig }: ModelC
         setStep('success');
       } else {
         setError(result.error || '模型连接测试失败');
+        setStep('select-model');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '测试过程出错');
+      setStep('select-model');
     } finally {
       setIsLoading(false);
     }
@@ -155,7 +158,7 @@ export default function ModelConfigForm({ onConfigSaved, initialConfig }: ModelC
               { step: 'select-model', label: '选择模型', icon: Database },
               { step: 'test', label: '测试连接', icon: RefreshCw },
               { step: 'success', label: '完成', icon: CheckCircle2 }
-            ].map((item, index) => {
+            ].map((item) => {
               const Icon = item.icon;
               const isActive = step === item.step;
               const isPast = ['select-model', 'test', 'success'].includes(step) && 
@@ -204,7 +207,7 @@ export default function ModelConfigForm({ onConfigSaved, initialConfig }: ModelC
                   id="baseUrl"
                   placeholder="https://api.openai.com/v1"
                   value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
+                  onChange={(e: { target: { value: string } }) => setBaseUrl(e.target.value)}
                 />
                 <p className="text-sm text-slate-500">
                   支持OpenAI兼容格式的API地址
@@ -221,7 +224,7 @@ export default function ModelConfigForm({ onConfigSaved, initialConfig }: ModelC
                   type="password"
                   placeholder="sk-..."
                   value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
+                  onChange={(e: { target: { value: string } }) => setApiKey(e.target.value)}
                 />
                 <p className="text-sm text-slate-500">
                   您的API密钥将安全地保存在浏览器本地
@@ -268,7 +271,7 @@ export default function ModelConfigForm({ onConfigSaved, initialConfig }: ModelC
                     <SelectValue placeholder="选择一个模型" />
                   </SelectTrigger>
                   <SelectContent>
-                    {models.map((model) => (
+                    {models.map((model: ModelInfo) => (
                       <SelectItem key={model.id} value={model.id}>
                         {model.name}
                       </SelectItem>
@@ -292,7 +295,7 @@ export default function ModelConfigForm({ onConfigSaved, initialConfig }: ModelC
                   id="customModel"
                   placeholder="输入模型名称"
                   value={customModel}
-                  onChange={(e) => {
+                  onChange={(e: { target: { value: string } }) => {
                     setCustomModel(e.target.value);
                     if (e.target.value) setSelectedModel('');
                   }}

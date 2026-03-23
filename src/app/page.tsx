@@ -2,48 +2,45 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { 
-  FileText, 
   Sparkles, 
-  CheckCircle2, 
-  AlertCircle, 
-  Loader2, 
   Settings,
   LogOut
 } from 'lucide-react';
-import { EvaluationInput, SpecialConstraint, AnalysisReport } from '@/types/report';
+import {
+  AnalysisReport,
+  EvaluationGoal,
+  FeedbackStyle,
+  ReaderPreference,
+  SpecialConstraint,
+  TextCompleteness,
+  TextType,
+} from '@/types/report';
 import { ModelConfig } from '@/types/modelConfig';
-import { aiAnalysisService } from '@/services/aiAnalysis';
+import { analysisService } from '@/services/analysis';
 import { modelConfigService } from '@/services/modelConfig';
 import ReportView from '@/components/ReportView';
 import ModelConfigForm from '@/components/ModelConfigForm';
-
-type AppStep = 'config' | 'input' | 'analyzing' | 'report';
+import { AppFlowStep } from '@/types/appFlow';
+import TextInputPanel from '@/components/home/TextInputPanel';
+import AnalysisSettingsPanel from '@/components/home/AnalysisSettingsPanel';
+import AnalysisProgressView from '@/components/home/AnalysisProgressView';
+import { useEvaluationForm } from '@/hooks/useEvaluationForm';
 
 export default function Home() {
-  const [appStep, setAppStep] = useState<AppStep>('config');
+  const [appStep, setAppStep] = useState<AppFlowStep>('config');
   const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
-  const [step, setStep] = useState<'input' | 'analyzing' | 'report'>('input');
   const [report, setReport] = useState<AnalysisReport | null>(null);
-  const [formData, setFormData] = useState<EvaluationInput>({
-    textContent: '',
-    textType: 'general_text',
-    textCompleteness: 'excerpt',
-    evaluationGoal: 'overall_check',
-    readerPreference: 'general_reader',
-    feedbackStyle: 'balanced',
-    hasReferenceSample: false,
-    specialConstraints: []
-  });
+  const {
+    formData,
+    formErrors,
+    updateField,
+    toggleSpecialConstraint,
+    validate,
+    setFormError,
+    clearError,
+    resetForm,
+  } = useEvaluationForm();
 
   // 检查是否已有配置
   useEffect(() => {
@@ -56,87 +53,41 @@ export default function Home() {
 
   const handleConfigSaved = (config: ModelConfig) => {
     setModelConfig(config);
+    clearError();
     setAppStep('input');
   };
 
   const handleLogout = () => {
     modelConfigService.clearConfig();
     setModelConfig(null);
-    setAppStep('config');
-    setStep('input');
+    resetForm();
     setReport(null);
+    setAppStep('config');
   };
 
-  const textTypeOptions = [
-    { value: 'web_serial', label: '网络连载' },
-    { value: 'short_story', label: '短篇小说' },
-    { value: 'light_novel', label: '轻小说/青年向' },
-    { value: 'literary_submission', label: '文学投稿' },
-    { value: 'general_text', label: '通用文本' }
-  ];
-
-  const textCompletenessOptions = [
-    { value: 'complete', label: '完整作品' },
-    { value: 'single_chapter', label: '长篇中的单章/样章' },
-    { value: 'first_chapters', label: '长篇前若干章' },
-    { value: 'excerpt', label: '节选片段' },
-    { value: 'draft', label: '未完成草稿' }
-  ];
-
-  const evaluationGoalOptions = [
-    { value: 'overall_check', label: '发布前总体检查' },
-    { value: 'opening_attraction', label: '开篇吸引力检查' },
-    { value: 'rhythm_progression', label: '节奏与推进问题' },
-    { value: 'character_development', label: '人物塑造检查' },
-    { value: 'style_consistency', label: '文风一致性检查' },
-    { value: 'structure_completeness', label: '结构完整性检查' },
-    { value: 'reader_acceptance', label: '读者接受度预估' }
-  ];
-
-  const readerPreferenceOptions = [
-    { value: 'fast_paced', label: '偏快节奏' },
-    { value: 'plot_driven', label: '偏剧情推进' },
-    { value: 'character_emotion', label: '偏人物情感' },
-    { value: 'world_building', label: '偏世界观/设定' },
-    { value: 'literary_expression', label: '偏文学表达' },
-    { value: 'general_reader', label: '通用读者' }
-  ];
-
-  const feedbackStyleOptions = [
-    { value: 'strict', label: '严格问题导向' },
-    { value: 'balanced', label: '平衡反馈' },
-    { value: 'encouraging', label: '鼓励式反馈' }
-  ];
-
-  const specialConstraintOptions: { value: SpecialConstraint; label: string }[] = [
-    { value: 'keep_original_style', label: '尽量保留原文风格' },
-    { value: 'avoid_overwriting', label: '避免过度重写式建议' },
-    { value: 'focus_publishability', label: '更关注可发布性' },
-    { value: 'focus_literary_expression', label: '更关注文学表达' }
-  ];
-
   const handleSubmit = async () => {
-    if (!formData.textContent.trim()) {
-      alert('请输入要分析的文本内容');
+    const validatedInput = validate();
+    if (!validatedInput) {
       return;
     }
 
-    setStep('analyzing');
+    setAppStep('analyzing');
     
     try {
-      const result = await aiAnalysisService.generateReport(formData);
+      const result = await analysisService.generateReport(validatedInput);
       setReport(result);
-      setStep('report');
+      setAppStep('report');
     } catch (error) {
       console.error('Analysis failed:', error);
-      alert('分析失败，请重试');
-      setStep('input');
+      setFormError('分析失败，请重试');
+      setAppStep('input');
     }
   };
 
   const handleReset = () => {
-    setStep('input');
     setReport(null);
+    clearError();
+    setAppStep('input');
   };
 
   // 如果是配置页面，显示配置表单
@@ -150,7 +101,7 @@ export default function Home() {
   }
 
   // 如果是报告页面，显示报告
-  if (step === 'report' && report) {
+  if (appStep === 'report' && report) {
     return <ReportView report={report} onReset={handleReset} />;
   }
 
@@ -189,214 +140,34 @@ export default function Home() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        {step === 'input' ? (
+        {appStep === 'input' ? (
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="w-5 h-5" />
-                    文本内容
-                  </CardTitle>
-                  <CardDescription>
-                    请粘贴您要分析的作品内容
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Textarea
-                    placeholder="在此粘贴您的文本内容..."
-                    className="min-h-[400px] font-serif text-lg leading-relaxed"
-                    value={formData.textContent}
-                    onChange={(e) => setFormData({ ...formData, textContent: e.target.value })}
-                  />
-                  <p className="text-sm text-slate-500 mt-2">
-                    字符数: {formData.textContent.length}
-                  </p>
-                </CardContent>
-              </Card>
+              <TextInputPanel
+                textContent={formData.textContent}
+                onTextContentChange={(value) => updateField('textContent', value)}
+              />
             </div>
 
             <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>分析设置</CardTitle>
-                  <CardDescription>
-                    配置您的分析偏好
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[700px] pr-4">
-                    <div className="space-y-6">
-                      <div className="space-y-3">
-                        <Label className="text-base font-medium">文本类型 *</Label>
-                        <Select
-                          value={formData.textType}
-                          onValueChange={(value) => setFormData({ ...formData, textType: value as any })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {textTypeOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-3">
-                        <Label className="text-base font-medium">文本完整度 *</Label>
-                        <Select
-                          value={formData.textCompleteness}
-                          onValueChange={(value) => setFormData({ ...formData, textCompleteness: value as any })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {textCompletenessOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-3">
-                        <Label className="text-base font-medium">本次评价目标 *</Label>
-                        <Select
-                          value={formData.evaluationGoal}
-                          onValueChange={(value) => setFormData({ ...formData, evaluationGoal: value as any })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {evaluationGoalOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <Separator />
-
-                      <div className="space-y-3">
-                        <Label className="text-base font-medium">目标读者偏好</Label>
-                        <RadioGroup
-                          value={formData.readerPreference}
-                          onValueChange={(value) => setFormData({ ...formData, readerPreference: value as any })}
-                          className="grid grid-cols-2 gap-2"
-                        >
-                          {readerPreferenceOptions.map((option) => (
-                            <div key={option.value} className="flex items-center space-x-2">
-                              <RadioGroupItem value={option.value} id={`reader-${option.value}`} />
-                              <Label htmlFor={`reader-${option.value}`} className="text-sm cursor-pointer">
-                                {option.label}
-                              </Label>
-                            </div>
-                          ))}
-                        </RadioGroup>
-                      </div>
-
-                      <div className="space-y-3">
-                        <Label className="text-base font-medium">反馈风格</Label>
-                        <RadioGroup
-                          value={formData.feedbackStyle}
-                          onValueChange={(value) => setFormData({ ...formData, feedbackStyle: value as any })}
-                          className="grid grid-cols-1 gap-2"
-                        >
-                          {feedbackStyleOptions.map((option) => (
-                            <div key={option.value} className="flex items-center space-x-2">
-                              <RadioGroupItem value={option.value} id={`feedback-${option.value}`} />
-                              <Label htmlFor={`feedback-${option.value}`} className="text-sm cursor-pointer">
-                                {option.label}
-                              </Label>
-                            </div>
-                          ))}
-                        </RadioGroup>
-                      </div>
-
-                      <div className="space-y-3">
-                        <Label className="text-base font-medium">特殊约束</Label>
-                        <div className="space-y-2">
-                          {specialConstraintOptions.map((option) => (
-                            <div key={option.value} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`constraint-${option.value}`}
-                                checked={formData.specialConstraints?.includes(option.value)}
-                                onCheckedChange={(checked) => {
-                                  const current = formData.specialConstraints || [];
-                                  const newConstraints = checked
-                                    ? [...current, option.value]
-                                    : current.filter(c => c !== option.value);
-                                  setFormData({ ...formData, specialConstraints: newConstraints });
-                                }}
-                              />
-                              <Label htmlFor={`constraint-${option.value}`} className="text-sm cursor-pointer">
-                                {option.label}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="reference-sample"
-                          checked={formData.hasReferenceSample}
-                          onCheckedChange={(checked) => setFormData({ ...formData, hasReferenceSample: checked as boolean })}
-                        />
-                        <Label htmlFor="reference-sample" className="text-sm cursor-pointer">
-                          提供参考样板
-                        </Label>
-                      </div>
-
-                      <Button 
-                        className="w-full h-12 text-lg" 
-                        onClick={handleSubmit}
-                      >
-                        <Sparkles className="w-5 h-5 mr-2" />
-                        开始分析
-                      </Button>
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
+              <AnalysisSettingsPanel
+                formData={formData}
+                errorMessage={formErrors.form || formErrors.textContent || null}
+                onTextTypeChange={(value: TextType) => updateField('textType', value)}
+                onTextCompletenessChange={(value: TextCompleteness) => updateField('textCompleteness', value)}
+                onEvaluationGoalChange={(value: EvaluationGoal) => updateField('evaluationGoal', value)}
+                onReaderPreferenceChange={(value: ReaderPreference) => updateField('readerPreference', value)}
+                onFeedbackStyleChange={(value: FeedbackStyle) => updateField('feedbackStyle', value)}
+                onSpecialConstraintChange={(constraint: SpecialConstraint, checked: boolean) =>
+                  toggleSpecialConstraint(constraint, checked)
+                }
+                onReferenceSampleChange={(checked: boolean) => updateField('hasReferenceSample', checked)}
+                onSubmit={handleSubmit}
+              />
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
-            <div className="text-center space-y-4">
-              <div className="flex items-center justify-center">
-                <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
-              </div>
-              <h2 className="text-2xl font-bold text-slate-900">AI 正在分析您的文本...</h2>
-              <p className="text-slate-600 max-w-md mx-auto">
-                正在进行多维度文本质量评估，请稍候片刻
-              </p>
-            </div>
-
-            <div className="w-full max-w-md space-y-4">
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
-                <span className="text-slate-700">基础分析完成</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-                <span className="text-slate-700">情境化评估中...</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 text-slate-300" />
-                <span className="text-slate-400">生成结构化报告</span>
-              </div>
-            </div>
-          </div>
+          <AnalysisProgressView />
         )}
       </main>
     </div>
