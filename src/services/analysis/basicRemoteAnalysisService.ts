@@ -1,21 +1,17 @@
-import { AnalysisRequest } from '@/types/analysis';
-import { AnalysisReport } from '@/types/report';
+import {
+  evaluationGoalOptions,
+  feedbackStyleOptions,
+  getOptionLabel,
+  readerPreferenceOptions,
+  specialConstraintOptions,
+  textCompletenessOptions,
+  textTypeOptions,
+} from '@/config/evaluationOptions';
+import { validateModelConfig } from '@/lib/validation/modelConfig';
+import { ModelAnalysisRequest, PromptTemplateResource, PromptTemplateSlotKey } from '@/types/analysis';
+import { AnalysisReport, EvaluationInput } from '@/types/report';
 import { MockAnalysisService } from './mockAnalysisService';
-import { AnalysisService } from './types';
-
-type RemoteIssue = {
-  title: string;
-  severity: AnalysisReport['keyIssues'][number]['severity'];
-  description: string;
-  suggestionDirection: string;
-};
-
-type RemoteAnalysisPayload = {
-  overview: string;
-  keyIssues: RemoteIssue[];
-  finalRecommendation: AnalysisReport['conclusion']['finalRecommendation'];
-  rationale: string;
-};
+import { AnalysisService, GenerateReportOptions, PromptTemplateService } from './types';
 
 type ChatCompletionsResponse = {
   choices?: Array<{
@@ -28,82 +24,107 @@ type ChatCompletionsResponse = {
   };
 };
 
+type PromptSlotValues = Record<PromptTemplateSlotKey, string>;
+
 const normalizeBaseUrl = (baseUrl: string) => baseUrl.trim().replace(/\/$/, '');
 
 export class BasicRemoteAnalysisService implements AnalysisService {
-  private readonly mockService = new MockAnalysisService();
+  constructor(
+    private readonly templateService: PromptTemplateService,
+    private readonly mockService: MockAnalysisService = new MockAnalysisService(),
+  ) {}
 
-  async generateReport(request: AnalysisRequest): Promise<AnalysisReport> {
-    const baseReport = await this.mockService.generateReport(request);
-    const remotePayload = await this.requestRemoteAnalysis(request);
-    const providerHost = this.getProviderHost(request.modelConfig.baseUrl);
+  async generateReport({ input, modelConfig, onProgress }: GenerateReportOptions): Promise<AnalysisReport> {
+    const validatedConfig = validateModelConfig(modelConfig);
+    if (!validatedConfig.success) {
+      throw new Error(validatedConfig.error);
+    }
 
+    onProgress?.('fetch-template');
+    const template = await this.templateService.getTemplate({
+      evaluationGoal: input.evaluationGoal,
+    });
+
+    onProgress?.('build-prompt');
+    const messages = this.buildMessages(template, input);
+
+    onProgress?.('request-model');
+    const content = await this.requestRemoteAnalysis(validatedConfig.data.baseUrl, validatedConfig.data.apiKey, {
+      model: validatedConfig.data.selectedModel,
+      messages,
+      temperature: template.recommendedParameters.temperature,
+      max_tokens: template.recommendedParameters.maxTokens,
+    });
+
+    onProgress?.('parse-report');
+    const payload = this.parseRemotePayload(content);
+    return this.normalizeAnalysisReport(payload, input, validatedConfig.data.baseUrl, validatedConfig.data.selectedModel);
+  }
+
+  private buildMessages(template: PromptTemplateResource, input: EvaluationInput) {
+    const slotValues = this.createSlotValues(input);
+
+    return [
+      {
+        role: 'system' as const,
+        content: this.fillPromptTemplate(template.systemPromptTemplate, slotValues),
+      },
+      {
+        role: 'user' as const,
+        content: this.fillPromptTemplate(template.userPromptTemplate, slotValues),
+      },
+    ];
+  }
+
+  private createSlotValues(input: EvaluationInput): PromptSlotValues {
     return {
-      ...baseReport,
-      summary: {
-        ...baseReport.summary,
-        overview: remotePayload.overview || baseReport.summary.overview,
-      },
-      keyIssues:
-        remotePayload.keyIssues.length > 0
-          ? remotePayload.keyIssues.map((issue, index) => ({
-              id: `issue-${index + 1}`,
-              ...issue,
-            }))
-          : baseReport.keyIssues,
-      conclusion: {
-        finalRecommendation: remotePayload.finalRecommendation || baseReport.conclusion.finalRecommendation,
-        rationale: remotePayload.rationale || baseReport.conclusion.rationale,
-      },
-      meta: {
-        ...baseReport.meta,
-        provider: providerHost,
-        model: request.modelConfig.selectedModel,
-      },
+      textContent: input.textContent.trim(),
+      textTypeLabel: getOptionLabel(textTypeOptions, input.textType),
+      textCompletenessLabel: getOptionLabel(textCompletenessOptions, input.textCompleteness),
+      evaluationGoalLabel: getOptionLabel(evaluationGoalOptions, input.evaluationGoal),
+      readerPreferenceLabel: input.readerPreference
+        ? getOptionLabel(readerPreferenceOptions, input.readerPreference)
+        : 'Î´Ö¸¶¨',
+      feedbackStyleLabel: input.feedbackStyle
+        ? getOptionLabel(feedbackStyleOptions, input.feedbackStyle)
+        : 'Î´Ö¸¶¨',
+      hasReferenceSampleLabel: input.hasReferenceSample ? 'ÒÑÌá¹©' : 'Î´Ìá¹©',
+      specialConstraintsLabel:
+        input.specialConstraints && input.specialConstraints.length > 0
+          ? input.specialConstraints.map((item) => getOptionLabel(specialConstraintOptions, item)).join('¡¢')
+          : 'ÎŞ',
     };
   }
 
-  private async requestRemoteAnalysis(request: AnalysisRequest): Promise<RemoteAnalysisPayload> {
-    const response = await fetch(`${normalizeBaseUrl(request.modelConfig.baseUrl)}/chat/completions`, {
+  private fillPromptTemplate(template: string, slotValues: PromptSlotValues) {
+    return template.replace(/{{(.*?)}}/g, (_, rawKey: string) => {
+      const key = rawKey.trim() as PromptTemplateSlotKey;
+      return slotValues[key] ?? '';
+    });
+  }
+
+  private async requestRemoteAnalysis(baseUrl: string, apiKey: string, payload: ModelAnalysisRequest): Promise<string> {
+    const response = await fetch(`${normalizeBaseUrl(baseUrl)}/chat/completions`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${request.modelConfig.apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: request.modelConfig.selectedModel,
-        temperature: 0.3,
-        max_tokens: 1200,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'ä½ æ˜¯ä¸€åä¸­æ–‡æ–‡æœ¬è´¨é‡åˆ†æåŠ©æ‰‹ã€‚è¯·åªè¿”å› JSONï¼Œä¸è¦è¾“å‡º markdownã€‚JSON ç»“æ„å¿…é¡»ä¸º {"overview": string, "keyIssues": [{"title": string, "severity": "high" | "medium" | "low", "description": string, "suggestionDirection": string}], "finalRecommendation": "publish" | "revise_then_publish" | "rework", "rationale": string}ã€‚',
-          },
-          {
-            role: 'user',
-            content: JSON.stringify({
-              task: 'analyze_text',
-              input: request.input,
-            }),
-          },
-        ],
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = (await response.json()) as ChatCompletionsResponse;
 
     if (!response.ok) {
-      throw new Error(data.error?.message || `è¿œç«¯åˆ†æè¯·æ±‚å¤±è´¥: HTTP ${response.status}`);
+      throw new Error(data.error?.message || `Ô¶¶Ë·ÖÎöÇëÇóÊ§°Ü: HTTP ${response.status}`);
     }
 
     const content = data.choices?.[0]?.message?.content;
     if (!content) {
-      throw new Error('è¿œç«¯åˆ†æå“åº”ä¸ºç©º');
+      throw new Error('Ô¶¶Ë·ÖÎöÏìÓ¦Îª¿Õ');
     }
 
-    const payload = this.parseRemotePayload(content);
-    return this.normalizeRemotePayload(payload);
+    return content;
   }
 
   private parseRemotePayload(content: string): unknown {
@@ -113,46 +134,123 @@ export class BasicRemoteAnalysisService implements AnalysisService {
     const end = candidate.lastIndexOf('}');
 
     if (start === -1 || end === -1 || end <= start) {
-      throw new Error('è¿œç«¯åˆ†ææœªè¿”å›å¯è§£æçš„ JSON');
+      throw new Error('Ô¶¶Ë·ÖÎöÎ´·µ»Ø¿É½âÎöµÄ JSON');
     }
 
     return JSON.parse(candidate.slice(start, end + 1));
   }
 
-  private normalizeRemotePayload(payload: unknown): RemoteAnalysisPayload {
+  private async normalizeAnalysisReport(
+    payload: unknown,
+    input: EvaluationInput,
+    baseUrl: string,
+    model: string,
+  ): Promise<AnalysisReport> {
+    const fallbackReport = await this.mockService.generateReport({
+      input,
+      modelConfig: {
+        baseUrl,
+        apiKey: 'local-only',
+        selectedModel: model,
+      },
+    });
+
     if (!payload || typeof payload !== 'object') {
-      throw new Error('è¿œç«¯åˆ†æå“åº”æ ¼å¼å¼‚å¸¸');
+      throw new Error('Ô¶¶Ë·ÖÎöÏìÓ¦¸ñÊ½Òì³£');
     }
 
-    const data = payload as Partial<RemoteAnalysisPayload>;
-    const keyIssues = Array.isArray(data.keyIssues)
-      ? data.keyIssues
-          .filter(
-            (issue): issue is RemoteIssue =>
-              !!issue &&
-              typeof issue === 'object' &&
-              typeof issue.title === 'string' &&
-              (issue.severity === 'high' || issue.severity === 'medium' || issue.severity === 'low') &&
-              typeof issue.description === 'string' &&
-              typeof issue.suggestionDirection === 'string',
-          )
-          .slice(0, 5)
-      : [];
-
-    if (
-      typeof data.overview !== 'string' ||
-      typeof data.rationale !== 'string' ||
-      !data.finalRecommendation ||
-      !['publish', 'revise_then_publish', 'rework'].includes(data.finalRecommendation)
-    ) {
-      throw new Error('è¿œç«¯åˆ†æå“åº”ç¼ºå°‘å¿…è¦å­—æ®µ');
-    }
+    const data = payload as Partial<AnalysisReport>;
 
     return {
-      overview: data.overview.trim(),
-      keyIssues,
-      finalRecommendation: data.finalRecommendation,
-      rationale: data.rationale.trim(),
+      ...fallbackReport,
+      ...data,
+      reportId: typeof data.reportId === 'string' && data.reportId.trim() ? data.reportId : fallbackReport.reportId,
+      reportVersion:
+        typeof data.reportVersion === 'string' && data.reportVersion.trim() ? data.reportVersion : '2.0.0',
+      generatedAt:
+        typeof data.generatedAt === 'string' && data.generatedAt.trim() ? data.generatedAt : new Date().toISOString(),
+      summary:
+        data.summary && typeof data.summary === 'object'
+          ? {
+              title:
+                typeof data.summary.title === 'string' && data.summary.title.trim()
+                  ? data.summary.title
+                  : fallbackReport.summary.title,
+              overview:
+                typeof data.summary.overview === 'string' && data.summary.overview.trim()
+                  ? data.summary.overview
+                  : fallbackReport.summary.overview,
+            }
+          : fallbackReport.summary,
+      dashboard:
+        data.dashboard && typeof data.dashboard === 'object'
+          ? {
+              totalScore:
+                typeof data.dashboard.totalScore === 'number'
+                  ? Math.max(0, Math.min(100, Math.round(data.dashboard.totalScore)))
+                  : fallbackReport.dashboard.totalScore,
+              grade:
+                typeof data.dashboard.grade === 'string' && data.dashboard.grade.trim()
+                  ? data.dashboard.grade
+                  : fallbackReport.dashboard.grade,
+              publishReadiness:
+                typeof data.dashboard.publishReadiness === 'string' && data.dashboard.publishReadiness.trim()
+                  ? data.dashboard.publishReadiness
+                  : fallbackReport.dashboard.publishReadiness,
+            }
+          : fallbackReport.dashboard,
+      dimensions: Array.isArray(data.dimensions) && data.dimensions.length > 0 ? data.dimensions : fallbackReport.dimensions,
+      keyIssues:
+        Array.isArray(data.keyIssues) && data.keyIssues.length > 0
+          ? data.keyIssues.map((issue, index) => ({
+              id:
+                typeof issue?.id === 'string' && issue.id.trim() ? issue.id : `issue-${index + 1}`,
+              title: typeof issue?.title === 'string' ? issue.title : fallbackReport.keyIssues[index]?.title || '´ı²¹³äÎÊÌâ',
+              severity:
+                issue?.severity === 'high' || issue?.severity === 'medium' || issue?.severity === 'low'
+                  ? issue.severity
+                  : 'medium',
+              description:
+                typeof issue?.description === 'string'
+                  ? issue.description
+                  : fallbackReport.keyIssues[index]?.description || 'Ä£ĞÍÎ´·µ»ØÎÊÌâÃèÊö¡£',
+              suggestionDirection:
+                typeof issue?.suggestionDirection === 'string'
+                  ? issue.suggestionDirection
+                  : fallbackReport.keyIssues[index]?.suggestionDirection || 'Çë²¹³äĞŞ¸Ä·½Ïò¡£',
+            }))
+          : fallbackReport.keyIssues,
+      conclusion:
+        data.conclusion && typeof data.conclusion === 'object'
+          ? {
+              finalRecommendation:
+                data.conclusion.finalRecommendation === 'publish' ||
+                data.conclusion.finalRecommendation === 'revise_then_publish' ||
+                data.conclusion.finalRecommendation === 'rework'
+                  ? data.conclusion.finalRecommendation
+                  : fallbackReport.conclusion.finalRecommendation,
+              rationale:
+                typeof data.conclusion.rationale === 'string' && data.conclusion.rationale.trim()
+                  ? data.conclusion.rationale
+                  : fallbackReport.conclusion.rationale,
+            }
+          : fallbackReport.conclusion,
+      meta: {
+        frameworkVersion:
+          data.meta && typeof data.meta.frameworkVersion === 'string' && data.meta.frameworkVersion.trim()
+            ? data.meta.frameworkVersion
+            : '2.0.0',
+        scoringPolicyVersion:
+          data.meta && typeof data.meta.scoringPolicyVersion === 'string' && data.meta.scoringPolicyVersion.trim()
+            ? data.meta.scoringPolicyVersion
+            : fallbackReport.meta.scoringPolicyVersion,
+        conclusionPolicyVersion:
+          data.meta && typeof data.meta.conclusionPolicyVersion === 'string' && data.meta.conclusionPolicyVersion.trim()
+            ? data.meta.conclusionPolicyVersion
+            : fallbackReport.meta.conclusionPolicyVersion,
+        provider: this.getProviderHost(baseUrl),
+        model,
+      },
     };
   }
 

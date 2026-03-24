@@ -21,7 +21,7 @@ import { analysisService } from '@/services/analysis';
 import { modelConfigService } from '@/services/modelConfig';
 import ReportView from '@/components/ReportView';
 import ModelConfigForm from '@/components/ModelConfigForm';
-import { AppFlowStep } from '@/types/appFlow';
+import { AnalysisPhase, AppFlowStep } from '@/types/appFlow';
 import TextInputPanel from '@/components/home/TextInputPanel';
 import AnalysisSettingsPanel from '@/components/home/AnalysisSettingsPanel';
 import AnalysisProgressView from '@/components/home/AnalysisProgressView';
@@ -39,6 +39,9 @@ export default function Home() {
     validate,
     setFormError,
     clearError,
+    analysisPhase,
+    startAnalysis,
+    updateAnalysisPhase,
     resetForm,
   } = useEvaluationForm();
 
@@ -66,20 +69,31 @@ export default function Home() {
   };
 
   const handleSubmit = async () => {
+    if (!modelConfig) {
+      setFormError('请先完成模型配置。');
+      setAppStep('config');
+      return;
+    }
+
     const validatedInput = validate();
     if (!validatedInput) {
       return;
     }
 
+    startAnalysis();
     setAppStep('analyzing');
     
     try {
-      const result = await analysisService.generateReport(validatedInput);
+      const result = await analysisService.generateReport({
+        input: validatedInput,
+        modelConfig,
+        onProgress: (phase: AnalysisPhase) => updateAnalysisPhase(phase),
+      });
       setReport(result);
       setAppStep('report');
     } catch (error) {
       console.error('Analysis failed:', error);
-      setFormError('分析失败，请重试');
+      setFormError(error instanceof Error ? error.message : '分析失败，请重试');
       setAppStep('input');
     }
   };
@@ -116,7 +130,7 @@ export default function Home() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-slate-900">AI 文本完成度诊断系统</h1>
-                <p className="text-sm text-slate-500">投稿/发布前的专业文本质量评估</p>
+                <p className="text-sm text-slate-500">服务端提供提示词模板，客户端直连模型完成评估</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -167,7 +181,7 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <AnalysisProgressView />
+          <AnalysisProgressView phase={analysisPhase} />
         )}
       </main>
     </div>

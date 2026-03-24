@@ -1,31 +1,33 @@
 import {
-  AnalysisErrorResponse,
-  AnalysisRequest,
-  AnalysisSuccessResponse,
+  PromptTemplateErrorResponse,
+  PromptTemplateRequest,
+  PromptTemplateResource,
+  PromptTemplateSuccessResponse,
 } from '@/types/analysis';
-import { AnalysisReport } from '@/types/report';
-import { AnalysisService } from './types';
+import { PromptTemplateService } from './types';
 
-export class ApiAnalysisService implements AnalysisService {
-  async generateReport(input: AnalysisRequest): Promise<AnalysisReport> {
-    const response = await fetch('/api/analysis', {
-      method: 'POST',
+export class ApiAnalysisService implements PromptTemplateService {
+  async getTemplate(request: PromptTemplateRequest): Promise<PromptTemplateResource> {
+    const searchParams = new URLSearchParams({
+      evaluationGoal: request.evaluationGoal,
+    });
+    const response = await fetch(`/api/analysis?${searchParams.toString()}`, {
+      method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(input),
     });
 
-    const data = (await response.json()) as AnalysisSuccessResponse | AnalysisErrorResponse;
+    const data = (await response.json()) as PromptTemplateSuccessResponse | PromptTemplateErrorResponse;
 
     if (!response.ok) {
       throw new Error('error' in data ? data.error : '分析请求失败');
     }
 
-    if (!('report' in data)) {
+    if (!('template' in data)) {
       throw new Error('分析响应格式异常');
     }
 
-    return data.report;
+    return data.template;
   }
 }

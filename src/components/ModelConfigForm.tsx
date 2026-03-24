@@ -145,7 +145,7 @@ export default function ModelConfigForm({ onConfigSaved, initialConfig }: ModelC
             </div>
             <div>
               <CardTitle>模型配置</CardTitle>
-              <CardDescription>配置您的AI模型连接信息</CardDescription>
+              <CardDescription>配置浏览器本地直连模型 API 所需的信息</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -227,7 +227,7 @@ export default function ModelConfigForm({ onConfigSaved, initialConfig }: ModelC
                   onChange={(e: { target: { value: string } }) => setApiKey(e.target.value)}
                 />
                 <p className="text-sm text-slate-500">
-                  您的API密钥将安全地保存在浏览器本地
+                  您的 API Key 仅保存在当前浏览器本地，不会发送到本项目服务端
                 </p>
               </div>
 
@@ -341,7 +341,7 @@ export default function ModelConfigForm({ onConfigSaved, initialConfig }: ModelC
                   <CheckCircle2 className="w-8 h-8 text-green-600" />
                 </div>
                 <h3 className="text-xl font-semibold text-green-700 mb-2">配置验证成功！</h3>
-                <p className="text-slate-600">模型连接正常，可以开始使用了</p>
+                <p className="text-slate-600">浏览器已可直接调用模型接口，可以开始使用了</p>
               </div>
 
               <div className="bg-slate-50 p-4 rounded-lg">

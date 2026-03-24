@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import { createDefaultEvaluationInput } from '@/config/defaults';
 import { EvaluationInput, SpecialConstraint } from '@/types/report';
+import { AnalysisPhase } from '@/types/appFlow';
 import { EvaluationFormErrors, validateEvaluationInput } from '@/lib/validation/evaluationInput';
 
 export function useEvaluationForm(initialValue: EvaluationInput = createDefaultEvaluationInput()) {
   const [formData, setFormData] = useState<EvaluationInput>(initialValue);
   const [formErrors, setFormErrors] = useState<EvaluationFormErrors>({});
+  const [analysisPhase, setAnalysisPhase] = useState<AnalysisPhase>('fetch-template');
 
   const clearError = (key?: keyof EvaluationFormErrors) => {
     setFormErrors((current: EvaluationFormErrors) => {
@@ -63,19 +65,32 @@ export function useEvaluationForm(initialValue: EvaluationInput = createDefaultE
     }));
   };
 
+  const startAnalysis = () => {
+    clearError('form');
+    setAnalysisPhase('fetch-template');
+  };
+
+  const updateAnalysisPhase = (phase: AnalysisPhase) => {
+    setAnalysisPhase(phase);
+  };
+
   const resetForm = () => {
     setFormData(createDefaultEvaluationInput());
     setFormErrors({});
+    setAnalysisPhase('fetch-template');
   };
 
   return {
     formData,
     formErrors,
+    analysisPhase,
     updateField,
     toggleSpecialConstraint,
     validate,
     setFormError,
     clearError,
+    startAnalysis,
+    updateAnalysisPhase,
     resetForm,
   };
 }

@@ -1,8 +1,8 @@
 import { AnalysisReport, EvaluationInput, TextType } from '@/types/report';
-import { AnalysisService } from './types';
+import { AnalysisService, GenerateReportOptions } from './types';
 
 export class MockAnalysisService implements AnalysisService {
-  async generateReport(input: EvaluationInput): Promise<AnalysisReport> {
+  async generateReport({ input }: GenerateReportOptions): Promise<AnalysisReport> {
     await new Promise((resolve) => setTimeout(resolve, 2000 + Math.random() * 1000));
 
     const totalScore = this.calculateScore(input);

@@ -12,6 +12,10 @@ export type Option<T extends string> = {
   label: string;
 };
 
+export function getOptionLabel<T extends string>(options: Option<T>[], value: T): string {
+  return options.find((option) => option.value === value)?.label || value;
+}
+
 export const textTypeOptions: Option<TextType>[] = [
   { value: 'web_serial', label: '网络连载' },
   { value: 'short_story', label: '短篇小说' },
