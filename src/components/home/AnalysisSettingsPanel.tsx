@@ -9,14 +9,6 @@ import {
   TextCompleteness,
   TextType,
 } from '@/types/report';
-import {
-  evaluationGoalOptions,
-  feedbackStyleOptions,
-  readerPreferenceOptions,
-  specialConstraintOptions,
-  textCompletenessOptions,
-  textTypeOptions,
-} from '@/config/evaluationOptions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,38 +18,64 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { AlertCircle, Sparkles } from 'lucide-react';
+import { AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import type { CatalogOption, FeatureFlagsConfig } from '@/server/config/types';
 
 interface AnalysisSettingsPanelProps {
+  title?: string;
+  description?: string;
   formData: EvaluationInput;
+  textTypeOptions: CatalogOption<TextType>[];
+  textCompletenessOptions: CatalogOption<TextCompleteness>[];
+  evaluationGoalOptions: CatalogOption<EvaluationGoal>[];
+  readerPreferenceOptions: CatalogOption<ReaderPreference>[];
+  feedbackStyleOptions: CatalogOption<FeedbackStyle>[];
+  specialConstraintOptions: CatalogOption<SpecialConstraint>[];
+  featureFlags: FeatureFlagsConfig;
   errorMessage: string | null;
+  isSubmitting: boolean;
+  submitHint?: string;
   onTextTypeChange: (value: TextType) => void;
   onTextCompletenessChange: (value: TextCompleteness) => void;
   onEvaluationGoalChange: (value: EvaluationGoal) => void;
   onReaderPreferenceChange: (value: ReaderPreference) => void;
   onFeedbackStyleChange: (value: FeedbackStyle) => void;
   onSpecialConstraintChange: (constraint: SpecialConstraint, checked: boolean) => void;
-  onReferenceSampleChange: (checked: boolean) => void;
   onSubmit: () => void;
 }
 
 export default function AnalysisSettingsPanel({
+  title = '分析设置',
+  description = '配置您的分析偏好',
   formData,
+  textTypeOptions,
+  textCompletenessOptions,
+  evaluationGoalOptions,
+  readerPreferenceOptions,
+  feedbackStyleOptions,
+  specialConstraintOptions,
+  featureFlags,
   errorMessage,
+  isSubmitting,
+  submitHint = '系统会自动校验模型输出；若检测到 JSON 结构异常，会自动尝试修复一次。',
   onTextTypeChange,
   onTextCompletenessChange,
   onEvaluationGoalChange,
   onReaderPreferenceChange,
   onFeedbackStyleChange,
   onSpecialConstraintChange,
-  onReferenceSampleChange,
   onSubmit,
 }: AnalysisSettingsPanelProps) {
+  const showReaderPreference = featureFlags.enableReaderPreference && readerPreferenceOptions.length > 0;
+  const showFeedbackStyle = featureFlags.enableFeedbackStyle && feedbackStyleOptions.length > 0;
+  const showSpecialConstraints = featureFlags.enableSpecialConstraints && specialConstraintOptions.length > 0;
+  const showOptionalSections = showReaderPreference || showFeedbackStyle || showSpecialConstraints;
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>分析设置</CardTitle>
-        <CardDescription>配置您的分析偏好</CardDescription>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[700px] pr-4">
@@ -72,7 +90,11 @@ export default function AnalysisSettingsPanel({
 
             <div className="space-y-3">
               <Label className="text-base font-medium">文本类型 *</Label>
-              <Select value={formData.textType} onValueChange={(value: string) => onTextTypeChange(value as TextType)}>
+              <Select
+                value={formData.textType}
+                onValueChange={(value: string) => onTextTypeChange(value as TextType)}
+                disabled={isSubmitting}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -91,6 +113,7 @@ export default function AnalysisSettingsPanel({
               <Select
                 value={formData.textCompleteness}
                 onValueChange={(value: string) => onTextCompletenessChange(value as TextCompleteness)}
+                disabled={isSubmitting}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -110,6 +133,7 @@ export default function AnalysisSettingsPanel({
               <Select
                 value={formData.evaluationGoal}
                 onValueChange={(value: string) => onEvaluationGoalChange(value as EvaluationGoal)}
+                disabled={isSubmitting}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -123,80 +147,85 @@ export default function AnalysisSettingsPanel({
                 </SelectContent>
               </Select>
             </div>
+            {showOptionalSections && <Separator />}
 
-            <Separator />
-
-            <div className="space-y-3">
-              <Label className="text-base font-medium">目标读者偏好</Label>
-              <RadioGroup
-                value={formData.readerPreference}
-                onValueChange={(value: string) => onReaderPreferenceChange(value as ReaderPreference)}
-                className="grid grid-cols-2 gap-2"
-              >
-                {readerPreferenceOptions.map((option) => (
-                  <div key={option.value} className="flex items-center space-x-2">
-                    <RadioGroupItem value={option.value} id={`reader-${option.value}`} />
-                    <Label htmlFor={`reader-${option.value}`} className="text-sm cursor-pointer">
-                      {option.label}
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-base font-medium">反馈风格</Label>
-              <RadioGroup
-                value={formData.feedbackStyle}
-                onValueChange={(value: string) => onFeedbackStyleChange(value as FeedbackStyle)}
-                className="grid grid-cols-1 gap-2"
-              >
-                {feedbackStyleOptions.map((option) => (
-                  <div key={option.value} className="flex items-center space-x-2">
-                    <RadioGroupItem value={option.value} id={`feedback-${option.value}`} />
-                    <Label htmlFor={`feedback-${option.value}`} className="text-sm cursor-pointer">
-                      {option.label}
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-base font-medium">特殊约束</Label>
-              <div className="space-y-2">
-                {specialConstraintOptions.map((option) => (
-                  <div key={option.value} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`constraint-${option.value}`}
-                      checked={formData.specialConstraints?.includes(option.value)}
-                      onCheckedChange={(checked: boolean | 'indeterminate') => {
-                        onSpecialConstraintChange(option.value, checked === true);
-                      }}
-                    />
-                    <Label htmlFor={`constraint-${option.value}`} className="text-sm cursor-pointer">
-                      {option.label}
-                    </Label>
-                  </div>
-                ))}
+            {showReaderPreference && (
+              <div className="space-y-3">
+                <Label className="text-base font-medium">目标读者偏好</Label>
+                <RadioGroup
+                  value={formData.readerPreference}
+                  onValueChange={(value: string) => onReaderPreferenceChange(value as ReaderPreference)}
+                  className="grid grid-cols-2 gap-2"
+                  disabled={isSubmitting}
+                >
+                  {readerPreferenceOptions.map((option) => (
+                    <div key={option.value} className="flex items-center space-x-2">
+                      <RadioGroupItem value={option.value} id={`reader-${option.value}`} />
+                      <Label htmlFor={`reader-${option.value}`} className="cursor-pointer text-sm">
+                        {option.label}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
               </div>
-            </div>
+            )}
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="reference-sample"
-                checked={formData.hasReferenceSample}
-                onCheckedChange={(checked: boolean | 'indeterminate') => onReferenceSampleChange(checked === true)}
-              />
-              <Label htmlFor="reference-sample" className="text-sm cursor-pointer">
-                提供参考样板
-              </Label>
-            </div>
+            {showFeedbackStyle && (
+              <div className="space-y-3">
+                <Label className="text-base font-medium">反馈风格</Label>
+                <RadioGroup
+                  value={formData.feedbackStyle}
+                  onValueChange={(value: string) => onFeedbackStyleChange(value as FeedbackStyle)}
+                  className="grid grid-cols-1 gap-2"
+                  disabled={isSubmitting}
+                >
+                  {feedbackStyleOptions.map((option) => (
+                    <div key={option.value} className="flex items-center space-x-2">
+                      <RadioGroupItem value={option.value} id={`feedback-${option.value}`} />
+                      <Label htmlFor={`feedback-${option.value}`} className="cursor-pointer text-sm">
+                        {option.label}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+            )}
 
-            <Button className="w-full h-12 text-lg" onClick={onSubmit}>
-              <Sparkles className="w-5 h-5 mr-2" />
-              开始分析
-            </Button>
+            {showSpecialConstraints && (
+              <div className="space-y-3">
+                <Label className="text-base font-medium">特殊约束</Label>
+                <div className="space-y-2">
+                  {specialConstraintOptions.map((option) => (
+                    <div key={option.value} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`constraint-${option.value}`}
+                        checked={formData.specialConstraints?.includes(option.value)}
+                        disabled={isSubmitting}
+                        onCheckedChange={(checked: boolean | 'indeterminate') => {
+                          onSpecialConstraintChange(option.value, checked === true);
+                        }}
+                      />
+                      <Label htmlFor={`constraint-${option.value}`} className="cursor-pointer text-sm">
+                        {option.label}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Alert>
+              <Sparkles className="h-4 w-4" />
+              <AlertTitle>可靠性增强</AlertTitle>
+              <AlertDescription>{submitHint}</AlertDescription>
+            </Alert>
+
+            <div className="grid gap-3 sm:grid-cols-1">
+              <Button className="h-12 text-lg" onClick={onSubmit} disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Sparkles className="mr-2 h-5 w-5" />}
+                {isSubmitting ? '分析进行中...' : '开始分析'}
+              </Button>
+            </div>
           </div>
         </ScrollArea>
       </CardContent>

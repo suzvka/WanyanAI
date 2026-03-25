@@ -93,13 +93,93 @@ export type SpecialConstraint =
   | "focus_publishability" 
   | "focus_literary_expression";
 
+export type TextBlockType = 'actual_text' | 'reference_material' | 'reference_review';
+
+export type TextBlockAttachmentSource = 'upload';
+
+export type TextBlockFileRef = {
+  id: string;
+  originalName: string;
+  storedName: string;
+  mimeType: string;
+  size: number;
+  lastModified: number;
+  source: TextBlockAttachmentSource;
+};
+
+export type TextBlockAttachment = TextBlockFileRef & {
+  content: string;
+};
+
+export type TextBlockContentUnit = {
+  draftText: string;
+  file: TextBlockAttachment | null;
+};
+
+export type TextBlockSupplement = TextBlockContentUnit & {
+  id: string;
+};
+
+export type TextBlock = TextBlockContentUnit & {
+  id: string;
+  number: number;
+  blockType: TextBlockType;
+  title: string;
+  localSupplements: TextBlockSupplement[];
+};
+
+export type SerializableTextBlockSupplement = {
+  id: string;
+  content: SerializableTextBlockContent | null;
+};
+
+export type SerializableTextBlockContent =
+  | {
+      kind: 'text';
+      content: string;
+    }
+  | {
+      kind: 'file';
+      fileName: string;
+      content: string;
+    };
+
+export type SerializableTextBlock = {
+  id: string;
+  number: number;
+  blockType: TextBlockType;
+  title: string;
+  content: SerializableTextBlockContent | null;
+  localSupplements: SerializableTextBlockSupplement[];
+};
+
+export type SerializableEvaluationMetadataFile = {
+  id: string;
+  blockId: string;
+  parentBlockId?: string;
+  originalName: string;
+  storedName: string;
+  mimeType: string;
+  size: number;
+  lastModified: number;
+  source: TextBlockAttachmentSource;
+};
+
 export type EvaluationInput = {
-  textContent: string;
+  textBlocks: TextBlock[];
+  globalSupplementBlocks: TextBlock[];
   textType: TextType;
   textCompleteness: TextCompleteness;
   evaluationGoal: EvaluationGoal;
   readerPreference?: ReaderPreference;
   feedbackStyle?: FeedbackStyle;
-  hasReferenceSample?: boolean;
   specialConstraints?: SpecialConstraint[];
+};
+
+export type SerializableEvaluationInput = Omit<EvaluationInput, 'textBlocks' | 'globalSupplementBlocks'> & {
+  blocks: SerializableTextBlock[];
+  globalSupplements: SerializableTextBlock[];
+  metadata: {
+    files: SerializableEvaluationMetadataFile[];
+  };
 };

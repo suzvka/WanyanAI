@@ -1,0 +1,84 @@
+import {
+  EvaluationGoal,
+  FeedbackStyle,
+  ReaderPreference,
+  SpecialConstraint,
+  TextCompleteness,
+  TextType,
+} from '@/types/report';
+
+export type CatalogOption<T extends string> = {
+  value: T;
+  label: string;
+  description: string;
+  enabled: boolean;
+  sortOrder: number;
+  badge?: string;
+  recommended?: boolean;
+};
+
+export type EvaluationCatalogConfig = {
+  textTypes: CatalogOption<TextType>[];
+  textCompletenessOptions: CatalogOption<TextCompleteness>[];
+  evaluationGoals: CatalogOption<EvaluationGoal>[];
+  readerPreferences: CatalogOption<ReaderPreference>[];
+  feedbackStyles: CatalogOption<FeedbackStyle>[];
+  specialConstraints: CatalogOption<SpecialConstraint>[];
+};
+
+export type EvaluationDefaultsConfig = {
+  textType: TextType;
+  textCompleteness: TextCompleteness;
+  evaluationGoal: EvaluationGoal;
+  readerPreference?: ReaderPreference;
+  feedbackStyle?: FeedbackStyle;
+  specialConstraints: SpecialConstraint[];
+};
+
+export type FeatureFlagsConfig = {
+  enableFileUpload: boolean;
+  enableGlobalSupplementBlocks: boolean;
+  enableLocalSupplements: boolean;
+  enableReaderPreference: boolean;
+  enableFeedbackStyle: boolean;
+  enableSpecialConstraints: boolean;
+};
+
+export type SiteConfig = {
+  home: {
+    title: string;
+    subtitle: string;
+    modelHint: string;
+  };
+  inputPanel: {
+    title: string;
+    description: string;
+  };
+  settingsPanel: {
+    title: string;
+    description: string;
+  };
+  progress: {
+    runningTitle: string;
+    runningDescription: string;
+  };
+  errors: {
+    generic: string;
+  };
+};
+
+export type OpsConfigManifest = {
+  configVersion: string;
+  publishedAt: string;
+  publishedBy: string;
+  environment: 'production' | 'staging' | 'local';
+};
+
+export type PublishedOpsConfig = {
+  source: 'published' | 'fallback';
+  manifest: OpsConfigManifest;
+  site: SiteConfig;
+  catalog: EvaluationCatalogConfig;
+  defaults: EvaluationDefaultsConfig;
+  featureFlags: FeatureFlagsConfig;
+};

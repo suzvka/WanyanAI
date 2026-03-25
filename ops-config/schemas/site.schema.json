@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["home", "inputPanel", "settingsPanel", "progress", "errors"],
+  "properties": {
+    "home": {
+      "type": "object",
+      "required": ["title", "subtitle", "modelHint"],
+      "properties": {
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "modelHint": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "inputPanel": {
+      "type": "object",
+      "required": ["title", "description"],
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "settingsPanel": {
+      "type": "object",
+      "required": ["title", "description"],
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "progress": {
+      "type": "object",
+      "required": ["runningTitle", "runningDescription"],
+      "properties": {
+        "runningTitle": { "type": "string" },
+        "runningDescription": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "errors": {
+      "type": "object",
+      "required": ["generic"],
+      "properties": {
+        "generic": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,7 +1,31 @@
+import { AppErrorPayload } from '@/types/errors';
+
 export interface ModelConfig {
   baseUrl: string;
   apiKey: string;
   selectedModel: string;
+}
+
+export type ApiConfigValidationStatus = 'unknown' | 'validating' | 'valid' | 'invalid';
+
+export interface ApiConfigRecord extends ModelConfig {
+  id: string;
+  name: string;
+  modelsCache: ModelInfo[];
+  lastValidationStatus: ApiConfigValidationStatus;
+  lastValidationMessage?: string;
+  validatedAt?: string;
+}
+
+export interface ApiConfigDraft {
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+}
+
+export interface ApiConfigStoreState {
+  configs: ApiConfigRecord[];
+  selectedConfigId: string | null;
 }
 
 export interface ModelInfo {
@@ -12,25 +36,17 @@ export interface ModelInfo {
 
 export interface ConfigValidationResult {
   success: boolean;
-  error?: string;
+  error?: AppErrorPayload;
   models?: ModelInfo[];
 }
 
-export interface ModelTestResult {
-  success: boolean;
-  error?: string;
-  response?: unknown;
-}
-
 export interface ModelConfigStore {
-  getConfig(): ModelConfig | null;
-  saveConfig(config: ModelConfig): void;
-  clearConfig(): void;
+  getState(): ApiConfigStoreState;
+  saveState(state: ApiConfigStoreState): void;
 }
 
 export interface ModelConfigProvider {
   validateAndFetchModels(baseUrl: string, apiKey: string): Promise<ConfigValidationResult>;
-  testModelConnection(baseUrl: string, apiKey: string, model: string): Promise<ModelTestResult>;
 }
 
 export interface ModelListResponse {
@@ -40,4 +56,5 @@ export interface ModelListResponse {
   }>;
 }
 
-export const STORAGE_KEY = 'ai-text-diagnosis-model-config';
+export const STORAGE_KEY = 'ai-text-diagnosis-model-config-store';
+export const LEGACY_STORAGE_KEY = 'ai-text-diagnosis-model-config';

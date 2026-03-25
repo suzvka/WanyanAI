@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["textType", "textCompleteness", "evaluationGoal", "specialConstraints"],
+  "properties": {
+    "textType": { "type": "string" },
+    "textCompleteness": { "type": "string" },
+    "evaluationGoal": { "type": "string" },
+    "readerPreference": { "type": "string" },
+    "feedbackStyle": { "type": "string" },
+    "specialConstraints": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": false
+}

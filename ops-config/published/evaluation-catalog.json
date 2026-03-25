@@ -1,0 +1,224 @@
+{
+  "textTypes": [
+    {
+      "value": "web_serial",
+      "label": "网络连载",
+      "description": "偏章节连载节奏",
+      "enabled": true,
+      "sortOrder": 10
+    },
+    {
+      "value": "short_story",
+      "label": "短篇小说",
+      "description": "偏完整短篇结构",
+      "enabled": true,
+      "sortOrder": 20
+    },
+    {
+      "value": "light_novel",
+      "label": "轻小说/青年向",
+      "description": "偏角色成长与轻量设定",
+      "enabled": true,
+      "sortOrder": 30
+    },
+    {
+      "value": "literary_submission",
+      "label": "文学投稿",
+      "description": "偏文学表达与投稿场景",
+      "enabled": true,
+      "sortOrder": 40
+    },
+    {
+      "value": "general_text",
+      "label": "通用文本",
+      "description": "默认通用场景",
+      "enabled": true,
+      "sortOrder": 50
+    }
+  ],
+  "textCompletenessOptions": [
+    {
+      "value": "complete",
+      "label": "完整作品",
+      "description": "适合整体评估",
+      "enabled": true,
+      "sortOrder": 10
+    },
+    {
+      "value": "single_chapter",
+      "label": "长篇中的单章/样章",
+      "description": "适合单章分析",
+      "enabled": true,
+      "sortOrder": 20
+    },
+    {
+      "value": "first_chapters",
+      "label": "长篇前若干章",
+      "description": "适合开篇连续分析",
+      "enabled": true,
+      "sortOrder": 30
+    },
+    {
+      "value": "excerpt",
+      "label": "节选片段",
+      "description": "适合局部节选评估",
+      "enabled": true,
+      "sortOrder": 40
+    },
+    {
+      "value": "draft",
+      "label": "未完成草稿",
+      "description": "适合草稿问题发现",
+      "enabled": true,
+      "sortOrder": 50
+    }
+  ],
+  "evaluationGoals": [
+    {
+      "value": "overall_check",
+      "label": "发布前总体检查",
+      "description": "综合评估完成度与可发布性",
+      "enabled": true,
+      "sortOrder": 10
+    },
+    {
+      "value": "opening_attraction",
+      "label": "开篇吸引力检查",
+      "description": "聚焦开篇钩子与继续阅读意愿",
+      "enabled": true,
+      "sortOrder": 20
+    },
+    {
+      "value": "rhythm_progression",
+      "label": "节奏与推进问题",
+      "description": "关注推进效率与冗余停滞",
+      "enabled": true,
+      "sortOrder": 30
+    },
+    {
+      "value": "character_development",
+      "label": "人物塑造检查",
+      "description": "关注人物动机与情感变化",
+      "enabled": true,
+      "sortOrder": 40
+    },
+    {
+      "value": "style_consistency",
+      "label": "文风一致性检查",
+      "description": "关注叙述稳定性与表达统一",
+      "enabled": true,
+      "sortOrder": 50
+    },
+    {
+      "value": "structure_completeness",
+      "label": "结构完整性检查",
+      "description": "关注结构闭环与铺垫回收",
+      "enabled": true,
+      "sortOrder": 60
+    },
+    {
+      "value": "reader_acceptance",
+      "label": "读者接受度预估",
+      "description": "关注目标读者匹配度与留存风险",
+      "enabled": true,
+      "sortOrder": 70
+    }
+  ],
+  "readerPreferences": [
+    {
+      "value": "fast_paced",
+      "label": "偏快节奏",
+      "description": "偏好节奏紧凑阅读体验",
+      "enabled": true,
+      "sortOrder": 10
+    },
+    {
+      "value": "plot_driven",
+      "label": "偏剧情推进",
+      "description": "偏好事件和情节驱动",
+      "enabled": true,
+      "sortOrder": 20
+    },
+    {
+      "value": "character_emotion",
+      "label": "偏人物情感",
+      "description": "偏好人物关系与情感线",
+      "enabled": true,
+      "sortOrder": 30
+    },
+    {
+      "value": "world_building",
+      "label": "偏世界观/设定",
+      "description": "偏好设定展开与背景构建",
+      "enabled": true,
+      "sortOrder": 40
+    },
+    {
+      "value": "literary_expression",
+      "label": "偏文学表达",
+      "description": "偏好修辞与语言质感",
+      "enabled": true,
+      "sortOrder": 50
+    },
+    {
+      "value": "general_reader",
+      "label": "通用读者",
+      "description": "默认读者偏好",
+      "enabled": true,
+      "sortOrder": 60
+    }
+  ],
+  "feedbackStyles": [
+    {
+      "value": "strict",
+      "label": "严格问题导向",
+      "description": "强调问题定位与优先级",
+      "enabled": true,
+      "sortOrder": 10
+    },
+    {
+      "value": "balanced",
+      "label": "平衡反馈",
+      "description": "兼顾优点与问题",
+      "enabled": true,
+      "sortOrder": 20
+    },
+    {
+      "value": "encouraging",
+      "label": "鼓励式反馈",
+      "description": "更强调正向建议",
+      "enabled": true,
+      "sortOrder": 30
+    }
+  ],
+  "specialConstraints": [
+    {
+      "value": "keep_original_style",
+      "label": "尽量保留原文风格",
+      "description": "减少改写倾向",
+      "enabled": true,
+      "sortOrder": 10
+    },
+    {
+      "value": "avoid_overwriting",
+      "label": "避免过度重写式建议",
+      "description": "建议以诊断为主",
+      "enabled": true,
+      "sortOrder": 20
+    },
+    {
+      "value": "focus_publishability",
+      "label": "更关注可发布性",
+      "description": "偏向上线和可发布判断",
+      "enabled": true,
+      "sortOrder": 30
+    },
+    {
+      "value": "focus_literary_expression",
+      "label": "更关注文学表达",
+      "description": "偏向语言和表达质量",
+      "enabled": true,
+      "sortOrder": 40
+    }
+  ]
+}

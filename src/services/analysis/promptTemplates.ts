@@ -7,9 +7,9 @@ const baseSlots: PromptTemplateResource['slots'] = [
   { key: 'evaluationGoalLabel', label: '评价目标', required: true },
   { key: 'readerPreferenceLabel', label: '目标读者偏好', required: false },
   { key: 'feedbackStyleLabel', label: '反馈风格', required: false },
-  { key: 'hasReferenceSampleLabel', label: '是否提供参考样板', required: false },
   { key: 'specialConstraintsLabel', label: '特殊约束', required: false },
-  { key: 'textContent', label: '待分析文本', required: true },
+  { key: 'textBlocksSummary', label: '文本块摘要', required: true },
+  { key: 'textBlocksPlainText', label: '待分析纯文本内容', required: true },
 ];
 
 const createTemplate = (
@@ -17,8 +17,10 @@ const createTemplate = (
   title: string,
   focusInstruction: string,
 ): PromptTemplateResource => ({
-  id: `analysis-template-${evaluationGoal}`,
+  frameworkId: `fw-text-diagnosis-${evaluationGoal}`,
   version: '2.0.0',
+  scenario: 'text_diagnosis',
+  providerProfile: 'openai-compatible',
   evaluationGoal,
   title,
   systemPromptTemplate: [
@@ -42,13 +44,19 @@ const createTemplate = (
     '- 评价目标：{{evaluationGoalLabel}}',
     '- 目标读者偏好：{{readerPreferenceLabel}}',
     '- 反馈风格：{{feedbackStyleLabel}}',
-    '- 参考样板：{{hasReferenceSampleLabel}}',
     '- 特殊约束：{{specialConstraintsLabel}}',
+    '- 文本块摘要：{{textBlocksSummary}}',
     '',
-    '待分析文本如下：',
-    '{{textContent}}',
+    '待分析纯文本内容如下：',
+    '{{textBlocksPlainText}}',
   ].join('\n'),
   slots: baseSlots,
+  outputSchemaRef: 'report_schema_v1',
+  policyMeta: {
+    scoringPolicyVersion: '2.0.0',
+    conclusionPolicyVersion: '2.0.0',
+    reportFormatVersion: '2.0.0',
+  },
   recommendedParameters: {
     temperature: 0.3,
     maxTokens: 1400,
@@ -95,4 +103,8 @@ const promptTemplateMap: Record<EvaluationGoal, PromptTemplateResource> = {
 
 export function getPromptTemplate(evaluationGoal: EvaluationGoal): PromptTemplateResource {
   return promptTemplateMap[evaluationGoal];
+}
+
+export function compilePromptFramework(evaluationGoal: EvaluationGoal): PromptTemplateResource {
+  return getPromptTemplate(evaluationGoal);
 }

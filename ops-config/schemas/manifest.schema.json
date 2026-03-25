@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["configVersion", "publishedAt", "publishedBy", "environment"],
+  "properties": {
+    "configVersion": { "type": "string" },
+    "publishedAt": { "type": "string" },
+    "publishedBy": { "type": "string" },
+    "environment": {
+      "type": "string",
+      "enum": ["production", "staging", "local"]
+    }
+  },
+  "additionalProperties": false
+}

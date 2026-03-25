@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "enableFileUpload",
+    "enableGlobalSupplementBlocks",
+    "enableLocalSupplements",
+    "enableReaderPreference",
+    "enableFeedbackStyle",
+    "enableSpecialConstraints"
+  ],
+  "properties": {
+    "enableFileUpload": { "type": "boolean" },
+    "enableGlobalSupplementBlocks": { "type": "boolean" },
+    "enableLocalSupplements": { "type": "boolean" },
+    "enableReaderPreference": { "type": "boolean" },
+    "enableFeedbackStyle": { "type": "boolean" },
+    "enableSpecialConstraints": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}

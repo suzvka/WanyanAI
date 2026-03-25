@@ -25,7 +25,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Analysis route failed:', error);
+    console.error('Prompt framework compile route failed:', error);
 
     const response: PromptTemplateErrorResponse = {
       error: toAppErrorPayload(error, {

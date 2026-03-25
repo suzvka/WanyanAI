@@ -3,13 +3,44 @@
 import { useState } from 'react';
 import { createDefaultEvaluationInput } from '@/config/defaults';
 import { EvaluationInput, SpecialConstraint } from '@/types/report';
-import { AnalysisPhase } from '@/types/appFlow';
+import { AnalysisPhase, AnalysisProgressState, AnalysisStatus } from '@/types/appFlow';
 import { EvaluationFormErrors, validateEvaluationInput } from '@/lib/validation/evaluationInput';
+import type { FeatureFlagsConfig } from '@/server/config/types';
 
-export function useEvaluationForm(initialValue: EvaluationInput = createDefaultEvaluationInput()) {
-  const [formData, setFormData] = useState<EvaluationInput>(initialValue);
+const initialAnalysisProgressState: AnalysisProgressState = {
+  phase: 'prepare-upload',
+  status: 'idle',
+  message: '分析准备就绪。',
+  canRetry: false,
+};
+
+type UseEvaluationFormOptions = {
+  featureFlags?: Partial<FeatureFlagsConfig>;
+};
+
+function cloneEvaluationInput(input: EvaluationInput): EvaluationInput {
+  return {
+    ...input,
+    textBlocks: input.textBlocks.map((block) => ({
+      ...block,
+      localSupplements: block.localSupplements.map((supplement) => ({ ...supplement })),
+    })),
+    globalSupplementBlocks: input.globalSupplementBlocks.map((block) => ({
+      ...block,
+      localSupplements: block.localSupplements.map((supplement) => ({ ...supplement })),
+    })),
+    specialConstraints: [...(input.specialConstraints || [])],
+  };
+}
+
+export function useEvaluationForm(
+  initialValue: EvaluationInput = createDefaultEvaluationInput(),
+  options: UseEvaluationFormOptions = {},
+) {
+  const [initialFormData] = useState<EvaluationInput>(() => cloneEvaluationInput(initialValue));
+  const [formData, setFormData] = useState<EvaluationInput>(initialFormData);
   const [formErrors, setFormErrors] = useState<EvaluationFormErrors>({});
-  const [analysisPhase, setAnalysisPhase] = useState<AnalysisPhase>('fetch-template');
+  const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgressState>(initialAnalysisProgressState);
 
   const clearError = (key?: keyof EvaluationFormErrors) => {
     setFormErrors((current: EvaluationFormErrors) => {
@@ -31,7 +62,7 @@ export function useEvaluationForm(initialValue: EvaluationInput = createDefaultE
     setFormData((current: EvaluationInput) => ({ ...current, [key]: value }));
     clearError(key);
 
-    if (key === 'textContent') {
+    if (key === 'textBlocks' || key === 'globalSupplementBlocks') {
       clearError('form');
     }
   };
@@ -46,7 +77,7 @@ export function useEvaluationForm(initialValue: EvaluationInput = createDefaultE
   };
 
   const validate = (): EvaluationInput | null => {
-    const result = validateEvaluationInput(formData);
+    const result = validateEvaluationInput(formData, options);
 
     if (result.success) {
       setFormData(result.data);
@@ -67,30 +98,66 @@ export function useEvaluationForm(initialValue: EvaluationInput = createDefaultE
 
   const startAnalysis = () => {
     clearError('form');
-    setAnalysisPhase('fetch-template');
+    setAnalysisProgress({
+      phase: 'prepare-upload',
+      status: 'running',
+      message: '正在准备分析任务。',
+      canRetry: false,
+    });
   };
 
-  const updateAnalysisPhase = (phase: AnalysisPhase) => {
-    setAnalysisPhase(phase);
+  const updateAnalysisProgress = ({
+    stage,
+    message,
+    status,
+  }: {
+    stage: AnalysisPhase;
+    message?: string;
+    status?: Extract<AnalysisStatus, 'running' | 'recovering'>;
+  }) => {
+    setAnalysisProgress((current: AnalysisProgressState) => ({
+      phase: stage,
+      status: status ?? 'running',
+      message: message ?? current.message,
+      canRetry: false,
+    }));
+  };
+
+  const markAnalysisFailed = (message: string, canRetry = false) => {
+    setAnalysisProgress((current: AnalysisProgressState) => ({
+      ...current,
+      status: 'failed',
+      message,
+      canRetry,
+    }));
+  };
+
+  const resetAnalysisState = () => {
+    setAnalysisProgress(initialAnalysisProgressState);
   };
 
   const resetForm = () => {
-    setFormData(createDefaultEvaluationInput());
+    setFormData(cloneEvaluationInput(initialFormData));
     setFormErrors({});
-    setAnalysisPhase('fetch-template');
+    setAnalysisProgress(initialAnalysisProgressState);
   };
 
   return {
     formData,
     formErrors,
-    analysisPhase,
+    analysisPhase: analysisProgress.phase,
+    analysisStatus: analysisProgress.status,
+    analysisMessage: analysisProgress.message,
+    canRetryAnalysis: analysisProgress.canRetry,
     updateField,
     toggleSpecialConstraint,
     validate,
     setFormError,
     clearError,
     startAnalysis,
-    updateAnalysisPhase,
+    updateAnalysisProgress,
+    markAnalysisFailed,
+    resetAnalysisState,
     resetForm,
   };
 }
