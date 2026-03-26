@@ -2,11 +2,20 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RefreshCw, Settings, Sparkles } from 'lucide-react';
-import { AnalysisReport, EvaluationInput, FeedbackStyle, ReaderPreference, SpecialConstraint, TextBlock, TextCompleteness, TextType } from '@/types/report';
+import { AnalysisReport, EvaluationGoal, EvaluationInput, TextCompleteness, TextType } from '@/types/report';
 import { ApiConfigDraft, ApiConfigRecord, ModelConfig } from '@/types/modelConfig';
 import { analysisService } from '@/services/analysis';
 import { modelConfigService } from '@/services/modelConfig';
@@ -17,16 +26,134 @@ import AnalysisSettingsPanel from '@/components/home/AnalysisSettingsPanel';
 import AnalysisProgressView from '@/components/home/AnalysisProgressView';
 import ApiConfigManagerDialog from '@/components/home/ApiConfigManagerDialog';
 import { useEvaluationForm } from '@/hooks/useEvaluationForm';
-import { toAppErrorPayload } from '@/types/errors';
-import type { CatalogOption, PublishedOpsConfig } from '@/server/config/types';
+import { createAppError, toAppErrorPayload } from '@/types/errors';
+import type { AnalysisControlBinding, AnalysisControlConfig, PublishedOpsConfig } from '@/server/config/types';
+import type {
+  CompileInstructionsErrorResponse,
+  CompileInstructionsSuccessResponse,
+} from '@/types/instructions';
 
 interface HomeClientProps {
   opsConfig: PublishedOpsConfig;
   initialEvaluationInput: EvaluationInput;
 }
 
-function getEnabledOptions<T extends string>(options: CatalogOption<T>[]) {
-  return options.filter((option) => option.enabled).sort((left, right) => left.sortOrder - right.sortOrder);
+function getEnabledDynamicControls(opsConfig: PublishedOpsConfig, evaluationGoal: EvaluationInput['evaluationGoal']) {
+  return opsConfig.analysisControls.controls
+    .filter((control) => control.enabled && control.appliesTo.includes(evaluationGoal))
+    .map((control) => ({
+      ...control,
+      options: control.options.filter((option) => option.enabled),
+    }))
+    .filter((control) => control.options.length > 0);
+}
+
+function getBoundControlValue(control: AnalysisControlConfig, input: EvaluationInput): string | null {
+  switch (control.bindTo) {
+    case 'textType':
+      return input.textType;
+    case 'textCompleteness':
+      return input.textCompleteness;
+    case 'evaluationGoal':
+      return input.evaluationGoal;
+    default:
+      return null;
+  }
+}
+
+function resolveInitialControlSelections(controls: AnalysisControlConfig[], input: EvaluationInput) {
+  return Object.fromEntries(
+    controls.map((control) => {
+      const boundValue = getBoundControlValue(control, input);
+      const selectedValue =
+        boundValue && control.options.some((option) => option.value === boundValue) ? boundValue : control.options[0].value;
+
+      return [control.id, selectedValue];
+    }),
+  );
+}
+
+function applyBoundControlSelection(
+  control: AnalysisControlConfig | undefined,
+  value: string,
+  updateField: <K extends keyof EvaluationInput>(key: K, value: EvaluationInput[K]) => void,
+) {
+  switch (control?.bindTo as AnalysisControlBinding | undefined) {
+    case 'textType':
+      updateField('textType', value as TextType);
+      break;
+    case 'textCompleteness':
+      updateField('textCompleteness', value as TextCompleteness);
+      break;
+    case 'evaluationGoal':
+      updateField('evaluationGoal', value as EvaluationGoal);
+      break;
+    default:
+      break;
+  }
+}
+
+async function readCompileInstructionsResponse(
+  response: Response,
+): Promise<CompileInstructionsSuccessResponse | CompileInstructionsErrorResponse | null> {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as CompileInstructionsSuccessResponse | CompileInstructionsErrorResponse;
+  } catch {
+    return null;
+  }
+}
+
+async function requestCompiledInstructions(payload: {
+  controlSelections: Record<string, string>;
+  configVersion: string;
+}) {
+  let response: Response;
+
+  try {
+    response = await fetch('/api/instructions/compile', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw createAppError({
+      code: 'network_error',
+      message: '动态指令请求失败，请检查网络连接后重试。',
+      retryable: true,
+    });
+  }
+
+  const data = await readCompileInstructionsResponse(response);
+
+  if (!response.ok) {
+    throw createAppError(
+      data && 'error' in data
+        ? data.error
+        : {
+            code: 'unknown_error',
+            message: '动态指令请求失败。',
+            status: response.status,
+            retryable: response.status >= 500,
+          },
+    );
+  }
+
+  if (!data || !('instructionText' in data)) {
+    throw createAppError({
+      code: 'unknown_error',
+      message: '动态指令响应格式异常。',
+    });
+  }
+
+  return data;
 }
 
 function getConfigStatusLabel(status: ApiConfigRecord['lastValidationStatus']) {
@@ -60,13 +187,20 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
   const [isConfigMutating, setIsConfigMutating] = useState(false);
   const [isModelRefreshing, setIsModelRefreshing] = useState(false);
+  const allAnalysisControls = useMemo<AnalysisControlConfig[]>(
+    () => opsConfig.analysisControls.controls.filter((control) => control.enabled && control.options.some((option) => option.enabled)),
+    [opsConfig],
+  );
+  const [controlSelections, setControlSelections] = useState<Record<string, string>>(() =>
+    resolveInitialControlSelections(allAnalysisControls, initialEvaluationInput),
+  );
+  const [isOpsConfigStaleDialogOpen, setIsOpsConfigStaleDialogOpen] = useState(false);
   const [report, setReport] = useState<AnalysisReport | null>(null);
   const [lastSubmittedInput, setLastSubmittedInput] = useState<EvaluationInput | null>(null);
   const {
     formData,
     formErrors,
     updateField,
-    toggleSpecialConstraint,
     validate,
     setFormError,
     clearError,
@@ -78,17 +212,40 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
     updateAnalysisProgress,
     markAnalysisFailed,
     resetAnalysisState,
-    resetForm,
   } = useEvaluationForm(initialEvaluationInput, {
     featureFlags: opsConfig.featureFlags,
   });
 
-  const textTypeOptions = getEnabledOptions(opsConfig.catalog.textTypes);
-  const textCompletenessOptions = getEnabledOptions(opsConfig.catalog.textCompletenessOptions);
-  const evaluationGoalOptions = getEnabledOptions(opsConfig.catalog.evaluationGoals);
-  const readerPreferenceOptions = getEnabledOptions(opsConfig.catalog.readerPreferences);
-  const feedbackStyleOptions = getEnabledOptions(opsConfig.catalog.feedbackStyles);
-  const specialConstraintOptions = getEnabledOptions(opsConfig.catalog.specialConstraints);
+  const dynamicControls = useMemo<AnalysisControlConfig[]>(
+    () => getEnabledDynamicControls(opsConfig, formData.evaluationGoal),
+    [formData.evaluationGoal, opsConfig],
+  );
+
+  useEffect(() => {
+    setControlSelections((current: Record<string, string>) => {
+      let changed = false;
+      const next = { ...current };
+
+      Object.keys(next).forEach((controlId) => {
+        if (!dynamicControls.some((control: AnalysisControlConfig) => control.id === controlId)) {
+          delete next[controlId];
+          changed = true;
+        }
+      });
+
+      dynamicControls.forEach((control: AnalysisControlConfig) => {
+        const selectedValue = next[control.id];
+        const hasSelectedOption = control.options.some((option) => option.value === selectedValue);
+
+        if (!hasSelectedOption) {
+          next[control.id] = control.options[0].value;
+          changed = true;
+        }
+      });
+
+      return changed ? next : current;
+    });
+  }, [dynamicControls]);
 
   const selectedConfig = useMemo(
     () => apiConfigs.find((config: ApiConfigRecord) => config.id === selectedConfigId) || null,
@@ -105,6 +262,13 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
 
   const isSubmittingAnalysis = analysisStatus === 'running' || analysisStatus === 'recovering';
   const isConfigBusy = isConfigMutating || isModelRefreshing;
+  const activeControlSelections = useMemo<Record<string, string>>(
+    () =>
+      Object.fromEntries(
+        dynamicControls.map((control: AnalysisControlConfig) => [control.id, controlSelections[control.id] || control.options[0].value]),
+      ),
+    [controlSelections, dynamicControls],
+  );
 
   const syncConfigState = () => {
     setApiConfigs(modelConfigService.listConfigs());
@@ -232,6 +396,17 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
     syncConfigState();
   };
 
+  const handleControlChange = (controlId: string, value: string) => {
+    const control = dynamicControls.find((item: AnalysisControlConfig) => item.id === controlId);
+
+    setControlSelections((current: Record<string, string>) => ({
+      ...current,
+      [controlId]: value,
+    }));
+    applyBoundControlSelection(control, value, updateField);
+    clearError('form');
+  };
+
   const runAnalysis = async (validatedInput: EvaluationInput) => {
     if (!selectedConfig) {
       setFormError('请先添加一个 API 配置。');
@@ -249,9 +424,19 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
     setAppStep('analyzing');
 
     try {
+      updateAnalysisProgress({
+        stage: 'fetch-template',
+        message: '正在同步当前动态检查指令',
+      });
+      const compiledInstructions = await requestCompiledInstructions({
+        controlSelections: activeControlSelections,
+        configVersion: opsConfig.manifest.configVersion,
+      });
+
       const result = await analysisService.generateReport({
         input: validatedInput,
         modelConfig: currentModelConfig,
+        instructionText: compiledInstructions.instructionText,
         onProgress: updateAnalysisProgress,
       });
       resetAnalysisState();
@@ -263,6 +448,14 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
         code: 'unknown_error',
         message: '分析失败，请重试',
       });
+
+      if (payload.code === 'ops_config_stale') {
+        resetAnalysisState();
+        setFormError(payload.message);
+        setIsOpsConfigStaleDialogOpen(true);
+        setAppStep('input');
+        return;
+      }
 
       if (payload.retryable) {
         markAnalysisFailed(payload.message, true);
@@ -402,12 +595,9 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
                 title={opsConfig.site.inputPanel.title}
                 description={opsConfig.site.inputPanel.description}
                 textBlocks={formData.textBlocks}
-                globalSupplementBlocks={formData.globalSupplementBlocks}
                 enableFileUpload={opsConfig.featureFlags.enableFileUpload}
-                enableGlobalSupplementBlocks={opsConfig.featureFlags.enableGlobalSupplementBlocks}
-                enableLocalSupplements={opsConfig.featureFlags.enableLocalSupplements}
+                enableAnnotations={opsConfig.featureFlags.enableAnnotations}
                 onTextBlocksChange={(value) => updateField('textBlocks', value)}
-                onGlobalSupplementBlocksChange={(value: TextBlock[]) => updateField('globalSupplementBlocks', value)}
               />
             </div>
 
@@ -415,24 +605,11 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
               <AnalysisSettingsPanel
                 title={opsConfig.site.settingsPanel.title}
                 description={opsConfig.site.settingsPanel.description}
-                formData={formData}
-                textTypeOptions={textTypeOptions}
-                textCompletenessOptions={textCompletenessOptions}
-                evaluationGoalOptions={evaluationGoalOptions}
-                readerPreferenceOptions={readerPreferenceOptions}
-                feedbackStyleOptions={feedbackStyleOptions}
-                specialConstraintOptions={specialConstraintOptions}
-                featureFlags={opsConfig.featureFlags}
-                errorMessage={formErrors.form || formErrors.textBlocks || formErrors.globalSupplementBlocks || null}
+                controls={dynamicControls}
+                controlSelections={activeControlSelections}
+                errorMessage={formErrors.form || formErrors.textBlocks || null}
                 isSubmitting={isSubmittingAnalysis}
-                onTextTypeChange={(value: TextType) => updateField('textType', value)}
-                onTextCompletenessChange={(value: TextCompleteness) => updateField('textCompleteness', value)}
-                onEvaluationGoalChange={(value) => updateField('evaluationGoal', value)}
-                onReaderPreferenceChange={(value: ReaderPreference) => updateField('readerPreference', value)}
-                onFeedbackStyleChange={(value: FeedbackStyle) => updateField('feedbackStyle', value)}
-                onSpecialConstraintChange={(constraint: SpecialConstraint, checked: boolean) =>
-                  toggleSpecialConstraint(constraint, checked)
-                }
+                onControlChange={handleControlChange}
                 onSubmit={handleSubmit}
               />
             </div>
@@ -462,6 +639,20 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
         onUpdateConfig={handleUpdateConfig}
         onDeleteConfig={handleDeleteConfig}
       />
+
+      <AlertDialog open={isOpsConfigStaleDialogOpen} onOpenChange={setIsOpsConfigStaleDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>页面配置已更新</AlertDialogTitle>
+            <AlertDialogDescription>
+              当前动态检查策略已发生变化。请先保存或复制当前输入内容，再手动刷新页面以加载最新配置。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setIsOpsConfigStaleDialogOpen(false)}>我知道了</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

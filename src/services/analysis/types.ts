@@ -14,6 +14,7 @@ export type AnalysisProgressUpdate = {
 export type GenerateReportOptions = {
   input: EvaluationInput;
   modelConfig: ModelConfig;
+  instructionText?: string;
   onProgress?: (update: AnalysisProgressUpdate) => void;
 };
 

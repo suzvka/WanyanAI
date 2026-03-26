@@ -1,7 +1,4 @@
 import {
-  FeedbackStyle,
-  ReaderPreference,
-  SpecialConstraint,
   TextCompleteness,
   TextType,
   EvaluationGoal,
@@ -40,26 +37,4 @@ export const evaluationGoalOptions: Option<EvaluationGoal>[] = [
   { value: 'style_consistency', label: '文风一致性检查' },
   { value: 'structure_completeness', label: '结构完整性检查' },
   { value: 'reader_acceptance', label: '读者接受度预估' },
-];
-
-export const readerPreferenceOptions: Option<ReaderPreference>[] = [
-  { value: 'fast_paced', label: '偏快节奏' },
-  { value: 'plot_driven', label: '偏剧情推进' },
-  { value: 'character_emotion', label: '偏人物情感' },
-  { value: 'world_building', label: '偏世界观/设定' },
-  { value: 'literary_expression', label: '偏文学表达' },
-  { value: 'general_reader', label: '通用读者' },
-];
-
-export const feedbackStyleOptions: Option<FeedbackStyle>[] = [
-  { value: 'strict', label: '严格问题导向' },
-  { value: 'balanced', label: '平衡反馈' },
-  { value: 'encouraging', label: '鼓励式反馈' },
-];
-
-export const specialConstraintOptions: Option<SpecialConstraint>[] = [
-  { value: 'keep_original_style', label: '尽量保留原文风格' },
-  { value: 'avoid_overwriting', label: '避免过度重写式建议' },
-  { value: 'focus_publishability', label: '更关注可发布性' },
-  { value: 'focus_literary_expression', label: '更关注文学表达' },
 ];

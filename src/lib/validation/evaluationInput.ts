@@ -1,7 +1,12 @@
 import { z } from 'zod';
-import { EvaluationInput, TextBlock, TextBlockAttachment } from '@/types/report';
+import { ContentSource, EvaluationInput, TextBlock, TextBlockAttachment } from '@/types/report';
 import type { FeatureFlagsConfig } from '@/server/config/types';
-import { getRenderedTextBlockLength, MAX_BLOCK_CONTENT_LENGTH } from '@/lib/textBlocks';
+import {
+  getRenderedTextBlockLength,
+  isContentSourceEmpty,
+  isTextAnnotationEmpty,
+  MAX_BLOCK_CONTENT_LENGTH,
+} from '@/lib/textBlocks';
 
 const textTypeSchema = z.enum([
   'web_serial',
@@ -27,24 +32,6 @@ const evaluationGoalSchema = z.enum([
   'style_consistency',
   'structure_completeness',
   'reader_acceptance',
-]);
-
-const readerPreferenceSchema = z.enum([
-  'fast_paced',
-  'plot_driven',
-  'character_emotion',
-  'world_building',
-  'literary_expression',
-  'general_reader',
-]);
-
-const feedbackStyleSchema = z.enum(['strict', 'balanced', 'encouraging']);
-
-const specialConstraintSchema = z.enum([
-  'keep_original_style',
-  'avoid_overwriting',
-  'focus_publishability',
-  'focus_literary_expression',
 ]);
 
 const textBlockTypeSchema = z.enum(['actual_text', 'reference_material', 'reference_review']);
@@ -77,31 +64,34 @@ const textBlockAttachmentSchema = z
   })
   .transform((value: unknown) => value as TextBlockAttachment);
 
-const textBlockContentUnitSchema = z
-  .object({
-    draftText: z.string().default(''),
-    file: textBlockAttachmentSchema.nullable().default(null),
-  })
-  .superRefine((unit: { draftText: string; file: TextBlockAttachment | null }, ctx: z.RefinementCtx) => {
-    if (unit.draftText.trim() && unit.file) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: '单个内容单元中，文本与文件不能同时存在',
-        path: ['draftText'],
-      });
-    }
-  });
-
-const textBlockSupplementSchema = textBlockContentUnitSchema.extend({
-  id: z.string().trim().min(1, '说明标识缺失'),
+const textContentSourceSchema = z.object({
+  kind: z.literal('text'),
+  text: z.string().default(''),
 });
 
-const textBlockSchema = textBlockContentUnitSchema.extend({
+const fileContentSourceSchema = z.object({
+  kind: z.literal('file'),
+  file: textBlockAttachmentSchema,
+});
+
+const contentSourceSchema = z
+  .discriminatedUnion('kind', [textContentSourceSchema, fileContentSourceSchema])
+  .nullable()
+  .default(null)
+  .transform((value: ContentSource | null) => value);
+
+const textAnnotationSchema = z.object({
+  id: z.string().trim().min(1, '说明标识缺失'),
+  content: contentSourceSchema,
+});
+
+const textBlockSchema = z.object({
   id: z.string().trim().min(1, '文本块标识缺失'),
   number: z.number().int().min(1, '文本块编号不合法'),
   blockType: textBlockTypeSchema,
   title: z.string().default(''),
-  localSupplements: z.array(textBlockSupplementSchema).default([]),
+  content: contentSourceSchema,
+  annotations: z.array(textAnnotationSchema).default([]),
 });
 
 export const evaluationInputSchema = z.object({
@@ -122,13 +112,9 @@ export const evaluationInputSchema = z.object({
       seenIds.add(block.id);
     });
   }),
-  globalSupplementBlocks: z.array(textBlockSchema),
   textType: textTypeSchema,
   textCompleteness: textCompletenessSchema,
   evaluationGoal: evaluationGoalSchema,
-  readerPreference: readerPreferenceSchema.optional(),
-  feedbackStyle: feedbackStyleSchema.optional(),
-  specialConstraints: z.array(specialConstraintSchema).optional(),
 });
 
 export type EvaluationFormErrors = Partial<Record<keyof EvaluationInput | 'form', string>>;
@@ -138,13 +124,30 @@ type ValidationOptions = {
 };
 
 function hasAnyFiles(input: EvaluationInput) {
-  return [...input.textBlocks, ...input.globalSupplementBlocks].some(
-    (block) => block.file !== null || block.localSupplements.some((supplement) => supplement.file !== null),
+  return input.textBlocks.some(
+    (block) =>
+      block.content?.kind === 'file' || block.annotations.some((annotation) => annotation.content?.kind === 'file'),
   );
 }
 
-function hasAnyLocalSupplements(input: EvaluationInput) {
-  return [...input.textBlocks, ...input.globalSupplementBlocks].some((block) => block.localSupplements.length > 0);
+function hasAnyAnnotations(input: EvaluationInput) {
+  return input.textBlocks.some((block) => block.annotations.length > 0);
+}
+
+function getInvalidBlockNumbers(input: EvaluationInput) {
+  return input.textBlocks.filter((block) => isContentSourceEmpty(block.content)).map((block) => block.number);
+}
+
+function getAnnotationOnlyBlockNumbers(input: EvaluationInput) {
+  return input.textBlocks
+    .filter(
+      (block) => isContentSourceEmpty(block.content) && block.annotations.some((annotation) => !isTextAnnotationEmpty(annotation)),
+    )
+    .map((block) => block.number);
+}
+
+function formatBlockNumbers(blockNumbers: number[]) {
+  return blockNumbers.join('、');
 }
 
 export function validateEvaluationInput(input: EvaluationInput, options: ValidationOptions = {}):
@@ -153,20 +156,36 @@ export function validateEvaluationInput(input: EvaluationInput, options: Validat
   const result = evaluationInputSchema.safeParse(input);
 
   if (result.success) {
-    if (options.featureFlags?.enableGlobalSupplementBlocks === false && result.data.globalSupplementBlocks.length > 0) {
+    if (result.data.textBlocks.length === 0) {
       return {
         success: false,
         errors: {
-          globalSupplementBlocks: '当前配置已关闭整体说明块。',
+          textBlocks: '请至少添加一个文本块并填写正文后再提交。',
         },
       };
     }
 
-    if (options.featureFlags?.enableLocalSupplements === false && hasAnyLocalSupplements(result.data)) {
+    const invalidBlockNumbers = getInvalidBlockNumbers(result.data);
+    if (invalidBlockNumbers.length > 0) {
+      const annotationOnlyBlockNumbers = getAnnotationOnlyBlockNumbers(result.data);
+      const emptyBlockMessage = `文本块 ${formatBlockNumbers(invalidBlockNumbers)} 的正文为空，请填写正文或删除这些文本块后再提交。`;
+
       return {
         success: false,
         errors: {
-          textBlocks: '当前配置已关闭局部说明。',
+          textBlocks:
+            annotationOnlyBlockNumbers.length > 0
+              ? `${emptyBlockMessage} 批注不能脱离正文单独提交。`
+              : emptyBlockMessage,
+        },
+      };
+    }
+
+    if (options.featureFlags?.enableAnnotations === false && hasAnyAnnotations(result.data)) {
+      return {
+        success: false,
+        errors: {
+          textBlocks: '当前配置已关闭批注。',
         },
       };
     }

@@ -248,7 +248,7 @@ export default function MyForm() {
       <Input {...form.register('username')} />
       <Input {...form.register('email')} />
       <Button type="submit">提交</Button>
-    </form>
+    </form> 
   );
 }
 ```

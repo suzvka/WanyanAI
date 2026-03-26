@@ -1,13 +1,9 @@
 import {
     evaluationGoalOptions,
-    feedbackStyleOptions,
     getOptionLabel,
-    readerPreferenceOptions,
-    specialConstraintOptions,
     textCompletenessOptions,
     textTypeOptions,
 } from '@/config/evaluationOptions';
-import { prepareEvaluationSubmission } from '@/lib/evaluationSubmission';
 import { renderTextBlocksForModel, summarizeTextBlocks } from '@/lib/textBlocks';
 import { validateModelConfig } from '@/lib/validation/modelConfig';
 import {
@@ -18,7 +14,12 @@ import {
     PromptTemplateSlotKey,
     RawModelResponse,
 } from '@/types/analysis';
-import { AnalysisReport, EvaluationInput, SerializableEvaluationInput } from '@/types/report';
+import {
+    AnalysisReport,
+    EvaluationInput,
+    ReportNormalizationDiagnostics,
+    ReportSection,
+} from '@/types/report';
 import { AppError, createAppError } from '@/types/errors';
 import { z } from 'zod';
 import { AnalysisProgressUpdate, AnalysisService, GenerateReportOptions, PromptTemplateService } from './types';
@@ -36,6 +37,12 @@ type ChatCompletionsResponse = {
     };
 };
 
+const remoteAnalysisSectionSchema = z.object({
+    id: z.string().trim().min(1).optional(),
+    title: z.string().trim().min(1),
+    body: z.string().trim().min(1),
+});
+
 const remoteAnalysisReportSchema = z.object({
     reportId: z.string().trim().min(1).optional(),
     reportVersion: z.string().trim().min(1).optional(),
@@ -49,29 +56,6 @@ const remoteAnalysisReportSchema = z.object({
         grade: z.string().trim().min(1),
         publishReadiness: z.string().trim().min(1),
     }),
-    dimensions: z
-        .array(
-            z.object({
-                dimensionKey: z.string().trim().min(1),
-                dimensionName: z.string().trim().min(1),
-                score: z.number(),
-                grade: z.string().trim().min(1),
-                strengths: z.array(z.string()),
-                weaknesses: z.array(z.string()),
-            }),
-        )
-        .min(1),
-    keyIssues: z
-        .array(
-            z.object({
-                id: z.string().trim().min(1).optional(),
-                title: z.string().trim().min(1),
-                severity: z.enum(['high', 'medium', 'low']),
-                description: z.string().trim().min(1),
-                suggestionDirection: z.string().trim().min(1),
-            }),
-        )
-        .min(1),
     conclusion: z.object({
         finalRecommendation: z.enum(['publish', 'revise_then_publish', 'rework']),
         rationale: z.string().trim().min(1),
@@ -83,40 +67,23 @@ const remoteAnalysisReportSchema = z.object({
             conclusionPolicyVersion: z.string().trim().min(1).optional(),
         })
         .optional(),
+    sections: z.array(remoteAnalysisSectionSchema).min(1),
 });
 
 type RemoteAnalysisReport = z.infer<typeof remoteAnalysisReportSchema>;
+type RemoteAnalysisSection = z.infer<typeof remoteAnalysisSectionSchema>;
 
 type PromptSlotValues = Record<PromptTemplateSlotKey, string>;
+type NormalizedAnalysisReport = Omit<AnalysisReport, 'schemaVersion' | 'diagnostics'>;
 
 const normalizeBaseUrl = (baseUrl: string) => baseUrl.trim().replace(/\/$/, '');
 const promptSlotPattern = /{{(.*?)}}/g;
 const jsonFencePattern = /```(?:json)?\s*([\s\S]*?)```/i;
-
 const normalizeScore = (score: number) => Math.max(0, Math.min(100, Math.round(score)));
 
 const reportSchemaGuide = `{
   "summary": { "title": "string", "overview": "string" },
   "dashboard": { "totalScore": 0, "grade": "string", "publishReadiness": "string" },
-  "dimensions": [
-    {
-      "dimensionKey": "string",
-      "dimensionName": "string",
-      "score": 0,
-      "grade": "string",
-      "strengths": ["string"],
-      "weaknesses": ["string"]
-    }
-  ],
-  "keyIssues": [
-    {
-      "id": "string",
-      "title": "string",
-      "severity": "high | medium | low",
-      "description": "string",
-      "suggestionDirection": "string"
-    }
-  ],
   "conclusion": {
     "finalRecommendation": "publish | revise_then_publish | rework",
     "rationale": "string"
@@ -128,12 +95,15 @@ const reportSchemaGuide = `{
     "frameworkVersion": "string",
     "scoringPolicyVersion": "string",
     "conclusionPolicyVersion": "string"
-  }
+  },
+  "sections": [
+    {
+      "title": "string",
+      "body": "string",
+      "id": "string"
+    }
+  ]
 }`;
-
-function getSubmissionTopLevelBlocks(submission: SerializableEvaluationInput) {
-    return [...submission.blocks, ...submission.globalSupplements];
-}
 
 async function readResponseData(response: Response): Promise<ChatCompletionsResponse | null> {
     const text = await response.text();
@@ -152,7 +122,7 @@ async function readResponseData(response: Response): Promise<ChatCompletionsResp
 export class BasicRemoteAnalysisService implements AnalysisService {
     constructor(private readonly templateService: PromptTemplateService) { }
 
-    async generateReport({ input, modelConfig, onProgress }: GenerateReportOptions): Promise<AnalysisReport> {
+    async generateReport({ input, modelConfig, instructionText, onProgress }: GenerateReportOptions): Promise<AnalysisReport> {
         const validatedConfig = validateModelConfig(modelConfig);
         if (!validatedConfig.success) {
             throw createAppError({
@@ -162,24 +132,14 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         }
 
         this.emitProgress(onProgress, 'prepare-upload', '正在整理文本输入与文件引用');
-        const submission = prepareEvaluationSubmission(input);
-        const submissionBlocks = getSubmissionTopLevelBlocks(submission.submissionData);
 
         this.emitProgress(onProgress, 'fetch-template', '正在获取当前评价方式的提示词模板');
         const template = await this.templateService.getTemplate({
-            scenario: 'text_diagnosis',
             evaluationGoal: input.evaluationGoal,
-            providerProfile: 'openai-compatible',
-            model: validatedConfig.data.selectedModel,
-            inputMeta: {
-                blockTypes: [...new Set(submissionBlocks.map((block) => block.blockType))],
-                blockCount: submissionBlocks.length,
-                hasReferenceText: submissionBlocks.some((block) => block.blockType === 'reference_material'),
-            },
         });
 
         this.emitProgress(onProgress, 'build-prompt', '正在拼接最终提示词');
-        const messages = this.buildMessages(template, input);
+        const messages = this.buildMessages(template, input, instructionText);
 
         this.emitProgress(onProgress, 'request-model', '模型正在生成分析结果');
         const requestPayload: ModelAnalysisRequest = {
@@ -255,8 +215,8 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         }
     }
 
-    private buildMessages(template: PromptTemplateResource, input: EvaluationInput) {
-        const slotValues = this.createSlotValues(input);
+    private buildMessages(template: PromptTemplateResource, input: EvaluationInput, instructionText?: string) {
+        const slotValues = this.createSlotValues(input, instructionText);
         this.validateTemplateSlots(template, slotValues);
 
         return [
@@ -271,23 +231,14 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         ];
     }
 
-    private createSlotValues(input: EvaluationInput): PromptSlotValues {
+    private createSlotValues(input: EvaluationInput, instructionText?: string): PromptSlotValues {
         return {
             textBlocksPlainText: renderTextBlocksForModel(input),
             textBlocksSummary: summarizeTextBlocks(input),
             textTypeLabel: getOptionLabel(textTypeOptions, input.textType),
             textCompletenessLabel: getOptionLabel(textCompletenessOptions, input.textCompleteness),
             evaluationGoalLabel: getOptionLabel(evaluationGoalOptions, input.evaluationGoal),
-            readerPreferenceLabel: input.readerPreference
-                ? getOptionLabel(readerPreferenceOptions, input.readerPreference)
-                : '未指定',
-            feedbackStyleLabel: input.feedbackStyle
-                ? getOptionLabel(feedbackStyleOptions, input.feedbackStyle)
-                : '未指定',
-            specialConstraintsLabel:
-                input.specialConstraints && input.specialConstraints.length > 0
-                    ? input.specialConstraints.map((item) => getOptionLabel(specialConstraintOptions, item)).join('、')
-                    : '无',
+            dynamicInstructionText: instructionText?.trim() || '',
         };
     }
 
@@ -610,8 +561,11 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         }
 
         const data: RemoteAnalysisReport = parsed.data;
+        const sections = data.sections.map((section: RemoteAnalysisSection, index: number) =>
+            this.normalizeRemoteSection(section, index),
+        );
 
-        return {
+        const normalizedReport: NormalizedAnalysisReport = {
             reportId: data.reportId || `report-${Date.now()}`,
             reportVersion: data.reportVersion || template.version,
             generatedAt: data.generatedAt || new Date().toISOString(),
@@ -620,14 +574,6 @@ export class BasicRemoteAnalysisService implements AnalysisService {
                 ...data.dashboard,
                 totalScore: normalizeScore(data.dashboard.totalScore),
             },
-            dimensions: data.dimensions.map((dimension: RemoteAnalysisReport['dimensions'][number]) => ({
-                ...dimension,
-                score: normalizeScore(dimension.score),
-            })),
-            keyIssues: data.keyIssues.map((issue: RemoteAnalysisReport['keyIssues'][number], index: number) => ({
-                ...issue,
-                id: issue.id || `issue-${index + 1}`,
-            })),
             conclusion: data.conclusion,
             meta: {
                 frameworkVersion: data.meta?.frameworkVersion || template.version,
@@ -636,6 +582,28 @@ export class BasicRemoteAnalysisService implements AnalysisService {
                 provider: this.getProviderHost(baseUrl),
                 model,
             },
+            sections,
+        };
+
+        return {
+            schemaVersion: 'report_schema_v2_paragraphs',
+            ...normalizedReport,
+            diagnostics: this.buildReportDiagnostics(sections),
+        };
+    }
+
+    private normalizeRemoteSection(section: RemoteAnalysisSection, index: number): ReportSection {
+        return {
+            id: section.id || `section-${index + 1}`,
+            title: section.title,
+            body: section.body,
+        };
+    }
+
+    private buildReportDiagnostics(sections: ReportSection[]): ReportNormalizationDiagnostics {
+        return {
+            normalizationMode: 'paragraph-sections',
+            sectionCount: sections.length,
         };
     }
 

@@ -1,8 +1,4 @@
 {
   "enableFileUpload": true,
-  "enableGlobalSupplementBlocks": true,
-  "enableLocalSupplements": true,
-  "enableReaderPreference": true,
-  "enableFeedbackStyle": true,
-  "enableSpecialConstraints": true
+  "enableAnnotations": true
 }

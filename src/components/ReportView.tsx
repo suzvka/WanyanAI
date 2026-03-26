@@ -2,19 +2,8 @@
 
 import { AnalysisReport } from '@/types/report';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  ArrowLeft, 
-  Download, 
-  Sparkles, 
-  AlertCircle, 
-  BarChart3,
-  FileText,
-  TrendingUp
-} from 'lucide-react';
-import ReportDimensionsPanel from '@/components/report/ReportDimensionsPanel';
-import ReportIssuesPanel from '@/components/report/ReportIssuesPanel';
-import ReportMetaPanel from '@/components/report/ReportMetaPanel';
+import { ArrowLeft, Download, Sparkles } from 'lucide-react';
+import ReportBodySections from '@/components/report/ReportBodySections';
 import ReportSidebar from '@/components/report/ReportSidebar';
 import ReportSummaryCard from '@/components/report/ReportSummaryCard';
 
@@ -24,6 +13,8 @@ interface ReportViewProps {
 }
 
 export default function ReportView({ report, onReset }: ReportViewProps) {
+  const sections = report.sections ?? [];
+
   const handleDownload = () => {
     const dataStr = JSON.stringify(report, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
@@ -66,53 +57,13 @@ export default function ReportView({ report, onReset }: ReportViewProps) {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-3">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-6">
             <ReportSummaryCard report={report} />
+            <ReportBodySections sections={sections} />
           </div>
 
-          <div className="lg:col-span-2 space-y-6">
-            <Tabs defaultValue="dashboard" className="w-full">
-              <TabsList className="w-full grid grid-cols-4">
-                <TabsTrigger value="dashboard">
-                  <BarChart3 className="w-4 h-4 mr-2" />
-                  仪表盘
-                </TabsTrigger>
-                <TabsTrigger value="issues">
-                  <AlertCircle className="w-4 h-4 mr-2" />
-                  核心问题
-                </TabsTrigger>
-                <TabsTrigger value="dimensions">
-                  <TrendingUp className="w-4 h-4 mr-2" />
-                  分维度分析
-                </TabsTrigger>
-                <TabsTrigger value="summary">
-                  <FileText className="w-4 h-4 mr-2" />
-                  摘要
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="dashboard" className="space-y-6 pt-6">
-                <ReportDimensionsPanel dimensions={report.dimensions} variant="dashboard" />
-              </TabsContent>
-
-              <TabsContent value="issues" className="space-y-6 pt-6">
-                <ReportIssuesPanel issues={report.keyIssues} />
-              </TabsContent>
-
-              <TabsContent value="dimensions" className="space-y-6 pt-6">
-                <ReportDimensionsPanel dimensions={report.dimensions} variant="details" />
-              </TabsContent>
-
-              <TabsContent value="summary" className="space-y-6 pt-6">
-                <ReportMetaPanel report={report} />
-              </TabsContent>
-            </Tabs>
-          </div>
-
-          <div className="lg:col-span-1 space-y-6">
-            <ReportSidebar report={report} onReset={onReset} onDownload={handleDownload} />
-          </div>
+          <ReportSidebar report={report} onReset={onReset} onDownload={handleDownload} />
         </div>
       </main>
     </div>

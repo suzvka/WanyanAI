@@ -1,8 +1,5 @@
 import {
   EvaluationGoal,
-  FeedbackStyle,
-  ReaderPreference,
-  SpecialConstraint,
   TextCompleteness,
   TextType,
 } from '@/types/report';
@@ -21,27 +18,40 @@ export type EvaluationCatalogConfig = {
   textTypes: CatalogOption<TextType>[];
   textCompletenessOptions: CatalogOption<TextCompleteness>[];
   evaluationGoals: CatalogOption<EvaluationGoal>[];
-  readerPreferences: CatalogOption<ReaderPreference>[];
-  feedbackStyles: CatalogOption<FeedbackStyle>[];
-  specialConstraints: CatalogOption<SpecialConstraint>[];
 };
 
 export type EvaluationDefaultsConfig = {
   textType: TextType;
   textCompleteness: TextCompleteness;
   evaluationGoal: EvaluationGoal;
-  readerPreference?: ReaderPreference;
-  feedbackStyle?: FeedbackStyle;
-  specialConstraints: SpecialConstraint[];
 };
 
 export type FeatureFlagsConfig = {
   enableFileUpload: boolean;
-  enableGlobalSupplementBlocks: boolean;
-  enableLocalSupplements: boolean;
-  enableReaderPreference: boolean;
-  enableFeedbackStyle: boolean;
-  enableSpecialConstraints: boolean;
+  enableAnnotations: boolean;
+};
+
+export type AnalysisControlOptionConfig = {
+  value: string;
+  label: string;
+  promptText: string;
+  enabled: boolean;
+};
+
+export type AnalysisControlBinding = 'textType' | 'textCompleteness' | 'evaluationGoal';
+
+export type AnalysisControlConfig = {
+  id: string;
+  title: string;
+  enabled: boolean;
+  sortOrder: number;
+  bindTo?: AnalysisControlBinding;
+  appliesTo: EvaluationGoal[];
+  options: AnalysisControlOptionConfig[];
+};
+
+export type AnalysisControlsConfig = {
+  controls: AnalysisControlConfig[];
 };
 
 export type SiteConfig = {
@@ -81,4 +91,5 @@ export type PublishedOpsConfig = {
   catalog: EvaluationCatalogConfig;
   defaults: EvaluationDefaultsConfig;
   featureFlags: FeatureFlagsConfig;
+  analysisControls: AnalysisControlsConfig;
 };

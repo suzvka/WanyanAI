@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { createDefaultEvaluationInput } from '@/config/defaults';
-import { EvaluationInput, SpecialConstraint } from '@/types/report';
+import { EvaluationInput } from '@/types/report';
 import { AnalysisPhase, AnalysisProgressState, AnalysisStatus } from '@/types/appFlow';
 import { EvaluationFormErrors, validateEvaluationInput } from '@/lib/validation/evaluationInput';
 import type { FeatureFlagsConfig } from '@/server/config/types';
@@ -23,13 +23,20 @@ function cloneEvaluationInput(input: EvaluationInput): EvaluationInput {
     ...input,
     textBlocks: input.textBlocks.map((block) => ({
       ...block,
-      localSupplements: block.localSupplements.map((supplement) => ({ ...supplement })),
+      content: block.content
+        ? block.content.kind === 'text'
+          ? { ...block.content }
+          : { ...block.content, file: { ...block.content.file } }
+        : null,
+      annotations: block.annotations.map((annotation) => ({
+        ...annotation,
+        content: annotation.content
+          ? annotation.content.kind === 'text'
+            ? { ...annotation.content }
+            : { ...annotation.content, file: { ...annotation.content.file } }
+          : null,
+      })),
     })),
-    globalSupplementBlocks: input.globalSupplementBlocks.map((block) => ({
-      ...block,
-      localSupplements: block.localSupplements.map((supplement) => ({ ...supplement })),
-    })),
-    specialConstraints: [...(input.specialConstraints || [])],
   };
 }
 
@@ -62,18 +69,9 @@ export function useEvaluationForm(
     setFormData((current: EvaluationInput) => ({ ...current, [key]: value }));
     clearError(key);
 
-    if (key === 'textBlocks' || key === 'globalSupplementBlocks') {
+    if (key === 'textBlocks') {
       clearError('form');
     }
-  };
-
-  const toggleSpecialConstraint = (constraint: SpecialConstraint, checked: boolean) => {
-    const current = formData.specialConstraints || [];
-    const nextConstraints = checked
-      ? [...current, constraint]
-      : current.filter((item: SpecialConstraint) => item !== constraint);
-
-    updateField('specialConstraints', nextConstraints);
   };
 
   const validate = (): EvaluationInput | null => {
@@ -150,7 +148,6 @@ export function useEvaluationForm(
     analysisMessage: analysisProgress.message,
     canRetryAnalysis: analysisProgress.canRetry,
     updateField,
-    toggleSpecialConstraint,
     validate,
     setFormError,
     clearError,

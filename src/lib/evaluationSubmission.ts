@@ -1,12 +1,12 @@
 import {
+  ContentSource,
   EvaluationInput,
   SerializableEvaluationInput,
   SerializableEvaluationMetadataFile,
+  SerializableTextAnnotation,
   SerializableTextBlock,
   SerializableTextBlockContent,
-  SerializableTextBlockSupplement,
   TextBlock,
-  TextBlockContentUnit,
 } from '@/types/report';
 
 export type PreparedEvaluationSubmission = {
@@ -19,31 +19,38 @@ type PreparedContentUnit = {
 };
 
 function prepareContentUnit(
-  unit: TextBlockContentUnit,
-  options: Pick<SerializableEvaluationMetadataFile, 'blockId' | 'parentBlockId'>,
+  content: ContentSource | null,
+  options: Pick<SerializableEvaluationMetadataFile, 'blockId' | 'annotationId'>,
 ): PreparedContentUnit {
-  if (unit.file) {
+  if (!content) {
+    return {
+      content: null,
+      metadataFile: null,
+    };
+  }
+
+  if (content.kind === 'file') {
     return {
       content: {
         kind: 'file',
-        fileName: unit.file.storedName,
-        content: unit.file.content,
+        fileName: content.file.storedName,
+        content: content.file.content,
       },
       metadataFile: {
-        id: unit.file.id,
+        id: content.file.id,
         blockId: options.blockId,
-        parentBlockId: options.parentBlockId,
-        originalName: unit.file.originalName,
-        storedName: unit.file.storedName,
-        mimeType: unit.file.mimeType,
-        size: unit.file.size,
-        lastModified: unit.file.lastModified,
-        source: unit.file.source,
+        annotationId: options.annotationId,
+        originalName: content.file.originalName,
+        storedName: content.file.storedName,
+        mimeType: content.file.mimeType,
+        size: content.file.size,
+        lastModified: content.file.lastModified,
+        source: content.file.source,
       },
     };
   }
 
-  if (!unit.draftText.trim()) {
+  if (!content.text.trim()) {
     return {
       content: null,
       metadataFile: null,
@@ -53,7 +60,7 @@ function prepareContentUnit(
   return {
     content: {
       kind: 'text',
-      content: unit.draftText,
+      content: content.text,
     },
     metadataFile: null,
   };
@@ -62,19 +69,19 @@ function prepareContentUnit(
 function prepareTextBlock(
   block: TextBlock,
 ): { serializableBlock: SerializableTextBlock; metadataFiles: SerializableEvaluationMetadataFile[] } {
-  const blockUnit = prepareContentUnit(block, {
+  const blockUnit = prepareContentUnit(block.content, {
     blockId: block.id,
   });
 
-  const supplementResults = block.localSupplements.map((supplement) =>
-    prepareContentUnit(supplement, {
-      blockId: supplement.id,
-      parentBlockId: block.id,
+  const annotationResults = block.annotations.map((annotation) =>
+    prepareContentUnit(annotation.content, {
+      blockId: block.id,
+      annotationId: annotation.id,
     }),
   );
 
-  const localSupplements: SerializableTextBlockSupplement[] = supplementResults.map((result, index) => ({
-    id: block.localSupplements[index].id,
+  const annotations: SerializableTextAnnotation[] = annotationResults.map((result, index) => ({
+    id: block.annotations[index].id,
     content: result.content,
   }));
 
@@ -85,30 +92,25 @@ function prepareTextBlock(
       blockType: block.blockType,
       title: block.title,
       content: blockUnit.content,
-      localSupplements,
+      annotations,
     },
-    metadataFiles: [blockUnit.metadataFile, ...supplementResults.map((result) => result.metadataFile)].filter(
+    metadataFiles: [blockUnit.metadataFile, ...annotationResults.map((result) => result.metadataFile)].filter(
       (file): file is SerializableEvaluationMetadataFile => file !== null,
     ),
   };
 }
 
 export function prepareEvaluationSubmission(input: EvaluationInput): PreparedEvaluationSubmission {
-  const mainBlocks = input.textBlocks.map((block) => prepareTextBlock(block));
-  const globalBlocks = input.globalSupplementBlocks.map((block) => prepareTextBlock(block));
+  const blocks = input.textBlocks.map((block) => prepareTextBlock(block));
 
   const submissionData: SerializableEvaluationInput = {
-    blocks: mainBlocks.map((item) => item.serializableBlock),
-    globalSupplements: globalBlocks.map((item) => item.serializableBlock),
+    blocks: blocks.map((item) => item.serializableBlock),
     metadata: {
-      files: [...mainBlocks, ...globalBlocks].flatMap((item) => item.metadataFiles),
+      files: blocks.flatMap((item) => item.metadataFiles),
     },
     textType: input.textType,
     textCompleteness: input.textCompleteness,
     evaluationGoal: input.evaluationGoal,
-    readerPreference: input.readerPreference,
-    feedbackStyle: input.feedbackStyle,
-    specialConstraints: input.specialConstraints,
   };
 
   return {

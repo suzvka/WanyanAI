@@ -12,21 +12,7 @@ const evaluationGoalValues = [
   'structure_completeness',
   'reader_acceptance',
 ] as const;
-const readerPreferenceValues = [
-  'fast_paced',
-  'plot_driven',
-  'character_emotion',
-  'world_building',
-  'literary_expression',
-  'general_reader',
-] as const;
-const feedbackStyleValues = ['strict', 'balanced', 'encouraging'] as const;
-const specialConstraintValues = [
-  'keep_original_style',
-  'avoid_overwriting',
-  'focus_publishability',
-  'focus_literary_expression',
-] as const;
+const analysisControlBindingValues = ['textType', 'textCompleteness', 'evaluationGoal'] as const;
 
 function createCatalogOptionSchema<TValues extends readonly [string, ...string[]]>(values: TValues) {
   return z.object({
@@ -43,9 +29,27 @@ function createCatalogOptionSchema<TValues extends readonly [string, ...string[]
 const textTypeOptionSchema = createCatalogOptionSchema(textTypeValues);
 const textCompletenessOptionSchema = createCatalogOptionSchema(textCompletenessValues);
 const evaluationGoalOptionSchema = createCatalogOptionSchema(evaluationGoalValues);
-const readerPreferenceOptionSchema = createCatalogOptionSchema(readerPreferenceValues);
-const feedbackStyleOptionSchema = createCatalogOptionSchema(feedbackStyleValues);
-const specialConstraintOptionSchema = createCatalogOptionSchema(specialConstraintValues);
+
+const analysisControlOptionSchema = z.object({
+  value: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  promptText: z.string(),
+  enabled: z.boolean(),
+});
+
+const analysisControlSchema = z.object({
+  id: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  enabled: z.boolean(),
+  sortOrder: z.number(),
+  bindTo: z.enum(analysisControlBindingValues).optional(),
+  appliesTo: z.array(z.enum(evaluationGoalValues)).min(1),
+  options: z.array(analysisControlOptionSchema).min(1),
+});
+
+const analysisControlsSchemaBase = z.object({
+  controls: z.array(analysisControlSchema),
+});
 
 export const manifestSchema = z.object({
   configVersion: z.string().trim().min(1),
@@ -81,28 +85,99 @@ export const evaluationCatalogSchema = z.object({
   textTypes: z.array(textTypeOptionSchema),
   textCompletenessOptions: z.array(textCompletenessOptionSchema),
   evaluationGoals: z.array(evaluationGoalOptionSchema),
-  readerPreferences: z.array(readerPreferenceOptionSchema),
-  feedbackStyles: z.array(feedbackStyleOptionSchema),
-  specialConstraints: z.array(specialConstraintOptionSchema),
 });
 
 export const evaluationDefaultsSchema = z.object({
   textType: z.enum(textTypeValues),
   textCompleteness: z.enum(textCompletenessValues),
   evaluationGoal: z.enum(evaluationGoalValues),
-  readerPreference: z.enum(readerPreferenceValues).optional(),
-  feedbackStyle: z.enum(feedbackStyleValues).optional(),
-  specialConstraints: z.array(z.enum(specialConstraintValues)),
 });
 
 export const featureFlagsSchema = z.object({
   enableFileUpload: z.boolean(),
-  enableGlobalSupplementBlocks: z.boolean(),
-  enableLocalSupplements: z.boolean(),
-  enableReaderPreference: z.boolean(),
-  enableFeedbackStyle: z.boolean(),
-  enableSpecialConstraints: z.boolean(),
+  enableAnnotations: z.boolean(),
 });
+
+export const analysisControlsSchema = analysisControlsSchemaBase.superRefine(
+  (value: z.infer<typeof analysisControlsSchemaBase>, ctx: z.RefinementCtx) => {
+    const seenControlIds = new Set<string>();
+    const boundControls = new Map<(typeof analysisControlBindingValues)[number], string>();
+
+    value.controls.forEach((control: z.infer<typeof analysisControlSchema>, controlIndex: number) => {
+      if (seenControlIds.has(control.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `动态检查项 ID 重复：${control.id}`,
+          path: ['controls', controlIndex, 'id'],
+        });
+      }
+      seenControlIds.add(control.id);
+
+      if (control.bindTo) {
+        const existingControlId = boundControls.get(control.bindTo);
+
+        if (existingControlId) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `核心分析设置 ${control.bindTo} 只能绑定一个控件，当前重复：${existingControlId} / ${control.id}`,
+            path: ['controls', controlIndex, 'bindTo'],
+          });
+        }
+
+        boundControls.set(control.bindTo, control.id);
+      }
+
+      if (!control.options[0]?.enabled) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: '动态检查项的首个选项必须启用，用于表达默认值。',
+          path: ['controls', controlIndex, 'options', 0, 'enabled'],
+        });
+      }
+
+      const seenOptionValues = new Set<string>();
+      control.options.forEach((option: z.infer<typeof analysisControlOptionSchema>, optionIndex: number) => {
+        const bindTo = control.bindTo;
+
+        const validBoundOption =
+          bindTo === 'textType'
+            ? textTypeValues.includes(option.value as (typeof textTypeValues)[number])
+            : bindTo === 'textCompleteness'
+              ? textCompletenessValues.includes(option.value as (typeof textCompletenessValues)[number])
+              : bindTo === 'evaluationGoal'
+                ? evaluationGoalValues.includes(option.value as (typeof evaluationGoalValues)[number])
+                : true;
+
+        if (bindTo && !validBoundOption) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `核心分析设置 ${bindTo} 的选项值不合法：${option.value}`,
+            path: ['controls', controlIndex, 'options', optionIndex, 'value'],
+          });
+        }
+
+        if (seenOptionValues.has(option.value)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `动态检查项选项值重复：${option.value}`,
+            path: ['controls', controlIndex, 'options', optionIndex, 'value'],
+          });
+        }
+        seenOptionValues.add(option.value);
+      });
+    });
+
+    analysisControlBindingValues.forEach((binding) => {
+      if (!boundControls.has(binding)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `缺少核心分析设置控件：${binding}`,
+          path: ['controls'],
+        });
+      }
+    });
+  },
+);
 
 function normalizeOptions<T extends string>(options: CatalogOption<T>[]) {
   return [...options].sort((left, right) => {
@@ -112,6 +187,38 @@ function normalizeOptions<T extends string>(options: CatalogOption<T>[]) {
 
     return left.label.localeCompare(right.label, 'zh-CN');
   });
+}
+
+function ensureBoundAnalysisControlsAlwaysVisible(config: PublishedOpsConfig) {
+  config.analysisControls.controls.forEach((control) => {
+    if (!control.bindTo) {
+      return;
+    }
+
+    const missingGoals = evaluationGoalValues.filter((goal) => !control.appliesTo.includes(goal));
+
+    if (missingGoals.length > 0) {
+      throw new Error(`核心分析设置 ${control.id} 必须对所有报告类型可见：缺少 ${missingGoals.join(', ')}`);
+    }
+  });
+}
+
+function normalizeAnalysisControls(config: PublishedOpsConfig['analysisControls']): PublishedOpsConfig['analysisControls'] {
+  return {
+    controls: [...config.controls]
+      .sort((left, right) => {
+        if (left.sortOrder !== right.sortOrder) {
+          return left.sortOrder - right.sortOrder;
+        }
+
+        return left.title.localeCompare(right.title, 'zh-CN');
+      })
+      .map((control) => ({
+        ...control,
+        appliesTo: [...control.appliesTo],
+        options: control.options.map((option) => ({ ...option })),
+      })),
+  };
 }
 
 function ensureEnabledOption<T extends string>(options: CatalogOption<T>[], fieldName: string) {
@@ -135,8 +242,23 @@ function ensureDefaultEnabled<T extends string>(options: CatalogOption<T>[], val
   }
 }
 
+function ensureAnalysisControlsTargetEnabledGoals(config: PublishedOpsConfig) {
+  const enabledGoals = new Set(
+    config.catalog.evaluationGoals.filter((option) => option.enabled).map((option) => option.value),
+  );
+
+  config.analysisControls.controls.forEach((control) => {
+    control.appliesTo.forEach((goal) => {
+      if (!enabledGoals.has(goal)) {
+        throw new Error(`动态检查项 ${control.id} 依赖了未启用的报告类型：${goal}`);
+      }
+    });
+  });
+}
+
 export function validatePublishedOpsConfig(config: Omit<PublishedOpsConfig, 'source'>, source: PublishedOpsConfig['source'] = 'published'): PublishedOpsConfig {
   const parsedCatalog = evaluationCatalogSchema.parse(config.catalog);
+  const parsedAnalysisControls = analysisControlsSchema.parse(config.analysisControls);
 
   const normalizedConfig: PublishedOpsConfig = {
     source,
@@ -146,12 +268,10 @@ export function validatePublishedOpsConfig(config: Omit<PublishedOpsConfig, 'sou
       textTypes: normalizeOptions(parsedCatalog.textTypes),
       textCompletenessOptions: normalizeOptions(parsedCatalog.textCompletenessOptions),
       evaluationGoals: normalizeOptions(parsedCatalog.evaluationGoals),
-      readerPreferences: normalizeOptions(parsedCatalog.readerPreferences),
-      feedbackStyles: normalizeOptions(parsedCatalog.feedbackStyles),
-      specialConstraints: normalizeOptions(parsedCatalog.specialConstraints),
     },
     defaults: evaluationDefaultsSchema.parse(config.defaults),
     featureFlags: featureFlagsSchema.parse(config.featureFlags),
+    analysisControls: normalizeAnalysisControls(parsedAnalysisControls),
   };
 
   ensureEnabledOption(normalizedConfig.catalog.textTypes, 'textTypes');
@@ -165,16 +285,9 @@ export function validatePublishedOpsConfig(config: Omit<PublishedOpsConfig, 'sou
     'textCompleteness',
   );
   ensureDefaultEnabled(normalizedConfig.catalog.evaluationGoals, normalizedConfig.defaults.evaluationGoal, 'evaluationGoal');
-  ensureDefaultEnabled(
-    normalizedConfig.catalog.readerPreferences,
-    normalizedConfig.defaults.readerPreference,
-    'readerPreference',
-  );
-  ensureDefaultEnabled(normalizedConfig.catalog.feedbackStyles, normalizedConfig.defaults.feedbackStyle, 'feedbackStyle');
 
-  normalizedConfig.defaults.specialConstraints.forEach((constraint) => {
-    ensureDefaultEnabled(normalizedConfig.catalog.specialConstraints, constraint, 'specialConstraints');
-  });
+  ensureAnalysisControlsTargetEnabledGoals(normalizedConfig);
+  ensureBoundAnalysisControlsAlwaysVisible(normalizedConfig);
 
   return normalizedConfig;
 }

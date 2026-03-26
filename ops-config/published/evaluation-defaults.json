@@ -1,8 +1,5 @@
 {
   "textType": "general_text",
   "textCompleteness": "excerpt",
-  "evaluationGoal": "overall_check",
-  "readerPreference": "general_reader",
-  "feedbackStyle": "balanced",
-  "specialConstraints": []
+  "evaluationGoal": "overall_check"
 }

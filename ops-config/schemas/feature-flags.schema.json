@@ -3,19 +3,11 @@
   "type": "object",
   "required": [
     "enableFileUpload",
-    "enableGlobalSupplementBlocks",
-    "enableLocalSupplements",
-    "enableReaderPreference",
-    "enableFeedbackStyle",
-    "enableSpecialConstraints"
+    "enableAnnotations"
   ],
   "properties": {
     "enableFileUpload": { "type": "boolean" },
-    "enableGlobalSupplementBlocks": { "type": "boolean" },
-    "enableLocalSupplements": { "type": "boolean" },
-    "enableReaderPreference": { "type": "boolean" },
-    "enableFeedbackStyle": { "type": "boolean" },
-    "enableSpecialConstraints": { "type": "boolean" }
+    "enableAnnotations": { "type": "boolean" }
   },
   "additionalProperties": false
 }

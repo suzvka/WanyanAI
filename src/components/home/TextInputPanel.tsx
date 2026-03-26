@@ -9,690 +9,566 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  getRenderedTextBlockLength,
-  getTextBlockPlainTextLength,
-  getTextBlockTypeLabel,
-  MAX_BLOCK_CONTENT_LENGTH,
+    getRenderedTextBlockLength,
+    getTextBlockPlainTextLength,
+    getTextBlockTypeLabel,
+    MAX_BLOCK_CONTENT_LENGTH,
 } from '@/lib/textBlocks';
-import { TextBlock, TextBlockAttachment, TextBlockContentUnit, TextBlockSupplement, TextBlockType } from '@/types/report';
+import { ContentSource, TextAnnotation, TextBlock, TextBlockAttachment, TextBlockType } from '@/types/report';
 
 interface TextInputPanelProps {
-  title?: string;
-  description?: string;
-  textBlocks: TextBlock[];
-  globalSupplementBlocks: TextBlock[];
-  enableFileUpload?: boolean;
-  enableGlobalSupplementBlocks?: boolean;
-  enableLocalSupplements?: boolean;
-  onTextBlocksChange: (value: TextBlock[]) => void;
-  onGlobalSupplementBlocksChange: (value: TextBlock[]) => void;
+    title?: string;
+    description?: string;
+    textBlocks: TextBlock[];
+    enableFileUpload?: boolean;
+    enableAnnotations?: boolean;
+    onTextBlocksChange: (value: TextBlock[]) => void;
 }
 
-type BlockCollectionKey = 'textBlocks' | 'globalSupplementBlocks';
-
 type PendingTextChange = {
-  collection: BlockCollectionKey;
-  blockId: string;
-  supplementId?: string;
-  nextDraftText: string;
+    blockId: string;
+    annotationId?: string;
+    nextText: string;
 };
 
 const textBlockTypeOptions: TextBlockType[] = ['actual_text', 'reference_material', 'reference_review'];
 
 function createTextBlock(number: number): TextBlock {
-  return {
-    id: crypto.randomUUID(),
-    number,
-    blockType: 'actual_text',
-    title: `文本${number}`,
-    draftText: '',
-    file: null,
-    localSupplements: [],
-  };
+    return {
+        id: crypto.randomUUID(),
+        number,
+        blockType: 'actual_text',
+        title: `文本${number}`,
+        content: null,
+        annotations: [],
+    };
 }
 
-function createSupplement(): TextBlockSupplement {
-  return {
-    id: crypto.randomUUID(),
-    draftText: '',
-    file: null,
-  };
+function createAnnotation(): TextAnnotation {
+    return {
+        id: crypto.randomUUID(),
+        content: null,
+    };
 }
 
 function sanitizeFileStem(value: string, fallback: string): string {
-  const sanitized = value.replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ').replace(/\s+/g, ' ').trim();
-  return sanitized || fallback;
+    const sanitized = value.replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ').replace(/\s+/g, ' ').trim();
+    return sanitized || fallback;
 }
 
 function appendUuidToFileName(fileName: string, uuid: string): string {
-  const extensionIndex = fileName.lastIndexOf('.');
-  if (extensionIndex <= 0) {
-    return `${fileName}-${uuid}`;
-  }
+    const extensionIndex = fileName.lastIndexOf('.');
+    if (extensionIndex <= 0) {
+        return `${fileName}-${uuid}`;
+    }
 
-  const baseName = fileName.slice(0, extensionIndex);
-  const extension = fileName.slice(extensionIndex);
-  return `${baseName}-${uuid}${extension}`;
+    const baseName = fileName.slice(0, extensionIndex);
+    const extension = fileName.slice(extensionIndex);
+    return `${baseName}-${uuid}${extension}`;
 }
 
 function isPlainTextFile(file: File) {
-  const mimeType = file.type.trim().toLowerCase();
-  return (mimeType === '' || mimeType.startsWith('text/plain')) && file.name.toLowerCase().endsWith('.txt');
+    const mimeType = file.type.trim().toLowerCase();
+    return (mimeType === '' || mimeType.startsWith('text/plain')) && file.name.toLowerCase().endsWith('.txt');
 }
 
 async function buildStoredFile(file: File, title: string): Promise<TextBlockAttachment> {
-  const id = crypto.randomUUID();
-  const originalName = file.name.trim() || `${sanitizeFileStem(title, '文本')}.txt`;
-  const storedName = appendUuidToFileName(originalName, id);
-  const content = await file.text();
+    const id = crypto.randomUUID();
+    const originalName = file.name.trim() || `${sanitizeFileStem(title, '文本')}.txt`;
+    const storedName = appendUuidToFileName(originalName, id);
+    const content = await file.text();
 
-  return {
-    id,
-    originalName,
-    storedName,
-    mimeType: file.type || 'text/plain',
-    size: file.size,
-    lastModified: file.lastModified || Date.now(),
-    source: 'upload',
-    content,
-  };
+    return {
+        id,
+        originalName,
+        storedName,
+        mimeType: file.type || 'text/plain',
+        size: file.size,
+        lastModified: file.lastModified || Date.now(),
+        source: 'upload',
+        content,
+    };
 }
 
-function getNextBlockNumber(textBlocks: TextBlock[], globalSupplementBlocks: TextBlock[]) {
-  return [...textBlocks, ...globalSupplementBlocks].reduce((max, block) => Math.max(max, block.number), 0) + 1;
+function getNextBlockNumber(textBlocks: TextBlock[]) {
+    return textBlocks.reduce((max, block) => Math.max(max, block.number), 0) + 1;
 }
 
 function getFileDisplaySize(size: number) {
-  if (size < 1024) {
-    return `${size} B`;
-  }
+    if (size < 1024) {
+        return `${size} B`;
+    }
 
-  if (size < 1024 * 1024) {
-    return `${(size / 1024).toFixed(1)} KB`;
-  }
+    if (size < 1024 * 1024) {
+        return `${(size / 1024).toFixed(1)} KB`;
+    }
 
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-type ContentUnitEditorProps = {
-  titleForFileName: string;
-  placeholder: string;
-  unit: TextBlockContentUnit;
-  inputId: string;
-  enableFileUpload: boolean;
-  onTextInput: (nextValue: string) => void;
-  onFileChange: (nextFile: TextBlockAttachment | null) => void;
-  onAlert: (message: string) => void;
-  canApplyFile: (nextFile: TextBlockAttachment) => boolean;
+function toTextContent(nextText: string): ContentSource | null {
+    return nextText === '' ? null : { kind: 'text', text: nextText };
+}
+
+type ContentSourceEditorProps = {
+    titleForFileName: string;
+    placeholder: string;
+    content: ContentSource | null;
+    inputId: string;
+    enableFileUpload: boolean;
+    onTextInput: (nextValue: string) => void;
+    onFileChange: (nextFile: TextBlockAttachment | null) => void;
+    onAlert: (message: string) => void;
+    canApplyFile: (nextFile: TextBlockAttachment) => boolean;
 };
 
-function ContentUnitEditor({
-  titleForFileName,
-  placeholder,
-  unit,
-  inputId,
-  enableFileUpload,
-  onTextInput,
-  onFileChange,
-  onAlert,
-  canApplyFile,
-}: ContentUnitEditorProps) {
-  const applyFile = async (file: File) => {
-    if (!isPlainTextFile(file)) {
-      onAlert('当前仅支持上传 txt/plain text 文件。');
-      return;
-    }
+function ContentSourceEditor({
+    titleForFileName,
+    placeholder,
+    content,
+    inputId,
+    enableFileUpload,
+    onTextInput,
+    onFileChange,
+    onAlert,
+    canApplyFile,
+}: ContentSourceEditorProps) {
+    const file = content?.kind === 'file' ? content.file : null;
+    const textValue = content?.kind === 'text' ? content.text : '';
 
-    const nextFile = await buildStoredFile(file, titleForFileName);
-    if (nextFile.content.length > MAX_BLOCK_CONTENT_LENGTH) {
-      onAlert(`单个文件不能超过 ${MAX_BLOCK_CONTENT_LENGTH} 字符。`);
-      return;
-    }
+    const applyFile = async (fileToUpload: File) => {
+        if (!isPlainTextFile(fileToUpload)) {
+            onAlert('当前仅支持上传 txt/plain text 文件。');
+            return;
+        }
 
-    if (!canApplyFile(nextFile)) {
-      return;
-    }
+        const nextFile = await buildStoredFile(fileToUpload, titleForFileName);
+        if (nextFile.content.length > MAX_BLOCK_CONTENT_LENGTH) {
+            onAlert(`单个文件不能超过 ${MAX_BLOCK_CONTENT_LENGTH} 字符。`);
+            return;
+        }
 
-    onFileChange(nextFile);
-  };
+        if (!canApplyFile(nextFile)) {
+            return;
+        }
 
-  const handleFileInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const nextFile = event.target.files?.[0];
-    if (nextFile) {
-      await applyFile(nextFile);
-    }
+        onFileChange(nextFile);
+    };
 
-    event.target.value = '';
-  };
+    const handleFileInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
+        const nextFile = event.target.files?.[0];
+        if (nextFile) {
+            await applyFile(nextFile);
+        }
 
-  const handleDrop = async (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    if (!enableFileUpload) {
-      return;
-    }
+        event.target.value = '';
+    };
 
-    const nextFile = event.dataTransfer.files?.[0];
-    if (nextFile) {
-      await applyFile(nextFile);
-    }
-  };
+    const handleDrop = async (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        if (!enableFileUpload) {
+            return;
+        }
 
-  return (
-    <div
-      className="space-y-3 rounded-lg border border-dashed border-slate-200 p-4"
-      onDragOver={(event: DragEvent<HTMLDivElement>) => enableFileUpload && event.preventDefault()}
-      onDrop={handleDrop}
-    >
-      {unit.file ? (
-        <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <div className="font-medium text-slate-900">{unit.file.originalName}</div>
-              <div className="text-sm text-slate-500">
-                引用名：{unit.file.storedName} · {getFileDisplaySize(unit.file.size)}
-              </div>
-            </div>
-            <Button variant="ghost" size="sm" type="button" onClick={() => onFileChange(null)}>
-              <X className="mr-1 h-4 w-4" />
-              移除文件
-            </Button>
-          </div>
-          {enableFileUpload && (
-            <input
-              id={inputId}
-              type="file"
-              accept=".txt,text/plain"
-              className="block w-full text-sm text-slate-500 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-700"
-              onChange={handleFileInputChange}
-            />
-          )}
+        const nextFile = event.dataTransfer.files?.[0];
+        if (nextFile) {
+            await applyFile(nextFile);
+        }
+    };
+
+    return (
+        <div
+            className="space-y-3 rounded-lg border border-dashed border-slate-200 p-4"
+            onDragOver={(event: DragEvent<HTMLDivElement>) => enableFileUpload && event.preventDefault()}
+            onDrop={handleDrop}
+        >
+            {file ? (
+                <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                            <div className="font-medium text-slate-900">{file.originalName}</div>
+                            <div className="text-sm text-slate-500">
+                                引用名：{file.storedName} · {getFileDisplaySize(file.size)}
+                            </div>
+                        </div>
+                        <Button variant="ghost" size="sm" type="button" onClick={() => onFileChange(null)}>
+                            <X className="mr-1 h-4 w-4" />
+                            移除文件
+                        </Button>
+                    </div>
+                    {enableFileUpload && (
+                        <input
+                            id={inputId}
+                            type="file"
+                            accept=".txt,text/plain"
+                            className="block w-full text-sm text-slate-500 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-700"
+                            onChange={handleFileInputChange}
+                        />
+                    )}
+                </div>
+            ) : (
+                <>
+                    <Textarea
+                        placeholder={placeholder}
+                        className="min-h-[180px] leading-relaxed"
+                        value={textValue}
+                        onInput={(event: FormEvent<HTMLTextAreaElement>) => onTextInput(event.currentTarget.value)}
+                    />
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+                        <span>
+                            {enableFileUpload
+                                ? '可直接输入文本，或拖放 / 选择单个 txt 文件。选择文件后会替换当前文本。'
+                                : '当前配置仅支持纯文本输入。'}
+                        </span>
+                        <span>
+                            {textValue.length} / {MAX_BLOCK_CONTENT_LENGTH}
+                        </span>
+                    </div>
+                    {enableFileUpload && (
+                        <input
+                            id={inputId}
+                            type="file"
+                            accept=".txt,text/plain"
+                            className="block w-full text-sm text-slate-500 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-700"
+                            onChange={handleFileInputChange}
+                        />
+                    )}
+                </>
+            )}
         </div>
-      ) : (
-        <>
-          <Textarea
-            placeholder={placeholder}
-            className="min-h-[180px] leading-relaxed"
-            value={unit.draftText}
-            onInput={(event: FormEvent<HTMLTextAreaElement>) => onTextInput(event.currentTarget.value)}
-          />
-          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
-            <span>
-              {enableFileUpload
-                ? '可直接输入文本，或拖放 / 选择单个 txt 文件。选择文件后会替换当前文本。'
-                : '当前配置仅支持纯文本输入。'}
-            </span>
-            <span>
-              {unit.draftText.length} / {MAX_BLOCK_CONTENT_LENGTH}
-            </span>
-          </div>
-          {enableFileUpload && (
-            <input
-              id={inputId}
-              type="file"
-              accept=".txt,text/plain"
-              className="block w-full text-sm text-slate-500 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-700"
-              onChange={handleFileInputChange}
-            />
-          )}
-        </>
-      )}
-    </div>
-  );
+    );
 }
 
 export default function TextInputPanel({
-  title = '文本输入',
-  description = '支持多个主文本块、整体说明块以及针对单个文本块的局部说明。上传 txt 文件后会保留带 UUID 的文件名引用，并将正文转为字符串进入分析链路。',
-  textBlocks,
-  globalSupplementBlocks,
-  enableFileUpload = true,
-  enableGlobalSupplementBlocks = true,
-  enableLocalSupplements = true,
-  onTextBlocksChange,
-  onGlobalSupplementBlocksChange,
+    title = '文本输入',
+    description = '支持多个文本块及块内批注。上传 txt 文件后会保留带 UUID 的文件名引用，并将正文转为字符串进入分析链路。',
+    textBlocks,
+    enableFileUpload = true,
+    enableAnnotations = true,
+    onTextBlocksChange,
 }: TextInputPanelProps) {
-  const nextBlockNumberRef = useRef(getNextBlockNumber(textBlocks, globalSupplementBlocks));
-  const [pendingTextChange, setPendingTextChange] = useState<PendingTextChange | null>(null);
-  const [hasConfirmedOverflow, setHasConfirmedOverflow] = useState(false);
+    const nextBlockNumberRef = useRef(getNextBlockNumber(textBlocks));
+    const [pendingTextChange, setPendingTextChange] = useState<PendingTextChange | null>(null);
+    const [hasConfirmedOverflow, setHasConfirmedOverflow] = useState(false);
 
-  useEffect(() => {
-    nextBlockNumberRef.current = Math.max(nextBlockNumberRef.current, getNextBlockNumber(textBlocks, globalSupplementBlocks));
-  }, [textBlocks, globalSupplementBlocks]);
+    useEffect(() => {
+        nextBlockNumberRef.current = Math.max(nextBlockNumberRef.current, getNextBlockNumber(textBlocks));
+    }, [textBlocks]);
 
-  useEffect(() => {
-    if (getTextBlockPlainTextLength({ textBlocks, globalSupplementBlocks }) <= MAX_BLOCK_CONTENT_LENGTH) {
-      setHasConfirmedOverflow(false);
-    }
-  }, [textBlocks, globalSupplementBlocks]);
+    useEffect(() => {
+        if (getTextBlockPlainTextLength({ textBlocks }) <= MAX_BLOCK_CONTENT_LENGTH) {
+            setHasConfirmedOverflow(false);
+        }
+    }, [textBlocks]);
 
-  const getBlocks = (collection: BlockCollectionKey) =>
-    collection === 'textBlocks' ? textBlocks : globalSupplementBlocks;
-
-  const setBlocks = (collection: BlockCollectionKey, nextBlocks: TextBlock[]) => {
-    if (collection === 'textBlocks') {
-      onTextBlocksChange(nextBlocks);
-      return;
-    }
-
-    onGlobalSupplementBlocksChange(nextBlocks);
-  };
-
-  const alertUser = (message: string) => {
-    window.alert(message);
-  };
-
-  const allocateBlockNumber = () => {
-    const nextNumber = Math.max(nextBlockNumberRef.current, getNextBlockNumber(textBlocks, globalSupplementBlocks));
-    nextBlockNumberRef.current = nextNumber + 1;
-    return nextNumber;
-  };
-
-  const updateBlock = (collection: BlockCollectionKey, blockId: string, updater: (block: TextBlock) => TextBlock) => {
-    setBlocks(
-      collection,
-      getBlocks(collection).map((block) => (block.id === blockId ? updater(block) : block)),
-    );
-  };
-
-  const buildNextInput = (
-    collection: BlockCollectionKey,
-    blockId: string,
-    nextUnit: TextBlockContentUnit,
-    supplementId?: string,
-  ) => {
-    const nextBlocks = getBlocks(collection).map((block) => {
-      if (block.id !== blockId) {
-        return block;
-      }
-
-      if (!supplementId) {
-        return {
-          ...block,
-          draftText: nextUnit.draftText,
-          file: nextUnit.file,
-        };
-      }
-
-      return {
-        ...block,
-        localSupplements: block.localSupplements.map((supplement) =>
-          supplement.id === supplementId
-            ? {
-                ...supplement,
-                draftText: nextUnit.draftText,
-                file: nextUnit.file,
-              }
-            : supplement,
-        ),
-      };
-    });
-
-    return {
-      textBlocks: collection === 'textBlocks' ? nextBlocks : textBlocks,
-      globalSupplementBlocks: collection === 'globalSupplementBlocks' ? nextBlocks : globalSupplementBlocks,
+    const alertUser = (message: string) => {
+        window.alert(message);
     };
-  };
 
-  const commitNextInput = (
-    collection: BlockCollectionKey,
-    nextInput: { textBlocks: TextBlock[]; globalSupplementBlocks: TextBlock[] },
-  ) => {
-    if (collection === 'textBlocks') {
-      onTextBlocksChange(nextInput.textBlocks);
-      return;
-    }
+    const allocateBlockNumber = () => {
+        const nextNumber = Math.max(nextBlockNumberRef.current, getNextBlockNumber(textBlocks));
+        nextBlockNumberRef.current = nextNumber + 1;
+        return nextNumber;
+    };
 
-    onGlobalSupplementBlocksChange(nextInput.globalSupplementBlocks);
-  };
+    const updateBlocks = (updater: (blocks: TextBlock[]) => TextBlock[]) => {
+        onTextBlocksChange(updater(textBlocks));
+    };
 
-  const handleTextInput = (
-    collection: BlockCollectionKey,
-    blockId: string,
-    nextDraftText: string,
-    supplementId?: string,
-  ) => {
-    const currentRawLength = getTextBlockPlainTextLength({ textBlocks, globalSupplementBlocks });
-    const currentBlock = getBlocks(collection).find((block) => block.id === blockId);
-    const currentUnit = supplementId
-      ? currentBlock?.localSupplements.find((supplement) => supplement.id === supplementId)
-      : currentBlock;
+    const updateBlock = (blockId: string, updater: (block: TextBlock) => TextBlock) => {
+        updateBlocks((blocks) => blocks.map((block) => (block.id === blockId ? updater(block) : block)));
+    };
 
-    if (!currentUnit) {
-      return;
-    }
+    const buildNextBlocks = (blockId: string, nextContent: ContentSource | null, annotationId?: string) =>
+        textBlocks.map((block) => {
+            if (block.id !== blockId) {
+                return block;
+            }
 
-    const nextRawLength = currentRawLength - currentUnit.draftText.length + nextDraftText.length;
-    if (currentRawLength <= MAX_BLOCK_CONTENT_LENGTH && nextRawLength > MAX_BLOCK_CONTENT_LENGTH && !hasConfirmedOverflow) {
-      setPendingTextChange({
-        collection,
-        blockId,
-        supplementId,
-        nextDraftText,
-      });
-      return;
-    }
+            if (!annotationId) {
+                return {
+                    ...block,
+                    content: nextContent,
+                };
+            }
 
-    const nextInput = buildNextInput(
-      collection,
-      blockId,
-      {
-        draftText: nextDraftText,
-        file: null,
-      },
-      supplementId,
-    );
+            return {
+                ...block,
+                annotations: block.annotations.map((annotation) =>
+                    annotation.id === annotationId
+                        ? {
+                            ...annotation,
+                            content: nextContent,
+                        }
+                        : annotation,
+                ),
+            };
+        });
 
-    commitNextInput(collection, nextInput);
-    if (nextRawLength <= MAX_BLOCK_CONTENT_LENGTH) {
-      setHasConfirmedOverflow(false);
-    }
-  };
+    const findCurrentContent = (blockId: string, annotationId?: string) => {
+        const block = textBlocks.find((item) => item.id === blockId);
+        if (!block) {
+            return null;
+        }
 
-  const canApplyFileChange = (
-    collection: BlockCollectionKey,
-    blockId: string,
-    nextFile: TextBlockAttachment,
-    supplementId?: string,
-  ) => {
-    const nextInput = buildNextInput(
-      collection,
-      blockId,
-      {
-        draftText: '',
-        file: nextFile,
-      },
-      supplementId,
-    );
+        if (!annotationId) {
+            return block.content;
+        }
 
-    const nextRawLength = getTextBlockPlainTextLength(nextInput);
-    if (nextRawLength > MAX_BLOCK_CONTENT_LENGTH) {
-      alertUser(`当前总文本长度不能超过 ${MAX_BLOCK_CONTENT_LENGTH} 字符，请删减后再上传。`);
-      return false;
-    }
+        return block.annotations.find((annotation) => annotation.id === annotationId)?.content ?? null;
+    };
 
-    if (getRenderedTextBlockLength(nextInput) > MAX_BLOCK_CONTENT_LENGTH) {
-      alertUser(`渲染后的文本长度超过 ${MAX_BLOCK_CONTENT_LENGTH} 字符，请删减后再上传。`);
-      return false;
-    }
+    const handleTextInput = (blockId: string, nextText: string, annotationId?: string) => {
+        const currentRawLength = getTextBlockPlainTextLength({ textBlocks });
+        const currentContent = findCurrentContent(blockId, annotationId);
+        const currentTextLength = currentContent?.kind === 'text' ? currentContent.text.length : 0;
+        const nextRawLength = currentRawLength - currentTextLength + nextText.length;
 
-    return true;
-  };
+        if (currentRawLength <= MAX_BLOCK_CONTENT_LENGTH && nextRawLength > MAX_BLOCK_CONTENT_LENGTH && !hasConfirmedOverflow) {
+            setPendingTextChange({
+                blockId,
+                annotationId,
+                nextText,
+            });
+            return;
+        }
 
-  const handleFileChange = (
-    collection: BlockCollectionKey,
-    blockId: string,
-    nextFile: TextBlockAttachment | null,
-    supplementId?: string,
-  ) => {
-    const nextInput = buildNextInput(
-      collection,
-      blockId,
-      {
-        draftText: '',
-        file: nextFile,
-      },
-      supplementId,
-    );
+        const nextBlocks = buildNextBlocks(blockId, toTextContent(nextText), annotationId);
+        onTextBlocksChange(nextBlocks);
+        if (nextRawLength <= MAX_BLOCK_CONTENT_LENGTH) {
+            setHasConfirmedOverflow(false);
+        }
+    };
 
-    const nextRawLength = getTextBlockPlainTextLength(nextInput);
+    const canApplyFileChange = (blockId: string, nextFile: TextBlockAttachment, annotationId?: string) => {
+        const nextBlocks = buildNextBlocks(blockId, { kind: 'file', file: nextFile }, annotationId);
+        const nextInput = { textBlocks: nextBlocks };
 
-    commitNextInput(collection, nextInput);
-    if (nextRawLength <= MAX_BLOCK_CONTENT_LENGTH) {
-      setHasConfirmedOverflow(false);
-    }
-    return true;
-  };
+        if (getTextBlockPlainTextLength(nextInput) > MAX_BLOCK_CONTENT_LENGTH) {
+            alertUser(`当前总文本长度不能超过 ${MAX_BLOCK_CONTENT_LENGTH} 字符，请删减后再上传。`);
+            return false;
+        }
 
-  const addBlock = (collection: BlockCollectionKey) => {
-    setBlocks(collection, [...getBlocks(collection), createTextBlock(allocateBlockNumber())]);
-  };
+        if (getRenderedTextBlockLength(nextInput) > MAX_BLOCK_CONTENT_LENGTH) {
+            alertUser(`渲染后的文本长度超过 ${MAX_BLOCK_CONTENT_LENGTH} 字符，请删减后再上传。`);
+            return false;
+        }
 
-  const removeBlock = (collection: BlockCollectionKey, blockId: string) => {
-    setBlocks(
-      collection,
-      getBlocks(collection).filter((block) => block.id !== blockId),
-    );
-  };
+        return true;
+    };
 
-  const addLocalSupplement = (collection: BlockCollectionKey, blockId: string) => {
-    updateBlock(collection, blockId, (block) => ({
-      ...block,
-      localSupplements: [...block.localSupplements, createSupplement()],
-    }));
-  };
+    const handleFileChange = (blockId: string, nextFile: TextBlockAttachment | null, annotationId?: string) => {
+        const nextBlocks = buildNextBlocks(blockId, nextFile ? { kind: 'file', file: nextFile } : null, annotationId);
+        const nextInput = { textBlocks: nextBlocks };
 
-  const removeLocalSupplement = (collection: BlockCollectionKey, blockId: string, supplementId: string) => {
-    updateBlock(collection, blockId, (block) => ({
-      ...block,
-      localSupplements: block.localSupplements.filter((supplement) => supplement.id !== supplementId),
-    }));
-  };
+        onTextBlocksChange(nextBlocks);
+        if (getTextBlockPlainTextLength(nextInput) <= MAX_BLOCK_CONTENT_LENGTH) {
+            setHasConfirmedOverflow(false);
+        }
+    };
 
-  const confirmPendingTextChange = () => {
-    if (!pendingTextChange) {
-      return;
-    }
+    const addBlock = () => {
+        updateBlocks((blocks) => [...blocks, createTextBlock(allocateBlockNumber())]);
+    };
 
-    const nextInput = buildNextInput(
-      pendingTextChange.collection,
-      pendingTextChange.blockId,
-      {
-        draftText: pendingTextChange.nextDraftText,
-        file: null,
-      },
-      pendingTextChange.supplementId,
-    );
+    const removeBlock = (blockId: string) => {
+        updateBlocks((blocks) => blocks.filter((block) => block.id !== blockId));
+    };
 
-    if (getRenderedTextBlockLength(nextInput) > MAX_BLOCK_CONTENT_LENGTH) {
-      alertUser(`渲染后的文本长度超过 ${MAX_BLOCK_CONTENT_LENGTH} 字符，本次输入未生效。`);
-      setPendingTextChange(null);
-      return;
-    }
+    const addAnnotation = (blockId: string) => {
+        updateBlock(blockId, (block) => ({
+            ...block,
+            annotations: [...block.annotations, createAnnotation()],
+        }));
+    };
 
-    commitNextInput(pendingTextChange.collection, nextInput);
-    setHasConfirmedOverflow(getTextBlockPlainTextLength(nextInput) > MAX_BLOCK_CONTENT_LENGTH);
-    setPendingTextChange(null);
-  };
+    const removeAnnotation = (blockId: string, annotationId: string) => {
+        updateBlock(blockId, (block) => ({
+            ...block,
+            annotations: block.annotations.filter((annotation) => annotation.id !== annotationId),
+        }));
+    };
 
-  const renderBlockList = (collection: BlockCollectionKey, heading: string, description: string) => {
-    const blocks = getBlocks(collection);
-    const addButtonLabel = collection === 'textBlocks' ? '添加文本块' : '添加整体说明块';
-    const canAddBlocks = collection === 'textBlocks' || enableGlobalSupplementBlocks;
+    const confirmPendingTextChange = () => {
+        if (!pendingTextChange) {
+            return;
+        }
+
+        const nextBlocks = buildNextBlocks(
+            pendingTextChange.blockId,
+            toTextContent(pendingTextChange.nextText),
+            pendingTextChange.annotationId,
+        );
+        const nextInput = { textBlocks: nextBlocks };
+
+        if (getRenderedTextBlockLength(nextInput) > MAX_BLOCK_CONTENT_LENGTH) {
+            alertUser(`渲染后的文本长度超过 ${MAX_BLOCK_CONTENT_LENGTH} 字符，本次输入未生效。`);
+            setPendingTextChange(null);
+            return;
+        }
+
+        onTextBlocksChange(nextBlocks);
+        setHasConfirmedOverflow(getTextBlockPlainTextLength(nextInput) > MAX_BLOCK_CONTENT_LENGTH);
+        setPendingTextChange(null);
+    };
 
     return (
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <h3 className="text-base font-medium text-slate-900">{heading}</h3>
-            <p className="text-sm text-slate-500">{description}</p>
-          </div>
-          {canAddBlocks && (
-            <Button type="button" variant="outline" onClick={() => addBlock(collection)}>
-              <Plus className="mr-2 h-4 w-4" />
-              {addButtonLabel}
-            </Button>
-          )}
-        </div>
-
-        {blocks.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-200 p-6 text-sm text-slate-500">当前没有文本块，可随时新增。</div>
-        ) : (
-          blocks.map((block) => {
-            const blockTitle = block.title.trim() || `文本${block.number}`;
-
-            return (
-              <div key={block.id} className="space-y-4 rounded-xl border border-slate-200 p-4 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-slate-900">文本块 #{block.number}</div>
-                    <div className="text-sm text-slate-500">类型用于描述该块在评审中的角色，编号固定不重排。</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {enableLocalSupplements && (
-                      <Button type="button" variant="outline" size="icon" onClick={() => addLocalSupplement(collection, block.id)} aria-label="添加说明">
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <Button type="button" variant="ghost" size="icon" onClick={() => removeBlock(collection, block.id)} aria-label="删除文本块">
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_200px]">
-                  <div className="space-y-2">
-                    <Label htmlFor={`title-${block.id}`}>标题</Label>
-                    <Input
-                      id={`title-${block.id}`}
-                      value={block.title}
-                      placeholder={`文本${block.number}`}
-                      onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                        updateBlock(collection, block.id, (current) => ({
-                          ...current,
-                          title: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>类型</Label>
-                    <Select
-                      value={block.blockType}
-                      onValueChange={(value: string) =>
-                        updateBlock(collection, block.id, (current) => ({
-                          ...current,
-                          blockType: value as TextBlockType,
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="选择类型" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {textBlockTypeOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {getTextBlockTypeLabel(option)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>正文 / 文件</Label>
-                  <ContentUnitEditor
-                    titleForFileName={blockTitle}
-                    placeholder="在此处粘贴文本或拖放文件"
-                    unit={block}
-                    inputId={`file-${block.id}`}
-                    enableFileUpload={enableFileUpload}
-                    onTextInput={(nextValue) => handleTextInput(collection, block.id, nextValue)}
-                    onFileChange={(nextFile) => handleFileChange(collection, block.id, nextFile)}
-                    onAlert={alertUser}
-                    canApplyFile={(nextFile) => canApplyFileChange(collection, block.id, nextFile)}
-                  />
-                </div>
-
-                {(block.localSupplements.length > 0 || enableLocalSupplements) && (
-                  <div className="space-y-3 rounded-lg bg-slate-50 p-4">
-                    <div className="space-y-1">
-                      <div className="text-sm font-medium text-slate-900">局部说明</div>
-                      <div className="text-sm text-slate-500">用于补充针对当前文本块局部内容的背景、评价或限定信息。</div>
+        <>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        {title}
+                    </CardTitle>
+                    <CardDescription>{description}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">
+                            共 {textBlocks.length} 个文本块
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={addBlock}>
+                            <Plus className="mr-1 h-4 w-4" />
+                            添加文本块
+                        </Button>
                     </div>
 
-                    {block.localSupplements.map((supplement, index) => (
-                      <div key={supplement.id} className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-sm font-medium text-slate-900">说明 {index + 1}</div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeLocalSupplement(collection, block.id, supplement.id)}
-                            aria-label="移除说明"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                        <ContentUnitEditor
-                          titleForFileName={`${blockTitle}-说明${index + 1}`}
-                          placeholder="在此处粘贴文本或拖放文件"
-                          unit={supplement}
-                          inputId={`supplement-file-${supplement.id}`}
-                          enableFileUpload={enableFileUpload}
-                          onTextInput={(nextValue) => handleTextInput(collection, block.id, nextValue, supplement.id)}
-                          onFileChange={(nextFile) => handleFileChange(collection, block.id, nextFile, supplement.id)}
-                          onAlert={alertUser}
-                          canApplyFile={(nextFile) => canApplyFileChange(collection, block.id, nextFile, supplement.id)}
-                        />
-                      </div>
-                    ))}
+                    <section className="space-y-4">
+                        {textBlocks.length === 0 ? (
+                            <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-sm text-muted-foreground">
+                                暂无文本块，点击上方按钮添加
+                            </div>
+                        ) : (
+                            textBlocks.map((block) => {
+                                const displayTitle = block.title.trim() || `文本块 ${block.number}`;
+                                const blockTitle = block.title.trim() || `文本${block.number}`;
 
-                    {enableLocalSupplements && (
-                      <div className="flex justify-end">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => addLocalSupplement(collection, block.id)}>
-                          <Plus className="mr-1 h-4 w-4" />
-                          添加说明
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </section>
+                                return (
+                                    <div key={block.id} className="space-y-4 rounded-xl border border-slate-200 p-4 shadow-sm">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                            <div className="flex items-center gap-3">
+                                                <Input
+                                                    id={`title-${block.id}`}
+                                                    value={block.title}
+                                                    placeholder={`文本块 ${block.number}`}
+                                                    className="h-9 w-auto min-w-[120px] max-w-[240px] border-0 bg-transparent px-0 text-base font-semibold text-slate-900 shadow-none focus-visible:ring-0"
+                                                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                                                        updateBlock(block.id, (current) => ({
+                                                            ...current,
+                                                            title: event.target.value,
+                                                        }))
+                                                    }
+                                                />
+                                                <Select
+                                                    value={block.blockType}
+                                                    onValueChange={(value: string) =>
+                                                        updateBlock(block.id, (current) => ({
+                                                            ...current,
+                                                            blockType: value as TextBlockType,
+                                                        }))
+                                                    }
+                                                >
+                                                    <SelectTrigger className="h-8 w-auto min-w-[100px] text-sm">
+                                                        <SelectValue placeholder="类型" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {textBlockTypeOptions.map((option) => (
+                                                            <SelectItem key={option} value={option}>
+                                                                {getTextBlockTypeLabel(option)}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                {enableAnnotations && (
+                                                    <Button type="button" variant="ghost" size="sm" onClick={() => addAnnotation(block.id)} aria-label="添加批注">
+                                                        <Plus className="h-4 w-4" />
+                                                        批注
+                                                    </Button>
+                                                )}
+                                                <Button type="button" variant="ghost" size="icon" onClick={() => removeBlock(block.id)} aria-label="删除文本块">
+                                                    <Trash2 className="h-4 w-4 text-muted-foreground hover:text-red-500" />
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        <ContentSourceEditor
+                                            titleForFileName={blockTitle}
+                                            placeholder="在此处粘贴文本或拖放文件"
+                                            content={block.content}
+                                            inputId={`file-${block.id}`}
+                                            enableFileUpload={enableFileUpload}
+                                            onTextInput={(nextValue) => handleTextInput(block.id, nextValue)}
+                                            onFileChange={(nextFile) => handleFileChange(block.id, nextFile)}
+                                            onAlert={alertUser}
+                                            canApplyFile={(nextFile) => canApplyFileChange(block.id, nextFile)}
+                                        />
+
+                                        {(block.annotations.length > 0) && (
+                                            <div className="space-y-2 pt-2">
+                                                {block.annotations.map((annotation, index) => (
+                                                    <div key={annotation.id} className="space-y-2 rounded-lg border border-slate-200 bg-muted/30 p-3">
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <span className="text-xs font-medium text-muted-foreground">批注 {index + 1}</span>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-6 w-6"
+                                                                onClick={() => removeAnnotation(block.id, annotation.id)}
+                                                                aria-label="移除批注"
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
+                                                            </Button>
+                                                        </div>
+                                                        <ContentSourceEditor
+                                                            titleForFileName={`${blockTitle}-批注${index + 1}`}
+                                                            placeholder="补充背景、评价或限制信息"
+                                                            content={annotation.content}
+                                                            inputId={`annotation-file-${annotation.id}`}
+                                                            enableFileUpload={enableFileUpload}
+                                                            onTextInput={(nextValue) => handleTextInput(block.id, nextValue, annotation.id)}
+                                                            onFileChange={(nextFile) => handleFileChange(block.id, nextFile, annotation.id)}
+                                                            onAlert={alertUser}
+                                                            canApplyFile={(nextFile) => canApplyFileChange(block.id, nextFile, annotation.id)}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </section>
+                </CardContent>
+            </Card>
+
+            <AlertDialog open={pendingTextChange !== null} onOpenChange={(open: boolean) => !open && setPendingTextChange(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>文本长度已超过 100000 字符</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            本次输入会使原始块内容总和首次超过上限。点击“继续输入”后，系统会再按渲染后的最终字符串长度校验；若仍超限，本次输入不会生效。
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setPendingTextChange(null)}>取消</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmPendingTextChange}>继续输入</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
-  };
-
-  return (
-    <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            {title}
-          </CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-8">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            <div>当前主文本块：{textBlocks.length} 个 · 整体说明块：{globalSupplementBlocks.length} 个</div>
-            <div>上传文件会自动追加 UUID 并按纯文本参与分析。</div>
-          </div>
-
-          {renderBlockList('textBlocks', '主文本块', '用于承载实际待审查文本、参考材料或参考评价等主要输入。')}
-          {(enableGlobalSupplementBlocks || globalSupplementBlocks.length > 0) &&
-            renderBlockList('globalSupplementBlocks', '整体说明块', '用于补充针对整体作品的背景说明、第三方评价或额外参考。')}
-        </CardContent>
-      </Card>
-
-      <AlertDialog open={pendingTextChange !== null} onOpenChange={(open: boolean) => !open && setPendingTextChange(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>文本长度已超过 100000 字符</AlertDialogTitle>
-            <AlertDialogDescription>
-              本次输入会使原始块内容总和首次超过上限。点击“继续输入”后，系统会再按渲染后的最终字符串长度校验；若仍超限，本次输入不会生效。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingTextChange(null)}>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmPendingTextChange}>继续输入</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
 }

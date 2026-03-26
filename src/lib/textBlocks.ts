@@ -1,5 +1,13 @@
 import { prepareEvaluationSubmission } from '@/lib/evaluationSubmission';
-import { EvaluationInput, SerializableEvaluationInput, TextBlock, TextBlockAttachment, TextBlockContentUnit, TextBlockType } from '@/types/report';
+import {
+  ContentSource,
+  EvaluationInput,
+  SerializableEvaluationInput,
+  TextAnnotation,
+  TextBlock,
+  TextBlockAttachment,
+  TextBlockType,
+} from '@/types/report';
 
 export const MAX_BLOCK_CONTENT_LENGTH = 100000;
 
@@ -21,30 +29,56 @@ function renderFileContent(file: Pick<TextBlockAttachment, 'storedName' | 'conte
   return `[${file.storedName}]\n${file.content}`;
 }
 
-function getUnitDisplayText(unit: Pick<TextBlockContentUnit, 'draftText' | 'file'>): string {
-  const draftText = unit.draftText.trim();
-  if (draftText) {
-    return draftText;
+export function isContentSourceEmpty(source: ContentSource | null | undefined): boolean {
+  if (!source) {
+    return true;
   }
 
-  if (unit.file) {
-    return renderFileContent(unit.file);
+  if (source.kind === 'text') {
+    return source.text.trim().length === 0;
   }
 
-  return '（空）';
+  return source.file.content.trim().length === 0;
 }
 
-function getUnitModelText(unit: Pick<TextBlockContentUnit, 'draftText' | 'file'>): string | null {
-  const draftText = unit.draftText.trim();
-  if (draftText) {
-    return unit.draftText;
+export function readContentSourceAsPlainText(source: ContentSource | null | undefined): string | null {
+  if (!source || isContentSourceEmpty(source)) {
+    return null;
   }
 
-  if (unit.file) {
-    return renderFileContent(unit.file);
+  if (source.kind === 'text') {
+    return source.text;
   }
 
-  return null;
+  return renderFileContent(source.file);
+}
+
+export function getContentSourceDisplayText(source: ContentSource | null | undefined): string {
+  return readContentSourceAsPlainText(source) ?? '（空）';
+}
+
+export function getContentSourceRawLength(source: ContentSource | null | undefined): number {
+  if (!source) {
+    return 0;
+  }
+
+  if (source.kind === 'text') {
+    return source.text.length;
+  }
+
+  return source.file.content.length;
+}
+
+export function isTextAnnotationEmpty(annotation: Pick<TextAnnotation, 'content'>): boolean {
+  return isContentSourceEmpty(annotation.content);
+}
+
+export function hasRenderableTextBlockContent(block: Pick<TextBlock, 'content'>): boolean {
+  return !isContentSourceEmpty(block.content);
+}
+
+export function getRenderableTextBlocks(input: Pick<EvaluationInput, 'textBlocks'>): TextBlock[] {
+  return input.textBlocks.filter((block) => hasRenderableTextBlockContent(block));
 }
 
 function serializeSingleTextBlock(block: TextBlock): string {
@@ -54,95 +88,76 @@ function serializeSingleTextBlock(block: TextBlock): string {
     `- 编号：${block.number}`,
     `- 类型：${getTextBlockTypeLabel(block.blockType)}`,
     '',
-    getUnitDisplayText(block),
+    getContentSourceDisplayText(block.content),
   ];
 
-  if (block.localSupplements.length > 0) {
-    lines.push('', '### 局部说明');
+  const renderableAnnotations = block.annotations.filter((annotation) => !isTextAnnotationEmpty(annotation));
+  if (renderableAnnotations.length > 0) {
+    lines.push('', '### 批注');
 
-    block.localSupplements.forEach((supplement, index) => {
-      lines.push(`#### 说明 ${index + 1}`, '', getUnitDisplayText(supplement));
+    renderableAnnotations.forEach((annotation, index) => {
+      lines.push(`#### 批注 ${index + 1}`, '', getContentSourceDisplayText(annotation.content));
     });
   }
 
   return lines.join('\n');
 }
 
-function getTopLevelBlocks(input: Pick<EvaluationInput, 'textBlocks' | 'globalSupplementBlocks'>): TextBlock[] {
-  return [...input.textBlocks, ...input.globalSupplementBlocks];
+export function hasReferenceTextBlock(input: Pick<EvaluationInput, 'textBlocks'>): boolean {
+  return input.textBlocks.some((block) => block.blockType === 'reference_material');
 }
 
-function getAllContentUnits(input: Pick<EvaluationInput, 'textBlocks' | 'globalSupplementBlocks'>) {
-  return getTopLevelBlocks(input).flatMap((block) => [block, ...block.localSupplements]);
+export function getTopLevelTextBlockCount(input: Pick<EvaluationInput, 'textBlocks'>): number {
+  return input.textBlocks.length;
 }
 
-export function hasReferenceTextBlock(input: Pick<EvaluationInput, 'textBlocks' | 'globalSupplementBlocks'>): boolean {
-  return getTopLevelBlocks(input).some((block) => block.blockType === 'reference_material');
+export function getTopLevelTextBlockTypes(input: Pick<EvaluationInput, 'textBlocks'>): TextBlockType[] {
+  return [...new Set(input.textBlocks.map((block) => block.blockType))];
 }
 
-export function getTopLevelTextBlockCount(input: Pick<EvaluationInput, 'textBlocks' | 'globalSupplementBlocks'>): number {
-  return getTopLevelBlocks(input).length;
-}
+export function serializeTextBlocks(input: Pick<EvaluationInput, 'textBlocks'>): string {
+  const renderableBlocks = getRenderableTextBlocks(input);
 
-export function getTopLevelTextBlockTypes(input: Pick<EvaluationInput, 'textBlocks' | 'globalSupplementBlocks'>): TextBlockType[] {
-  return [...new Set(getTopLevelBlocks(input).map((block) => block.blockType))];
-}
-
-export function serializeTextBlocks(input: Pick<EvaluationInput, 'textBlocks' | 'globalSupplementBlocks'>): string {
-  const sections: string[] = [];
-
-  if (input.textBlocks.length > 0) {
-    sections.push('## 主文本块');
-    sections.push(input.textBlocks.map((block) => serializeSingleTextBlock(block)).join('\n\n'));
-  }
-
-  if (input.globalSupplementBlocks.length > 0) {
-    sections.push('## 整体说明块');
-    sections.push(input.globalSupplementBlocks.map((block) => serializeSingleTextBlock(block)).join('\n\n'));
-  }
-
-  if (sections.length === 0) {
+  if (renderableBlocks.length === 0) {
     return '未提供文本块';
   }
 
-  return sections.join('\n\n');
+  return renderableBlocks.map((block) => serializeSingleTextBlock(block)).join('\n\n');
 }
 
-export function renderTextBlocksForModel(input: Pick<EvaluationInput, 'textBlocks' | 'globalSupplementBlocks'>): string {
-  const segments = getTopLevelBlocks(input).flatMap((block) => {
-    const blockSegments = [getUnitModelText(block)];
-    const supplementSegments = block.localSupplements.map((supplement) => getUnitModelText(supplement));
-    return [...blockSegments, ...supplementSegments].filter((value): value is string => Boolean(value));
+export function renderTextBlocksForModel(input: Pick<EvaluationInput, 'textBlocks'>): string {
+  const segments = getRenderableTextBlocks(input).flatMap((block) => {
+    const blockSegments = [readContentSourceAsPlainText(block.content)];
+    const annotationSegments = block.annotations.map((annotation) => readContentSourceAsPlainText(annotation.content));
+    return [...blockSegments, ...annotationSegments].filter((value): value is string => Boolean(value));
   });
 
   return segments.join('\n\n');
 }
 
-export function summarizeTextBlocks(input: Pick<EvaluationInput, 'textBlocks' | 'globalSupplementBlocks'>): string {
-  const topLevelBlocks = getTopLevelBlocks(input);
+export function summarizeTextBlocks(input: Pick<EvaluationInput, 'textBlocks'>): string {
+  const renderableBlocks = getRenderableTextBlocks(input);
 
-  if (topLevelBlocks.length === 0) {
+  if (renderableBlocks.length === 0) {
     return '未提供文本块';
   }
 
-  return topLevelBlocks
+  return renderableBlocks
     .map((block) => `${block.number}. ${getTextBlockTypeLabel(block.blockType)} / ${block.title.trim() || getDefaultBlockTitle(block)}`)
     .join('；');
 }
 
-export function getTextBlockPlainTextLength(input: Pick<EvaluationInput, 'textBlocks' | 'globalSupplementBlocks'>): number {
-  return getAllContentUnits(input).reduce((total, unit) => total + getUnitRawTextLength(unit), 0);
+export function getTextBlockPlainTextLength(input: Pick<EvaluationInput, 'textBlocks'>): number {
+  return input.textBlocks.reduce(
+    (total, block) =>
+      total +
+      getContentSourceRawLength(block.content) +
+      block.annotations.reduce((annotationTotal, annotation) => annotationTotal + getContentSourceRawLength(annotation.content), 0),
+    0,
+  );
 }
 
-export function getUnitRawTextLength(unit: Pick<TextBlockContentUnit, 'draftText' | 'file'>): number {
-  if (unit.file) {
-    return unit.file.content.length;
-  }
-
-  return unit.draftText.length;
-}
-
-export function getRenderedTextBlockLength(input: Pick<EvaluationInput, 'textBlocks' | 'globalSupplementBlocks'>): number {
+export function getRenderedTextBlockLength(input: Pick<EvaluationInput, 'textBlocks'>): number {
   return renderTextBlocksForModel(input).length;
 }
 

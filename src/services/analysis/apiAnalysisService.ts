@@ -26,7 +26,7 @@ export class ApiAnalysisService implements PromptTemplateService {
     let response: Response;
 
     try {
-      response = await fetch('/api/frameworks/compile', {
+      response = await fetch('/api/templates/compile', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -56,13 +56,13 @@ export class ApiAnalysisService implements PromptTemplateService {
       );
     }
 
-    if (!data || !('framework' in data)) {
+    if (!data || !('template' in data)) {
       throw createAppError({
         code: 'template_response_invalid',
         message: '提示词模板响应格式异常',
       });
     }
 
-    return data.framework;
+    return data.template;
   }
 }

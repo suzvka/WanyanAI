@@ -1,33 +1,8 @@
-import { z } from 'zod';
-import { AnalysisReport, EvaluationGoal, TextBlockType } from '@/types/report';
-import { AppErrorPayload } from '@/types/errors';
+import type { AnalysisReport, EvaluationGoal } from '@/types/report';
+import type { AppErrorPayload } from '@/types/errors';
 
 export const providerProfileValues = ['openai-compatible'] as const;
 export type ProviderProfile = (typeof providerProfileValues)[number];
-
-const evaluationGoalValues: [EvaluationGoal, ...EvaluationGoal[]] = [
-  'overall_check',
-  'opening_attraction',
-  'rhythm_progression',
-  'character_development',
-  'style_consistency',
-  'structure_completeness',
-  'reader_acceptance',
-];
-
-const textBlockTypeValues: [TextBlockType, ...TextBlockType[]] = ['actual_text', 'reference_material', 'reference_review'];
-
-export const promptFrameworkCompileRequestSchema = z.object({
-  scenario: z.literal('text_diagnosis'),
-  evaluationGoal: z.enum(evaluationGoalValues),
-  providerProfile: z.enum(providerProfileValues),
-  model: z.string().trim().min(1),
-  inputMeta: z.object({
-    blockTypes: z.array(z.enum(textBlockTypeValues)),
-    blockCount: z.number().int().min(0),
-    hasReferenceText: z.boolean(),
-  }),
-});
 
 export type PromptTemplateSlotKey =
   | 'textBlocksPlainText'
@@ -35,9 +10,7 @@ export type PromptTemplateSlotKey =
   | 'textTypeLabel'
   | 'textCompletenessLabel'
   | 'evaluationGoalLabel'
-  | 'readerPreferenceLabel'
-  | 'feedbackStyleLabel'
-  | 'specialConstraintsLabel';
+  | 'dynamicInstructionText';
 
 export type PromptTemplateSlotDefinition = {
   key: PromptTemplateSlotKey;
@@ -46,7 +19,7 @@ export type PromptTemplateSlotDefinition = {
 };
 
 export type PromptTemplateResource = {
-  frameworkId: string;
+  templateId: string;
   version: string;
   scenario: 'text_diagnosis';
   providerProfile: ProviderProfile;
@@ -67,10 +40,12 @@ export type PromptTemplateResource = {
   };
 };
 
-export type PromptTemplateRequest = z.infer<typeof promptFrameworkCompileRequestSchema>;
+export type PromptTemplateRequest = {
+  evaluationGoal: EvaluationGoal;
+};
 
 export type PromptTemplateSuccessResponse = {
-  framework: PromptTemplateResource;
+  template: PromptTemplateResource;
 };
 
 export type PromptTemplateErrorResponse = {

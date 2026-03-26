@@ -1,0 +1,260 @@
+{
+  "controls": [
+    {
+      "id": "text_type",
+      "title": "文本类型",
+      "enabled": true,
+      "sortOrder": 10,
+      "bindTo": "textType",
+      "appliesTo": [
+        "overall_check",
+        "opening_attraction",
+        "rhythm_progression",
+        "character_development",
+        "style_consistency",
+        "structure_completeness",
+        "reader_acceptance"
+      ],
+      "options": [
+        {
+          "value": "general_text",
+          "label": "通用文本",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "web_serial",
+          "label": "网络连载",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "short_story",
+          "label": "短篇小说",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "light_novel",
+          "label": "轻小说/青年向",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "literary_submission",
+          "label": "文学投稿",
+          "enabled": true,
+          "promptText": ""
+        }
+      ]
+    },
+    {
+      "id": "text_completeness",
+      "title": "文本完整度",
+      "enabled": true,
+      "sortOrder": 20,
+      "bindTo": "textCompleteness",
+      "appliesTo": [
+        "overall_check",
+        "opening_attraction",
+        "rhythm_progression",
+        "character_development",
+        "style_consistency",
+        "structure_completeness",
+        "reader_acceptance"
+      ],
+      "options": [
+        {
+          "value": "excerpt",
+          "label": "节选片段",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "complete",
+          "label": "完整作品",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "single_chapter",
+          "label": "长篇中的单章/样章",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "first_chapters",
+          "label": "长篇前若干章",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "draft",
+          "label": "未完成草稿",
+          "enabled": true,
+          "promptText": ""
+        }
+      ]
+    },
+    {
+      "id": "evaluation_goal",
+      "title": "本次评价目标",
+      "enabled": true,
+      "sortOrder": 30,
+      "bindTo": "evaluationGoal",
+      "appliesTo": [
+        "overall_check",
+        "opening_attraction",
+        "rhythm_progression",
+        "character_development",
+        "style_consistency",
+        "structure_completeness",
+        "reader_acceptance"
+      ],
+      "options": [
+        {
+          "value": "overall_check",
+          "label": "发布前总体检查",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "opening_attraction",
+          "label": "开篇吸引力检查",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "rhythm_progression",
+          "label": "节奏与推进问题",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "character_development",
+          "label": "人物塑造检查",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "style_consistency",
+          "label": "文风一致性检查",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "structure_completeness",
+          "label": "结构完整性检查",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "reader_acceptance",
+          "label": "读者接受度预估",
+          "enabled": true,
+          "promptText": ""
+        }
+      ]
+    },
+    {
+      "id": "reader_preference",
+      "title": "目标读者偏好",
+      "enabled": true,
+      "sortOrder": 40,
+      "appliesTo": [
+        "overall_check",
+        "opening_attraction",
+        "rhythm_progression",
+        "character_development",
+        "style_consistency",
+        "structure_completeness",
+        "reader_acceptance"
+      ],
+      "options": [
+        {
+          "value": "none",
+          "label": "不评价",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "fast_paced",
+          "label": "偏快节奏",
+          "enabled": true,
+          "promptText": "请优先从快节奏读者视角判断内容是否足够紧凑、信息投放是否及时。"
+        },
+        {
+          "value": "plot_driven",
+          "label": "偏剧情推进",
+          "enabled": true,
+          "promptText": "请优先从剧情推进读者视角判断情节推进效率、事件驱动性与停滞风险。"
+        },
+        {
+          "value": "character_emotion",
+          "label": "偏人物情感",
+          "enabled": true,
+          "promptText": "请优先从人物情感读者视角判断人物动机、关系推进与情绪张力是否充足。"
+        },
+        {
+          "value": "world_building",
+          "label": "偏世界观/设定",
+          "enabled": true,
+          "promptText": "请优先从世界观与设定读者视角判断设定信息是否清晰、自然且有吸引力。"
+        },
+        {
+          "value": "literary_expression",
+          "label": "偏文学表达",
+          "enabled": true,
+          "promptText": "请优先从重视文学表达的读者视角判断语言质感、修辞表现与叙述韵律。"
+        },
+        {
+          "value": "general_reader",
+          "label": "通用读者",
+          "enabled": true,
+          "promptText": "请优先从通用读者视角判断整体可读性、理解成本与继续阅读意愿。"
+        }
+      ]
+    },
+    {
+      "id": "feedback_style",
+      "title": "反馈风格",
+      "enabled": true,
+      "sortOrder": 50,
+      "appliesTo": [
+        "overall_check",
+        "opening_attraction",
+        "rhythm_progression",
+        "character_development",
+        "style_consistency",
+        "structure_completeness",
+        "reader_acceptance"
+      ],
+      "options": [
+        {
+          "value": "none",
+          "label": "不评价",
+          "enabled": true,
+          "promptText": ""
+        },
+        {
+          "value": "strict",
+          "label": "严格问题导向",
+          "enabled": true,
+          "promptText": "请采用直接、问题导向的反馈方式，优先指出影响结果的关键问题与修改优先级。"
+        },
+        {
+          "value": "balanced",
+          "label": "平衡反馈",
+          "enabled": true,
+          "promptText": "请兼顾优点与问题，保持反馈平衡。"
+        },
+        {
+          "value": "encouraging",
+          "label": "鼓励式反馈",
+          "enabled": true,
+          "promptText": "请保持鼓励式反馈，在指出问题时同时明确保留价值与可执行的改进方向。"
+        }
+      ]
+    }
+  ]
+}

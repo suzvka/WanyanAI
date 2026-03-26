@@ -2,11 +2,8 @@
 
 import { ArrowLeft, Download } from 'lucide-react';
 import { AnalysisReport } from '@/types/report';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { formatNumber, getGradeColor, getScoreColor } from './reportUtils';
 
 interface ReportSidebarProps {
   report: AnalysisReport;
@@ -19,32 +16,21 @@ export default function ReportSidebar({ report, onReset, onDownload }: ReportSid
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>快速概览</CardTitle>
+          <CardTitle>报告信息</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="text-center p-4 bg-slate-50 rounded-lg">
-              <div className="text-3xl font-bold mb-1" style={{ color: getScoreColor(report.dashboard.totalScore) }}>
-                {formatNumber(report.dashboard.totalScore)}
-              </div>
-              <div className="text-sm text-slate-500">总分</div>
+          <div className="space-y-3 text-sm text-slate-600">
+            <div className="flex items-start justify-between gap-3">
+              <span className="shrink-0 text-slate-500">报告 ID</span>
+              <span className="text-right font-mono text-xs text-slate-700">{report.reportId}</span>
             </div>
-
-            <Separator />
-
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-slate-600">等级</span>
-                <Badge className={getGradeColor(report.dashboard.grade)}>{report.dashboard.grade}</Badge>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-slate-600">发布准备度</span>
-                <span className="text-sm font-medium">{report.dashboard.publishReadiness}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-slate-600">问题数量</span>
-                <span className="text-sm font-medium">{report.keyIssues.length}个</span>
-              </div>
+            <div className="flex items-start justify-between gap-3">
+              <span className="shrink-0 text-slate-500">生成时间</span>
+              <span className="text-right text-slate-700">{new Date(report.generatedAt).toLocaleString('zh-CN')}</span>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <span className="shrink-0 text-slate-500">模型</span>
+              <span className="text-right text-slate-700">{report.meta.model}</span>
             </div>
           </div>
         </CardContent>

@@ -1,13 +1,11 @@
-import { PromptTemplateResource } from '@/types/analysis';
-import { EvaluationGoal } from '@/types/report';
+import type { PromptTemplateResource } from '@/types/analysis';
+import type { EvaluationGoal } from '@/types/report';
 
 const baseSlots: PromptTemplateResource['slots'] = [
   { key: 'textTypeLabel', label: '文本类型', required: true },
   { key: 'textCompletenessLabel', label: '文本完整度', required: true },
   { key: 'evaluationGoalLabel', label: '评价目标', required: true },
-  { key: 'readerPreferenceLabel', label: '目标读者偏好', required: false },
-  { key: 'feedbackStyleLabel', label: '反馈风格', required: false },
-  { key: 'specialConstraintsLabel', label: '特殊约束', required: false },
+  { key: 'dynamicInstructionText', label: '动态检查指令', required: false },
   { key: 'textBlocksSummary', label: '文本块摘要', required: true },
   { key: 'textBlocksPlainText', label: '待分析纯文本内容', required: true },
 ];
@@ -17,7 +15,7 @@ const createTemplate = (
   title: string,
   focusInstruction: string,
 ): PromptTemplateResource => ({
-  frameworkId: `fw-text-diagnosis-${evaluationGoal}`,
+  templateId: `tpl-text-diagnosis-${evaluationGoal}`,
   version: '2.0.0',
   scenario: 'text_diagnosis',
   providerProfile: 'openai-compatible',
@@ -26,15 +24,17 @@ const createTemplate = (
   systemPromptTemplate: [
     '你是一名中文文本评审助手，负责输出结构化中文 JSON 报告。',
     '请严格围绕当前评价目标执行分析，不要泄露思考过程，不要输出 markdown。',
+    '报告分为两部分：静态头部与动态正文。静态头部只包含 summary、dashboard、conclusion；动态正文只通过 sections 数组表达。',
+    'sections 的展示顺序即前端渲染顺序。每个 section 只允许包含 title 与 body 两个核心字段，不要输出额外的模块类型、嵌套 data 或列表结构。',
+    'sections 必须覆盖主要分析内容，并与 summary、dashboard、conclusion 保持一致，不得冲突。',
     '请仅返回合法 JSON，对象结构必须满足以下约束：',
     '{',
     '  "summary": { "title": string, "overview": string },',
     '  "dashboard": { "totalScore": number, "grade": string, "publishReadiness": string },',
-    '  "dimensions": [{ "dimensionKey": string, "dimensionName": string, "score": number, "grade": string, "strengths": string[], "weaknesses": string[] }],',
-    '  "keyIssues": [{ "title": string, "severity": "high" | "medium" | "low", "description": string, "suggestionDirection": string }],',
-    '  "conclusion": { "finalRecommendation": "publish" | "revise_then_publish" | "rework", "rationale": string }',
+    '  "conclusion": { "finalRecommendation": "publish" | "revise_then_publish" | "rework", "rationale": string },',
+    '  "sections": [{ "title": string, "body": string, "id"?: string }]',
     '}',
-    '分数范围必须为 0-100，dimensions 保持 5-7 项，keyIssues 保持 2-5 项。',
+    '分数范围必须为 0-100，sections 保持 3-6 段，每段 body 使用完整自然语言正文表达。',
     focusInstruction,
   ].join('\n'),
   userPromptTemplate: [
@@ -42,9 +42,8 @@ const createTemplate = (
     '- 文本类型：{{textTypeLabel}}',
     '- 文本完整度：{{textCompletenessLabel}}',
     '- 评价目标：{{evaluationGoalLabel}}',
-    '- 目标读者偏好：{{readerPreferenceLabel}}',
-    '- 反馈风格：{{feedbackStyleLabel}}',
-    '- 特殊约束：{{specialConstraintsLabel}}',
+    '- 附加检查指令（如无内容则表示本次未额外指定）：',
+    '{{dynamicInstructionText}}',
     '- 文本块摘要：{{textBlocksSummary}}',
     '',
     '待分析纯文本内容如下：',
@@ -103,8 +102,4 @@ const promptTemplateMap: Record<EvaluationGoal, PromptTemplateResource> = {
 
 export function getPromptTemplate(evaluationGoal: EvaluationGoal): PromptTemplateResource {
   return promptTemplateMap[evaluationGoal];
-}
-
-export function compilePromptFramework(evaluationGoal: EvaluationGoal): PromptTemplateResource {
-  return getPromptTemplate(evaluationGoal);
 }

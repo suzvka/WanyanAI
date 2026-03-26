@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { PromptTemplateErrorResponse, PromptTemplateSuccessResponse } from '@/types/analysis';
-import { compilePromptFramework } from '@/services/analysis/promptTemplates';
-import { validateAnalysisRequest } from '@/lib/validation/analysisRequest';
+import type { PromptTemplateErrorResponse, PromptTemplateSuccessResponse } from '@/types/analysis';
+import { getPromptTemplate } from '@/services/analysis/promptTemplates';
+import { validatePromptTemplateRequest } from '@/lib/validation/analysisRequest';
 import { toAppErrorPayload } from '@/types/errors';
 
 export async function POST(request: Request) {
   try {
-    const parsed = validateAnalysisRequest(await request.json());
+    const parsed = validatePromptTemplateRequest(await request.json());
 
     if (!parsed.success) {
       const response: PromptTemplateErrorResponse = {
@@ -20,12 +20,12 @@ export async function POST(request: Request) {
       return NextResponse.json(response, { status: 400 });
     }
 
-    const framework = compilePromptFramework(parsed.data.evaluationGoal);
-    const response: PromptTemplateSuccessResponse = { framework };
+    const template = getPromptTemplate(parsed.data.evaluationGoal);
+    const response: PromptTemplateSuccessResponse = { template };
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Analysis route failed:', error);
+    console.error('Prompt template compile route failed:', error);
 
     const response: PromptTemplateErrorResponse = {
       error: toAppErrorPayload(error, {
