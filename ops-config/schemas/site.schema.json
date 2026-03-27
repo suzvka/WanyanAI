@@ -1,15 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["home", "inputPanel", "settingsPanel", "progress", "errors"],
+  "required": ["home", "inputPanel", "settingsPanel", "progress"],
   "properties": {
     "home": {
       "type": "object",
-      "required": ["title", "subtitle", "modelHint"],
+      "required": ["title", "subtitle"],
       "properties": {
         "title": { "type": "string" },
-        "subtitle": { "type": "string" },
-        "modelHint": { "type": "string" }
+        "subtitle": { "type": "string" }
       },
       "additionalProperties": false
     },
@@ -37,14 +36,6 @@
       "properties": {
         "runningTitle": { "type": "string" },
         "runningDescription": { "type": "string" }
-      },
-      "additionalProperties": false
-    },
-    "errors": {
-      "type": "object",
-      "required": ["generic"],
-      "properties": {
-        "generic": { "type": "string" }
       },
       "additionalProperties": false
     }

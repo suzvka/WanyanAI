@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       return NextResponse.json(response, { status: 400 });
     }
 
-    const template = getPromptTemplate(parsed.data.evaluationGoal);
+    const template = await getPromptTemplate(parsed.data.evaluationGoal);
     const response: PromptTemplateSuccessResponse = { template };
 
     return NextResponse.json(response);

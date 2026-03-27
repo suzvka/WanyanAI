@@ -6,7 +6,6 @@ import { getCachedOpsConfig, setCachedOpsConfig } from './cache';
 import { createFallbackOpsConfig } from './fallback';
 import {
   analysisControlsSchema,
-  evaluationCatalogSchema,
   evaluationDefaultsSchema,
   featureFlagsSchema,
   manifestSchema,
@@ -28,10 +27,9 @@ export async function getPublishedOpsConfig() {
   }
 
   try {
-    const [manifest, site, catalog, defaults, featureFlags, analysisControls] = await Promise.all([
+    const [manifest, site, defaults, featureFlags, analysisControls] = await Promise.all([
       readJsonFile('manifest.json'),
       readJsonFile('site.json'),
-      readJsonFile('evaluation-catalog.json'),
       readJsonFile('evaluation-defaults.json'),
       readJsonFile('feature-flags.json'),
       readJsonFile('analysis-controls.json'),
@@ -40,7 +38,6 @@ export async function getPublishedOpsConfig() {
     const config = validatePublishedOpsConfig({
       manifest: manifestSchema.parse(manifest),
       site: siteSchema.parse(site),
-      catalog: evaluationCatalogSchema.parse(catalog),
       defaults: evaluationDefaultsSchema.parse(defaults),
       featureFlags: featureFlagsSchema.parse(featureFlags),
       analysisControls: analysisControlsSchema.parse(analysisControls),

@@ -10,8 +10,6 @@ export type {
   AnalysisControlConfig,
   AnalysisControlsConfig,
   AnalysisControlOptionConfig,
-  CatalogOption,
-  EvaluationCatalogConfig,
   EvaluationDefaultsConfig,
   FeatureFlagsConfig,
   OpsConfigManifest,

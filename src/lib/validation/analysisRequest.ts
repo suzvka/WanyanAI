@@ -1,14 +1,5 @@
 import { z } from 'zod';
-
-const evaluationGoalValues = [
-  'overall_check',
-  'opening_attraction',
-  'rhythm_progression',
-  'character_development',
-  'style_consistency',
-  'structure_completeness',
-  'reader_acceptance',
-] as const;
+import { evaluationGoalValues } from '@/config/evaluationDimensions';
 
 export const promptFrameworkCompileRequestSchema = z.object({
   evaluationGoal: z.enum(evaluationGoalValues),

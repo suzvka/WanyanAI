@@ -18,7 +18,7 @@
       "options": [
         {
           "value": "general_text",
-          "label": "通用文本",
+          "label": "自由体裁",
           "enabled": true,
           "promptText": ""
         },
@@ -65,32 +65,26 @@
       ],
       "options": [
         {
-          "value": "excerpt",
-          "label": "节选片段",
-          "enabled": true,
-          "promptText": ""
-        },
-        {
           "value": "complete",
           "label": "完整作品",
           "enabled": true,
           "promptText": ""
         },
         {
-          "value": "single_chapter",
-          "label": "长篇中的单章/样章",
+          "value": "excerpt",
+          "label": "节选片段",
           "enabled": true,
           "promptText": ""
         },
         {
-          "value": "first_chapters",
-          "label": "长篇前若干章",
+          "value": "single_chapter",
+          "label": "单章/样章",
           "enabled": true,
           "promptText": ""
         },
         {
           "value": "draft",
-          "label": "未完成草稿",
+          "label": "草稿",
           "enabled": true,
           "promptText": ""
         }
@@ -206,12 +200,6 @@
           "label": "偏文学表达",
           "enabled": true,
           "promptText": "请优先从重视文学表达的读者视角判断语言质感、修辞表现与叙述韵律。"
-        },
-        {
-          "value": "general_reader",
-          "label": "通用读者",
-          "enabled": true,
-          "promptText": "请优先从通用读者视角判断整体可读性、理解成本与继续阅读意愿。"
         }
       ]
     },
@@ -231,22 +219,16 @@
       ],
       "options": [
         {
-          "value": "none",
-          "label": "不评价",
+          "value": "balanced",
+          "label": "平衡反馈",
           "enabled": true,
-          "promptText": ""
+          "promptText": "请兼顾优点与问题，保持反馈平衡。"
         },
         {
           "value": "strict",
           "label": "严格问题导向",
           "enabled": true,
           "promptText": "请采用直接、问题导向的反馈方式，优先指出影响结果的关键问题与修改优先级。"
-        },
-        {
-          "value": "balanced",
-          "label": "平衡反馈",
-          "enabled": true,
-          "promptText": "请兼顾优点与问题，保持反馈平衡。"
         },
         {
           "value": "encouraging",

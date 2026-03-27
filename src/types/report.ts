@@ -1,3 +1,9 @@
+import {
+  evaluationGoalValues,
+  textCompletenessValues,
+  textTypeValues,
+} from '@/config/evaluationDimensions';
+
 export type AnalysisReport = {
   schemaVersion: string;
   reportId: string;
@@ -27,10 +33,22 @@ export type ReportSummary = {
   overview: string;
 };
 
+export type ReportSubscoreNature = 'internal' | 'internal_relational_boundary';
+
+export type ReportSubscore = {
+  id: string;
+  label: string;
+  score: number;
+  rationale: string;
+  keyQuestion?: string;
+  nature?: ReportSubscoreNature;
+};
+
 export type ReportDashboard = {
   totalScore: number;
   grade: string;
   publishReadiness: string;
+  subscores: ReportSubscore[];
 };
 
 export type ReportConclusion = {
@@ -46,28 +64,11 @@ export type ReportMeta = {
   model: string;
 };
 
-export type TextType = 
-  | "web_serial" 
-  | "short_story" 
-  | "light_novel" 
-  | "literary_submission" 
-  | "general_text";
+export type TextType = (typeof textTypeValues)[number];
 
-export type TextCompleteness = 
-  | "complete" 
-  | "single_chapter" 
-  | "first_chapters" 
-  | "excerpt" 
-  | "draft";
+export type TextCompleteness = (typeof textCompletenessValues)[number];
 
-export type EvaluationGoal = 
-  | "overall_check" 
-  | "opening_attraction" 
-  | "rhythm_progression" 
-  | "character_development" 
-  | "style_consistency" 
-  | "structure_completeness" 
-  | "reader_acceptance";
+export type EvaluationGoal = (typeof evaluationGoalValues)[number];
 
 export type TextBlockType = 'actual_text' | 'reference_material' | 'reference_review';
 

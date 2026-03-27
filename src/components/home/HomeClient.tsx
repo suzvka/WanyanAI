@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,192 +10,31 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RefreshCw, Settings, Sparkles } from 'lucide-react';
-import { AnalysisReport, EvaluationGoal, EvaluationInput, TextCompleteness, TextType } from '@/types/report';
-import { ApiConfigDraft, ApiConfigRecord, ModelConfig } from '@/types/modelConfig';
-import { analysisService } from '@/services/analysis';
-import { modelConfigService } from '@/services/modelConfig';
+import { EvaluationInput } from '@/types/report';
 import ReportView from '@/components/ReportView';
-import { AppFlowStep } from '@/types/appFlow';
 import TextInputPanel from '@/components/home/TextInputPanel';
-import AnalysisSettingsPanel from '@/components/home/AnalysisSettingsPanel';
 import AnalysisProgressView from '@/components/home/AnalysisProgressView';
-import ApiConfigManagerDialog from '@/components/home/ApiConfigManagerDialog';
 import { useEvaluationForm } from '@/hooks/useEvaluationForm';
-import { createAppError, toAppErrorPayload } from '@/types/errors';
-import type { AnalysisControlBinding, AnalysisControlConfig, PublishedOpsConfig } from '@/server/config/types';
-import type {
-  CompileInstructionsErrorResponse,
-  CompileInstructionsSuccessResponse,
-} from '@/types/instructions';
+import type { PublishedOpsConfig } from '@/server/config/types';
+import AnalysisControlsPanel from '@/features/analysis-controls/components/AnalysisControlsPanel';
+import { useAnalysisControls } from '@/features/analysis-controls/hooks/useAnalysisControls';
+import { useAnalysisFlow } from '@/features/analysis-flow/hooks/useAnalysisFlow';
+import ApiConfigManagerDialog from '@/features/model-config/components/ApiConfigManagerDialog';
+import ConfigSelector from '@/features/model-config/components/ConfigSelector';
+import ConfigStatusBar from '@/features/model-config/components/ConfigStatusBar';
+import ModelSelector from '@/features/model-config/components/ModelSelector';
+import { useModelConfigController } from '@/features/model-config/hooks/useModelConfigController';
 
 interface HomeClientProps {
   opsConfig: PublishedOpsConfig;
   initialEvaluationInput: EvaluationInput;
 }
 
-function getEnabledDynamicControls(opsConfig: PublishedOpsConfig, evaluationGoal: EvaluationInput['evaluationGoal']) {
-  return opsConfig.analysisControls.controls
-    .filter((control) => control.enabled && control.appliesTo.includes(evaluationGoal))
-    .map((control) => ({
-      ...control,
-      options: control.options.filter((option) => option.enabled),
-    }))
-    .filter((control) => control.options.length > 0);
-}
-
-function getBoundControlValue(control: AnalysisControlConfig, input: EvaluationInput): string | null {
-  switch (control.bindTo) {
-    case 'textType':
-      return input.textType;
-    case 'textCompleteness':
-      return input.textCompleteness;
-    case 'evaluationGoal':
-      return input.evaluationGoal;
-    default:
-      return null;
-  }
-}
-
-function resolveInitialControlSelections(controls: AnalysisControlConfig[], input: EvaluationInput) {
-  return Object.fromEntries(
-    controls.map((control) => {
-      const boundValue = getBoundControlValue(control, input);
-      const selectedValue =
-        boundValue && control.options.some((option) => option.value === boundValue) ? boundValue : control.options[0].value;
-
-      return [control.id, selectedValue];
-    }),
-  );
-}
-
-function applyBoundControlSelection(
-  control: AnalysisControlConfig | undefined,
-  value: string,
-  updateField: <K extends keyof EvaluationInput>(key: K, value: EvaluationInput[K]) => void,
-) {
-  switch (control?.bindTo as AnalysisControlBinding | undefined) {
-    case 'textType':
-      updateField('textType', value as TextType);
-      break;
-    case 'textCompleteness':
-      updateField('textCompleteness', value as TextCompleteness);
-      break;
-    case 'evaluationGoal':
-      updateField('evaluationGoal', value as EvaluationGoal);
-      break;
-    default:
-      break;
-  }
-}
-
-async function readCompileInstructionsResponse(
-  response: Response,
-): Promise<CompileInstructionsSuccessResponse | CompileInstructionsErrorResponse | null> {
-  const text = await response.text();
-
-  if (!text.trim()) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text) as CompileInstructionsSuccessResponse | CompileInstructionsErrorResponse;
-  } catch {
-    return null;
-  }
-}
-
-async function requestCompiledInstructions(payload: {
-  controlSelections: Record<string, string>;
-  configVersion: string;
-}) {
-  let response: Response;
-
-  try {
-    response = await fetch('/api/instructions/compile', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    throw createAppError({
-      code: 'network_error',
-      message: '动态指令请求失败，请检查网络连接后重试。',
-      retryable: true,
-    });
-  }
-
-  const data = await readCompileInstructionsResponse(response);
-
-  if (!response.ok) {
-    throw createAppError(
-      data && 'error' in data
-        ? data.error
-        : {
-            code: 'unknown_error',
-            message: '动态指令请求失败。',
-            status: response.status,
-            retryable: response.status >= 500,
-          },
-    );
-  }
-
-  if (!data || !('instructionText' in data)) {
-    throw createAppError({
-      code: 'unknown_error',
-      message: '动态指令响应格式异常。',
-    });
-  }
-
-  return data;
-}
-
-function getConfigStatusLabel(status: ApiConfigRecord['lastValidationStatus']) {
-  switch (status) {
-    case 'valid':
-      return '可用';
-    case 'invalid':
-      return '不可用';
-    case 'validating':
-      return '验证中';
-    default:
-      return '待验证';
-  }
-}
-
-function getConfigStatusVariant(status: ApiConfigRecord['lastValidationStatus']) {
-  switch (status) {
-    case 'valid':
-      return 'default';
-    case 'invalid':
-      return 'destructive';
-    default:
-      return 'outline';
-  }
-}
-
 export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeClientProps) {
-  const [appStep, setAppStep] = useState<AppFlowStep>('input');
-  const [apiConfigs, setApiConfigs] = useState<ApiConfigRecord[]>([]);
-  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
-  const [isConfigMutating, setIsConfigMutating] = useState(false);
-  const [isModelRefreshing, setIsModelRefreshing] = useState(false);
-  const allAnalysisControls = useMemo<AnalysisControlConfig[]>(
-    () => opsConfig.analysisControls.controls.filter((control) => control.enabled && control.options.some((option) => option.enabled)),
-    [opsConfig],
-  );
-  const [controlSelections, setControlSelections] = useState<Record<string, string>>(() =>
-    resolveInitialControlSelections(allAnalysisControls, initialEvaluationInput),
-  );
-  const [isOpsConfigStaleDialogOpen, setIsOpsConfigStaleDialogOpen] = useState(false);
-  const [report, setReport] = useState<AnalysisReport | null>(null);
-  const [lastSubmittedInput, setLastSubmittedInput] = useState<EvaluationInput | null>(null);
+  const { site, featureFlags } = opsConfig;
   const {
     formData,
     formErrors,
@@ -216,294 +54,64 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
     featureFlags: opsConfig.featureFlags,
   });
 
-  const dynamicControls = useMemo<AnalysisControlConfig[]>(
-    () => getEnabledDynamicControls(opsConfig, formData.evaluationGoal),
-    [formData.evaluationGoal, opsConfig],
-  );
+  const {
+    apiConfigs,
+    selectedConfigId,
+    selectedConfig,
+    currentModelConfig,
+    isModelRefreshing,
+    isConfigBusy,
+    refreshModels,
+    createConfig,
+    updateConfig,
+    deleteConfig,
+    selectConfig,
+    selectModel,
+  } = useModelConfigController({
+    onConfigInteraction: () => clearError('form'),
+  });
 
-  useEffect(() => {
-    setControlSelections((current: Record<string, string>) => {
-      let changed = false;
-      const next = { ...current };
-
-      Object.keys(next).forEach((controlId) => {
-        if (!dynamicControls.some((control: AnalysisControlConfig) => control.id === controlId)) {
-          delete next[controlId];
-          changed = true;
-        }
-      });
-
-      dynamicControls.forEach((control: AnalysisControlConfig) => {
-        const selectedValue = next[control.id];
-        const hasSelectedOption = control.options.some((option) => option.value === selectedValue);
-
-        if (!hasSelectedOption) {
-          next[control.id] = control.options[0].value;
-          changed = true;
-        }
-      });
-
-      return changed ? next : current;
-    });
-  }, [dynamicControls]);
-
-  const selectedConfig = useMemo(
-    () => apiConfigs.find((config: ApiConfigRecord) => config.id === selectedConfigId) || null,
-    [apiConfigs, selectedConfigId],
-  );
-
-  const currentModelConfig: ModelConfig | null = selectedConfig?.selectedModel
-    ? {
-        baseUrl: selectedConfig.baseUrl,
-        apiKey: selectedConfig.apiKey,
-        selectedModel: selectedConfig.selectedModel,
-      }
-    : null;
+  const { dynamicControls, activeControlSelections, handleControlChange } = useAnalysisControls({
+    opsConfig,
+    formData,
+    initialEvaluationInput,
+    updateField,
+    clearError,
+  });
 
   const isSubmittingAnalysis = analysisStatus === 'running' || analysisStatus === 'recovering';
-  const isConfigBusy = isConfigMutating || isModelRefreshing;
-  const activeControlSelections = useMemo<Record<string, string>>(
-    () =>
-      Object.fromEntries(
-        dynamicControls.map((control: AnalysisControlConfig) => [control.id, controlSelections[control.id] || control.options[0].value]),
-      ),
-    [controlSelections, dynamicControls],
-  );
+  const settingsDescription =
+    dynamicControls.length > 0
+      ? site.settingsPanel.description
+      : opsConfig.source === 'fallback'
+        ? '当前未加载动态分析配置，将使用系统默认值。'
+        : '当前没有可配置的动态检查项，将直接使用当前默认分析参数。';
 
-  const syncConfigState = () => {
-    setApiConfigs(modelConfigService.listConfigs());
-    setSelectedConfigId(modelConfigService.getSelectedConfig()?.id || null);
-  };
-
-  useEffect(() => {
-    syncConfigState();
-  }, []);
-
-  const refreshConfigModels = async (configId: string, showToast = true) => {
-    setIsModelRefreshing(true);
-
-    try {
-      const refreshTask = modelConfigService.refreshModels(configId);
-      syncConfigState();
-
-      const result = await refreshTask;
-      syncConfigState();
-
-      if (showToast) {
-        if (result.validation.success) {
-          toast.success(result.config?.lastValidationMessage || 'API 配置校验成功。');
-        } else {
-          toast.error(result.validation.error?.message || 'API 配置校验失败。');
-        }
-      }
-
-      return result;
-    } catch (error) {
-      const payload = toAppErrorPayload(error, {
-        code: 'unknown_error',
-        message: '模型列表刷新失败，请稍后重试。',
-      });
-      if (showToast) {
-        toast.error(payload.message);
-      }
-
-      return {
-        config: null,
-        validation: {
-          success: false,
-          error: payload,
-        },
-      };
-    } finally {
-      setIsModelRefreshing(false);
-      syncConfigState();
-    }
-  };
-
-  const handleCreateConfig = async (value: ApiConfigDraft) => {
-    setIsConfigMutating(true);
-
-    try {
-      const createdConfig = modelConfigService.createConfig(value);
-      syncConfigState();
-      clearError('form');
-      await refreshConfigModels(createdConfig.id);
-    } catch (error) {
-      const payload = toAppErrorPayload(error, {
-        code: 'config_invalid',
-        message: '创建配置失败，请检查输入。',
-      });
-      toast.error(payload.message);
-    } finally {
-      setIsConfigMutating(false);
-      syncConfigState();
-    }
-  };
-
-  const handleUpdateConfig = async (configId: string, value: ApiConfigDraft) => {
-    setIsConfigMutating(true);
-
-    try {
-      modelConfigService.updateConfig(configId, value);
-      syncConfigState();
-      clearError('form');
-      await refreshConfigModels(configId);
-    } catch (error) {
-      const payload = toAppErrorPayload(error, {
-        code: 'config_invalid',
-        message: '更新配置失败，请检查输入。',
-      });
-      toast.error(payload.message);
-    } finally {
-      setIsConfigMutating(false);
-      syncConfigState();
-    }
-  };
-
-  const handleDeleteConfig = async (configId: string) => {
-    setIsConfigMutating(true);
-
-    try {
-      modelConfigService.removeConfig(configId);
-      syncConfigState();
-      toast.success('API 配置已删除。');
-    } catch (error) {
-      const payload = toAppErrorPayload(error, {
-        code: 'unknown_error',
-        message: '删除配置失败，请重试。',
-      });
-      toast.error(payload.message);
-    } finally {
-      setIsConfigMutating(false);
-      syncConfigState();
-    }
-  };
-
-  const handleSelectConfig = async (configId: string) => {
-    modelConfigService.selectConfig(configId);
-    syncConfigState();
-    clearError('form');
-    await refreshConfigModels(configId);
-  };
-
-  const handleModelChange = (value: string) => {
-    if (!selectedConfig) {
-      return;
-    }
-
-    modelConfigService.saveSelectedModel(selectedConfig.id, value);
-    clearError('form');
-    syncConfigState();
-  };
-
-  const handleControlChange = (controlId: string, value: string) => {
-    const control = dynamicControls.find((item: AnalysisControlConfig) => item.id === controlId);
-
-    setControlSelections((current: Record<string, string>) => ({
-      ...current,
-      [controlId]: value,
-    }));
-    applyBoundControlSelection(control, value, updateField);
-    clearError('form');
-  };
-
-  const runAnalysis = async (validatedInput: EvaluationInput) => {
-    if (!selectedConfig) {
-      setFormError('请先添加一个 API 配置。');
-      setIsConfigDialogOpen(true);
-      return;
-    }
-
-    if (!currentModelConfig) {
-      setFormError('请选择一个模型');
-      return;
-    }
-
-    startAnalysis();
-    setLastSubmittedInput(validatedInput);
-    setAppStep('analyzing');
-
-    try {
-      updateAnalysisProgress({
-        stage: 'fetch-template',
-        message: '正在同步当前动态检查指令',
-      });
-      const compiledInstructions = await requestCompiledInstructions({
-        controlSelections: activeControlSelections,
-        configVersion: opsConfig.manifest.configVersion,
-      });
-
-      const result = await analysisService.generateReport({
-        input: validatedInput,
-        modelConfig: currentModelConfig,
-        instructionText: compiledInstructions.instructionText,
-        onProgress: updateAnalysisProgress,
-      });
-      resetAnalysisState();
-      setReport(result);
-      setAppStep('report');
-    } catch (error) {
-      console.error('Analysis failed:', error);
-      const payload = toAppErrorPayload(error, {
-        code: 'unknown_error',
-        message: '分析失败，请重试',
-      });
-
-      if (payload.code === 'ops_config_stale') {
-        resetAnalysisState();
-        setFormError(payload.message);
-        setIsOpsConfigStaleDialogOpen(true);
-        setAppStep('input');
-        return;
-      }
-
-      if (payload.retryable) {
-        markAnalysisFailed(payload.message, true);
-        setAppStep('analyzing');
-        return;
-      }
-
-      markAnalysisFailed(payload.message, false);
-      setFormError(payload.message);
-      setAppStep('input');
-    }
-  };
-
-  const handleSubmit = async () => {
-    const validatedInput = validate();
-    if (!validatedInput) {
-      return;
-    }
-
-    await runAnalysis(validatedInput);
-  };
-
-  const handleRetryAnalysis = async () => {
-    if (!lastSubmittedInput) {
-      setFormError('缺少可重试的分析输入，请返回后重新提交。');
-      setAppStep('input');
-      return;
-    }
-
-    await runAnalysis(lastSubmittedInput);
-  };
-
-  const handleBackToInput = () => {
-    if (analysisStatus === 'failed' && analysisMessage) {
-      setFormError(analysisMessage);
-    }
-
-    resetAnalysisState();
-    setAppStep('input');
-  };
-
-  const handleReset = () => {
-    setLastSubmittedInput(null);
-    resetAnalysisState();
-    setReport(null);
-    clearError();
-    setAppStep('input');
-  };
+  const {
+    appStep,
+    report,
+    isOpsConfigStaleDialogOpen,
+    setIsOpsConfigStaleDialogOpen,
+    handleSubmit,
+    handleRetryAnalysis,
+    handleBackToInput,
+    handleReset,
+  } = useAnalysisFlow({
+    opsConfig,
+    currentModelConfig,
+    hasSelectedConfig: Boolean(selectedConfig),
+    activeControlSelections,
+    validate,
+    setFormError,
+    clearError,
+    analysisStatus,
+    analysisMessage,
+    startAnalysis,
+    updateAnalysisProgress,
+    markAnalysisFailed,
+    resetAnalysisState,
+    onRequireConfig: () => setIsConfigDialogOpen(true),
+  });
 
   if (appStep === 'report' && report) {
     return <ReportView report={report} onReset={handleReset} />;
@@ -519,44 +127,31 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
                 <Sparkles className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">{opsConfig.site.home.title}</h1>
-                <p className="text-sm text-slate-500">{opsConfig.site.home.subtitle}</p>
+                <h1 className="text-2xl font-bold text-slate-900">{site.home.title}</h1>
+                <p className="text-sm text-slate-500">{site.home.subtitle}</p>
               </div>
             </div>
 
             <div className="flex flex-1 flex-col gap-3 lg:max-w-3xl">
               <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
-                <Select value={selectedConfigId || undefined} onValueChange={handleSelectConfig}>
-                  <SelectTrigger disabled={isConfigBusy || apiConfigs.length === 0}>
-                    <SelectValue placeholder={apiConfigs.length > 0 ? '切换 API 配置' : '暂无 API 配置'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {apiConfigs.map((config: ApiConfigRecord) => (
-                      <SelectItem key={config.id} value={config.id}>
-                        {config.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ConfigSelector
+                  configs={apiConfigs}
+                  selectedConfigId={selectedConfigId}
+                  disabled={isConfigBusy}
+                  onSelect={selectConfig}
+                />
 
-                <Select value={selectedConfig?.selectedModel || undefined} onValueChange={handleModelChange}>
-                  <SelectTrigger disabled={isConfigBusy || !selectedConfig || selectedConfig.modelsCache.length === 0}>
-                    <SelectValue placeholder={selectedConfig ? '请选择一个模型' : '请先选择 API 配置'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(selectedConfig?.modelsCache || []).map((model: ApiConfigRecord['modelsCache'][number]) => (
-                      <SelectItem key={model.id} value={model.id}>
-                        {model.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ModelSelector
+                  selectedConfig={selectedConfig}
+                  disabled={isConfigBusy}
+                  onSelectModel={selectModel}
+                />
 
                 <Button
                   type="button"
                   variant="outline"
                   disabled={!selectedConfig || isConfigBusy}
-                  onClick={() => selectedConfig && refreshConfigModels(selectedConfig.id)}
+                  onClick={() => selectedConfig && refreshModels(selectedConfig.id)}
                 >
                   <RefreshCw className={`mr-2 h-4 w-4 ${isModelRefreshing ? 'animate-spin' : ''}`} />
                   刷新模型
@@ -568,20 +163,7 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
                 </Button>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                {selectedConfig ? (
-                  <>
-                    <Badge variant={getConfigStatusVariant(selectedConfig.lastValidationStatus)}>
-                      {getConfigStatusLabel(selectedConfig.lastValidationStatus)}
-                    </Badge>
-                    <span className="max-w-[520px] truncate">
-                      {selectedConfig.lastValidationMessage || `${selectedConfig.name} · 已缓存 ${selectedConfig.modelsCache.length} 个模型`}
-                    </span>
-                  </>
-                ) : (
-                  <span>当前尚未添加 API 配置。点击“管理配置”即可开始设置。</span>
-                )}
-              </div>
+              <ConfigStatusBar selectedConfig={selectedConfig} />
             </div>
           </div>
         </div>
@@ -592,19 +174,19 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
           <div className="grid gap-8 lg:grid-cols-3">
             <div className="space-y-6 lg:col-span-2">
               <TextInputPanel
-                title={opsConfig.site.inputPanel.title}
-                description={opsConfig.site.inputPanel.description}
+                title={site.inputPanel.title}
+                description={site.inputPanel.description}
                 textBlocks={formData.textBlocks}
-                enableFileUpload={opsConfig.featureFlags.enableFileUpload}
-                enableAnnotations={opsConfig.featureFlags.enableAnnotations}
+                enableFileUpload={featureFlags.enableFileUpload}
+                enableAnnotations={featureFlags.enableAnnotations}
                 onTextBlocksChange={(value) => updateField('textBlocks', value)}
               />
             </div>
 
             <div className="space-y-6">
-              <AnalysisSettingsPanel
-                title={opsConfig.site.settingsPanel.title}
-                description={opsConfig.site.settingsPanel.description}
+              <AnalysisControlsPanel
+                title={site.settingsPanel.title}
+                description={settingsDescription}
                 controls={dynamicControls}
                 controlSelections={activeControlSelections}
                 errorMessage={formErrors.form || formErrors.textBlocks || null}
@@ -620,8 +202,8 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
             status={analysisStatus}
             message={analysisMessage}
             canRetry={canRetryAnalysis}
-            runningTitle={opsConfig.site.progress.runningTitle}
-            runningDescription={opsConfig.site.progress.runningDescription}
+              runningTitle={site.progress.runningTitle}
+              runningDescription={site.progress.runningDescription}
             onRetry={handleRetryAnalysis}
             onBack={handleBackToInput}
           />
@@ -634,10 +216,10 @@ export default function HomeClient({ opsConfig, initialEvaluationInput }: HomeCl
         configs={apiConfigs}
         busy={isConfigBusy}
         onOpenChange={setIsConfigDialogOpen}
-        onSelectConfig={handleSelectConfig}
-        onCreateConfig={handleCreateConfig}
-        onUpdateConfig={handleUpdateConfig}
-        onDeleteConfig={handleDeleteConfig}
+        onSelectConfig={selectConfig}
+        onCreateConfig={createConfig}
+        onUpdateConfig={updateConfig}
+        onDeleteConfig={deleteConfig}
       />
 
       <AlertDialog open={isOpsConfigStaleDialogOpen} onOpenChange={setIsOpsConfigStaleDialogOpen}>

@@ -44,6 +44,9 @@ src/
 │   └── utils.ts            # cn() 等工具函数
 └── hooks/                   # 自定义 React Hooks（可选）
 
+ops-config/
+└── prompt-blocks/           # 系统提示词块目录（按文件名顺序拼接）
+
 server/
 ├── index.ts                 # 自定义服务器入口
 ├── tsconfig.json           # Server TypeScript 配置
@@ -297,6 +300,27 @@ export default function ClientComponent() {
 
   return <div>{JSON.stringify(data)}</div>;
 }
+```
+
+### 7. 系统提示词块
+
+系统提示词通过 `ops-config/prompt-blocks/` 目录下的多个 Markdown 文件进行热更新管理。
+
+- 使用 `.md` 文件
+- **第一行是标题**，其余内容为正文
+- 最终组装时保留 Markdown 形式，例如 `# 标题`
+- **完全按文件名字典序** 拼接，不引入额外元数据
+- **全空文件会跳过**
+- **只有标题没有正文的文件允许正常组装**
+
+推荐使用数字前缀控制顺序，例如：
+
+```text
+ops-config/prompt-blocks/
+├── 010-task-overview.md
+├── 020-execution-guide.md
+├── 030-core-scoring.md
+└── 040-report-format.md
 ```
 
 ## 常见开发场景

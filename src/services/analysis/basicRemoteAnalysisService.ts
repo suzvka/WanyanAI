@@ -19,6 +19,7 @@ import {
     EvaluationInput,
     ReportNormalizationDiagnostics,
     ReportSection,
+    ReportSubscore,
 } from '@/types/report';
 import { AppError, createAppError } from '@/types/errors';
 import { z } from 'zod';
@@ -43,6 +44,15 @@ const remoteAnalysisSectionSchema = z.object({
     body: z.string().trim().min(1),
 });
 
+const remoteAnalysisSubscoreSchema = z.object({
+    id: z.string().trim().min(1),
+    label: z.string().trim().min(1),
+    score: z.number(),
+    rationale: z.string().trim().min(1),
+    keyQuestion: z.string().trim().min(1).optional(),
+    nature: z.enum(['internal', 'internal_relational_boundary']).optional(),
+});
+
 const remoteAnalysisReportSchema = z.object({
     reportId: z.string().trim().min(1).optional(),
     reportVersion: z.string().trim().min(1).optional(),
@@ -52,9 +62,10 @@ const remoteAnalysisReportSchema = z.object({
         overview: z.string().trim().min(1),
     }),
     dashboard: z.object({
-        totalScore: z.number(),
+        totalScore: z.number().optional(),
         grade: z.string().trim().min(1),
         publishReadiness: z.string().trim().min(1),
+        subscores: z.array(remoteAnalysisSubscoreSchema).min(1),
     }),
     conclusion: z.object({
         finalRecommendation: z.enum(['publish', 'revise_then_publish', 'rework']),
@@ -72,6 +83,7 @@ const remoteAnalysisReportSchema = z.object({
 
 type RemoteAnalysisReport = z.infer<typeof remoteAnalysisReportSchema>;
 type RemoteAnalysisSection = z.infer<typeof remoteAnalysisSectionSchema>;
+type RemoteAnalysisSubscore = z.infer<typeof remoteAnalysisSubscoreSchema>;
 
 type PromptSlotValues = Record<PromptTemplateSlotKey, string>;
 type NormalizedAnalysisReport = Omit<AnalysisReport, 'schemaVersion' | 'diagnostics'>;
@@ -81,9 +93,29 @@ const promptSlotPattern = /{{(.*?)}}/g;
 const jsonFencePattern = /```(?:json)?\s*([\s\S]*?)```/i;
 const normalizeScore = (score: number) => Math.max(0, Math.min(100, Math.round(score)));
 
+function calculateAverageScore(subscores: ReportSubscore[]) {
+    return normalizeScore(
+        subscores.reduce((total: number, item: ReportSubscore) => total + item.score, 0) / subscores.length,
+    );
+}
+
 const reportSchemaGuide = `{
   "summary": { "title": "string", "overview": "string" },
-  "dashboard": { "totalScore": 0, "grade": "string", "publishReadiness": "string" },
+  "dashboard": {
+    "totalScore": 0,
+    "grade": "string",
+    "publishReadiness": "string",
+    "subscores": [
+      {
+        "id": "string",
+        "label": "string",
+        "score": 0,
+        "rationale": "string",
+        "keyQuestion": "string",
+        "nature": "internal | internal_relational_boundary"
+      }
+    ]
+  },
   "conclusion": {
     "finalRecommendation": "publish | revise_then_publish | rework",
     "rationale": "string"
@@ -564,6 +596,7 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         const sections = data.sections.map((section: RemoteAnalysisSection, index: number) =>
             this.normalizeRemoteSection(section, index),
         );
+        const subscores = this.normalizeRemoteSubscores(data.dashboard.subscores);
 
         const normalizedReport: NormalizedAnalysisReport = {
             reportId: data.reportId || `report-${Date.now()}`,
@@ -572,7 +605,8 @@ export class BasicRemoteAnalysisService implements AnalysisService {
             summary: data.summary,
             dashboard: {
                 ...data.dashboard,
-                totalScore: normalizeScore(data.dashboard.totalScore),
+                subscores,
+                totalScore: calculateAverageScore(subscores),
             },
             conclusion: data.conclusion,
             meta: {
@@ -586,10 +620,17 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         };
 
         return {
-            schemaVersion: 'report_schema_v2_paragraphs',
+            schemaVersion: 'report_schema_v3_subscores',
             ...normalizedReport,
             diagnostics: this.buildReportDiagnostics(sections),
         };
+    }
+
+    private normalizeRemoteSubscores(subscores: RemoteAnalysisSubscore[]): ReportSubscore[] {
+        return subscores.map((subscore: RemoteAnalysisSubscore) => ({
+            ...subscore,
+            score: normalizeScore(subscore.score),
+        }));
     }
 
     private normalizeRemoteSection(section: RemoteAnalysisSection, index: number): ReportSection {

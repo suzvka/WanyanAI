@@ -18,6 +18,8 @@ interface ReportSummaryCardProps {
 }
 
 export default function ReportSummaryCard({ report }: ReportSummaryCardProps) {
+  const subscores = report.dashboard.subscores ?? [];
+
   return (
     <div className="grid gap-6 xl:grid-cols-3">
       <Card>
@@ -60,6 +62,25 @@ export default function ReportSummaryCard({ report }: ReportSummaryCardProps) {
               <div className="text-sm text-slate-500">发布准备度</div>
               <div className="mt-2 text-base font-semibold text-slate-900">{report.dashboard.publishReadiness}</div>
             </div>
+
+            {subscores.length > 0 && (
+              <div className="rounded-lg border border-slate-200 p-4">
+                <div className="mb-3 text-sm text-slate-500">子维度分数</div>
+                <div className="space-y-3">
+                  {subscores.map((subscore) => (
+                    <div key={subscore.id} className="rounded-md bg-slate-50 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-medium text-slate-900">{subscore.label}</div>
+                        <div className="text-base font-semibold" style={{ color: getScoreColor(subscore.score) }}>
+                          {formatNumber(subscore.score)}
+                        </div>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{subscore.rationale}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

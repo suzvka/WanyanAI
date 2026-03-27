@@ -4,22 +4,6 @@ import {
   TextType,
 } from '@/types/report';
 
-export type CatalogOption<T extends string> = {
-  value: T;
-  label: string;
-  description: string;
-  enabled: boolean;
-  sortOrder: number;
-  badge?: string;
-  recommended?: boolean;
-};
-
-export type EvaluationCatalogConfig = {
-  textTypes: CatalogOption<TextType>[];
-  textCompletenessOptions: CatalogOption<TextCompleteness>[];
-  evaluationGoals: CatalogOption<EvaluationGoal>[];
-};
-
 export type EvaluationDefaultsConfig = {
   textType: TextType;
   textCompleteness: TextCompleteness;
@@ -58,7 +42,6 @@ export type SiteConfig = {
   home: {
     title: string;
     subtitle: string;
-    modelHint: string;
   };
   inputPanel: {
     title: string;
@@ -71,9 +54,6 @@ export type SiteConfig = {
   progress: {
     runningTitle: string;
     runningDescription: string;
-  };
-  errors: {
-    generic: string;
   };
 };
 
@@ -88,7 +68,6 @@ export type PublishedOpsConfig = {
   source: 'published' | 'fallback';
   manifest: OpsConfigManifest;
   site: SiteConfig;
-  catalog: EvaluationCatalogConfig;
   defaults: EvaluationDefaultsConfig;
   featureFlags: FeatureFlagsConfig;
   analysisControls: AnalysisControlsConfig;
