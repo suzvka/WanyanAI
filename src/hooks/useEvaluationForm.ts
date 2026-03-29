@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { createDefaultEvaluationInput } from '@/config/defaults';
 import { EvaluationInput } from '@/types/report';
 import { AnalysisPhase, AnalysisProgressState, AnalysisStatus } from '@/types/appFlow';
 import { EvaluationFormErrors, validateEvaluationInput } from '@/lib/validation/evaluationInput';
@@ -41,7 +40,7 @@ function cloneEvaluationInput(input: EvaluationInput): EvaluationInput {
 }
 
 export function useEvaluationForm(
-  initialValue: EvaluationInput = createDefaultEvaluationInput(),
+  initialValue: EvaluationInput,
   options: UseEvaluationFormOptions = {},
 ) {
   const [initialFormData] = useState<EvaluationInput>(() => cloneEvaluationInput(initialValue));

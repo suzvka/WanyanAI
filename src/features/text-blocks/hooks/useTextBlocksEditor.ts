@@ -23,9 +23,10 @@ import {
 type UseTextBlocksEditorOptions = {
   textBlocks: TextBlock[];
   onTextBlocksChange: (value: TextBlock[]) => void;
+  fixedBlockType?: string;
 };
 
-export function useTextBlocksEditor({ textBlocks, onTextBlocksChange }: UseTextBlocksEditorOptions) {
+export function useTextBlocksEditor({ textBlocks, onTextBlocksChange, fixedBlockType }: UseTextBlocksEditorOptions) {
   const nextBlockNumberRef = useRef(getNextBlockNumber(textBlocks));
   const [pendingTextChange, setPendingTextChange] = useState<PendingTextChange | null>(null);
   const [hasConfirmedOverflow, setHasConfirmedOverflow] = useState(false);
@@ -138,7 +139,7 @@ export function useTextBlocksEditor({ textBlocks, onTextBlocksChange }: UseTextB
   };
 
   const addBlock = () => {
-    applyTextBlocks([...textBlocks, createTextBlock(allocateBlockNumber())]);
+    applyTextBlocks([...textBlocks, createTextBlock(allocateBlockNumber(), fixedBlockType)]);
   };
 
   const removeBlock = (blockId: string) => {

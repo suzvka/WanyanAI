@@ -5,6 +5,12 @@ import { EvaluationInput } from '@/types/report';
 
 export type AnalysisStage = AnalysisPhase;
 
+export type BoundControlLabels = {
+  textTypeLabel: string;
+  textCompletenessLabel: string;
+  evaluationGoalLabel: string;
+};
+
 export type AnalysisProgressUpdate = {
   stage: AnalysisStage;
   message?: string;
@@ -14,6 +20,7 @@ export type AnalysisProgressUpdate = {
 export type GenerateReportOptions = {
   input: EvaluationInput;
   modelConfig: ModelConfig;
+  controlLabels: BoundControlLabels;
   instructionText?: string;
   onProgress?: (update: AnalysisProgressUpdate) => void;
 };

@@ -31,4 +31,4 @@ echo "Clearing port ${PORT} before start."
 kill_port_if_listening
 echo "Starting HTTP service on port ${PORT} for dev..."
 
-PORT=$PORT npx tsx watch src/server.ts
+PORT=$PORT pnpm tsx watch src/server.ts

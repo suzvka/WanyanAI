@@ -1,4 +1,5 @@
 import type {
+  AnalysisControlGroupConfig,
   AnalysisControlConfig,
   PublishedOpsConfig,
 } from '@/server/config/types';
@@ -8,24 +9,43 @@ import {
   writeBoundControlValue,
   type EvaluationInputUpdater,
 } from './controlBindings';
+import {
+  textTypeLabels,
+  textCompletenessLabels,
+  evaluationGoalLabels,
+} from '@/config/evaluationDimensions';
 
 export type { EvaluationInputUpdater } from './controlBindings';
 
+function normalizeControl(control: AnalysisControlConfig): AnalysisControlConfig {
+  return {
+    ...control,
+    options: control.options.filter((option) => option.enabled),
+  };
+}
+
+export function getEnabledDynamicControlGroups(opsConfig: PublishedOpsConfig): AnalysisControlGroupConfig[] {
+  return opsConfig.analysisControls.groups
+    .filter((group) => group.enabled)
+    .map((group: AnalysisControlGroupConfig) => ({
+      ...group,
+      controls: group.controls
+        .filter((control) => control.enabled)
+        .map(normalizeControl)
+        .filter((control) => control.options.length > 0),
+    }));
+}
+
 export function getEnabledDynamicControls(
   opsConfig: PublishedOpsConfig,
-  evaluationGoal: EvaluationInput['evaluationGoal'],
-) {
-  return opsConfig.analysisControls.controls
-    .filter((control) => control.enabled && control.appliesTo.includes(evaluationGoal))
-    .map((control) => ({
-      ...control,
-      options: control.options.filter((option) => option.enabled),
-    }))
+): AnalysisControlConfig[] {
+  return getEnabledDynamicControlGroups(opsConfig)
+    .flatMap((group) => group.controls)
     .filter((control) => control.options.length > 0);
 }
 
 export function getBoundControlValue(control: AnalysisControlConfig, input: EvaluationInput): string | null {
-  return control.bindTo ? readBoundControlValue(control.bindTo, input) : null;
+  return readBoundControlValue(control.id, input);
 }
 
 export function resolveControlSelectionValue(
@@ -33,6 +53,10 @@ export function resolveControlSelectionValue(
   currentValue: string | undefined,
   input: EvaluationInput,
 ) {
+  if (control.options.length === 0) {
+    return '';
+  }
+
   if (currentValue && control.options.some((option) => option.value === currentValue)) {
     return currentValue;
   }
@@ -80,8 +104,44 @@ export function buildActiveControlSelections(
   controlSelections: Record<string, string>,
 ): Record<string, string> {
   return Object.fromEntries(
-    controls.map((control) => [control.id, controlSelections[control.id] || control.options[0].value]),
+    controls
+      .filter((control) => control.options.length > 0)
+      .map((control) => [control.id, controlSelections[control.id] || control.options[0].value]),
   );
+}
+
+function getBoundControlOptionLabel(
+  controls: AnalysisControlConfig[],
+  controlId: string,
+  input: EvaluationInput,
+) {
+  const control = controls.find((item) => item.id === controlId);
+
+  if (!control) {
+    return null;
+  }
+
+  const value = readBoundControlValue(controlId, input);
+  const option = control.options.find((item) => item.enabled && item.value === value);
+
+  if (!option) {
+    return null;
+  }
+
+  return option.label;
+}
+
+export function resolveBoundControlLabels(opsConfig: PublishedOpsConfig, input: EvaluationInput) {
+  const controls = getEnabledDynamicControls(opsConfig);
+  const textTypeLabel = getBoundControlOptionLabel(controls, 'text_type', input) ?? '未设置';
+  const textCompletenessLabel = getBoundControlOptionLabel(controls, 'text_completeness', input) ?? '未设置';
+  const evaluationGoalLabel = getBoundControlOptionLabel(controls, 'evaluation_goal', input) ?? '未设置';
+
+  return {
+    textTypeLabel,
+    textCompletenessLabel,
+    evaluationGoalLabel,
+  };
 }
 
 export function applyBoundControlSelection(
@@ -89,9 +149,9 @@ export function applyBoundControlSelection(
   value: string,
   updateField: EvaluationInputUpdater,
 ) {
-  if (!control?.bindTo) {
+  if (!control) {
     return;
   }
 
-  writeBoundControlValue(control.bindTo, value, updateField);
+  writeBoundControlValue(control.id, value, updateField);
 }

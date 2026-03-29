@@ -1,22 +1,28 @@
 'use client';
 
+import { cn } from '@/lib/utils';
 import type { ApiConfigRecord } from '@/types/modelConfig';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type ModelSelectorProps = {
   selectedConfig: ApiConfigRecord | null;
   disabled?: boolean;
+  className?: string;
   onSelectModel: (modelId: string) => void;
 };
 
 export default function ModelSelector({
   selectedConfig,
   disabled = false,
+  className,
   onSelectModel,
 }: ModelSelectorProps) {
   return (
     <Select value={selectedConfig?.selectedModel || undefined} onValueChange={onSelectModel}>
-      <SelectTrigger disabled={disabled || !selectedConfig || selectedConfig.modelsCache.length === 0}>
+      <SelectTrigger
+        className={cn('w-full min-w-0', className)}
+        disabled={disabled || !selectedConfig || selectedConfig.modelsCache.length === 0}
+      >
         <SelectValue placeholder={selectedConfig ? '请选择一个模型' : '请先选择 API 配置'} />
       </SelectTrigger>
       <SelectContent>

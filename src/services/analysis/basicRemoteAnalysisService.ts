@@ -1,34 +1,24 @@
-import {
-    evaluationGoalOptions,
-    getOptionLabel,
-    textCompletenessOptions,
-    textTypeOptions,
-} from '@/config/evaluationOptions';
-import { renderTextBlocksForModel, summarizeTextBlocks } from '@/lib/textBlocks';
+import { renderTextBlockMetadataForModel, renderTextBlocksForModel } from '@/lib/textBlocks';
 import { validateModelConfig } from '@/lib/validation/modelConfig';
 import {
     AnalysisRepairAttempt,
+    ModelAnalysisMessage,
     ModelAnalysisRequest,
     ParsedAnalysisPayload,
     PromptTemplateResource,
     PromptTemplateSlotKey,
     RawModelResponse,
 } from '@/types/analysis';
-import {
-    AnalysisReport,
-    EvaluationInput,
-    ReportNormalizationDiagnostics,
-    ReportSection,
-    ReportSubscore,
-} from '@/types/report';
+import { AnalysisReport, EvaluationInput } from '@/types/report';
 import { AppError, createAppError } from '@/types/errors';
-import { z } from 'zod';
+import { normalizeModelMinimalReport } from '@/lib/analysis/reportNormalization';
 import { AnalysisProgressUpdate, AnalysisService, GenerateReportOptions, PromptTemplateService } from './types';
 
 type ChatCompletionsResponse = {
     output_text?: string;
     choices?: Array<{
         text?: string;
+        finish_reason?: string;
         message?: {
             content?: string | Array<{ type?: string; text?: string }>;
         };
@@ -38,104 +28,25 @@ type ChatCompletionsResponse = {
     };
 };
 
-const remoteAnalysisSectionSchema = z.object({
-    id: z.string().trim().min(1).optional(),
-    title: z.string().trim().min(1),
-    body: z.string().trim().min(1),
-});
-
-const remoteAnalysisSubscoreSchema = z.object({
-    id: z.string().trim().min(1),
-    label: z.string().trim().min(1),
-    score: z.number(),
-    rationale: z.string().trim().min(1),
-    keyQuestion: z.string().trim().min(1).optional(),
-    nature: z.enum(['internal', 'internal_relational_boundary']).optional(),
-});
-
-const remoteAnalysisReportSchema = z.object({
-    reportId: z.string().trim().min(1).optional(),
-    reportVersion: z.string().trim().min(1).optional(),
-    generatedAt: z.string().trim().min(1).optional(),
-    summary: z.object({
-        title: z.string().trim().min(1),
-        overview: z.string().trim().min(1),
-    }),
-    dashboard: z.object({
-        totalScore: z.number().optional(),
-        grade: z.string().trim().min(1),
-        publishReadiness: z.string().trim().min(1),
-        subscores: z.array(remoteAnalysisSubscoreSchema).min(1),
-    }),
-    conclusion: z.object({
-        finalRecommendation: z.enum(['publish', 'revise_then_publish', 'rework']),
-        rationale: z.string().trim().min(1),
-    }),
-    meta: z
-        .object({
-            frameworkVersion: z.string().trim().min(1).optional(),
-            scoringPolicyVersion: z.string().trim().min(1).optional(),
-            conclusionPolicyVersion: z.string().trim().min(1).optional(),
-        })
-        .optional(),
-    sections: z.array(remoteAnalysisSectionSchema).min(1),
-});
-
-type RemoteAnalysisReport = z.infer<typeof remoteAnalysisReportSchema>;
-type RemoteAnalysisSection = z.infer<typeof remoteAnalysisSectionSchema>;
-type RemoteAnalysisSubscore = z.infer<typeof remoteAnalysisSubscoreSchema>;
-
 type PromptSlotValues = Record<PromptTemplateSlotKey, string>;
-type NormalizedAnalysisReport = Omit<AnalysisReport, 'schemaVersion' | 'diagnostics'>;
+type TruncationSignal = {
+    isLikelyTruncated: boolean;
+    reason: string;
+    missingTopLevelKeys: string[];
+    endsWithClosingBrace: boolean;
+    hasUnterminatedString: boolean;
+    unclosedBraces: number;
+    unclosedBrackets: number;
+};
 
 const normalizeBaseUrl = (baseUrl: string) => baseUrl.trim().replace(/\/$/, '');
 const promptSlotPattern = /{{(.*?)}}/g;
 const jsonFencePattern = /```(?:json)?\s*([\s\S]*?)```/i;
-const normalizeScore = (score: number) => Math.max(0, Math.min(100, Math.round(score)));
-
-function calculateAverageScore(subscores: ReportSubscore[]) {
-    return normalizeScore(
-        subscores.reduce((total: number, item: ReportSubscore) => total + item.score, 0) / subscores.length,
-    );
-}
-
-const reportSchemaGuide = `{
-  "summary": { "title": "string", "overview": "string" },
-  "dashboard": {
-    "totalScore": 0,
-    "grade": "string",
-    "publishReadiness": "string",
-    "subscores": [
-      {
-        "id": "string",
-        "label": "string",
-        "score": 0,
-        "rationale": "string",
-        "keyQuestion": "string",
-        "nature": "internal | internal_relational_boundary"
-      }
-    ]
-  },
-  "conclusion": {
-    "finalRecommendation": "publish | revise_then_publish | rework",
-    "rationale": "string"
-  },
-  "reportId": "string",
-  "reportVersion": "string",
-  "generatedAt": "string",
-  "meta": {
-    "frameworkVersion": "string",
-    "scoringPolicyVersion": "string",
-    "conclusionPolicyVersion": "string"
-  },
-  "sections": [
-    {
-      "title": "string",
-      "body": "string",
-      "id": "string"
-    }
-  ]
-}`;
+const requiredTopLevelKeys = ['summary', 'subscores', 'conclusion'] as const;
+const minimumInitialMaxTokens = 2200;
+const minimumRetryMaxTokens = 2800;
+const maximumGenerationMaxTokens = 3200;
+const maximumRepairMaxTokens = 3600;
 
 async function readResponseData(response: Response): Promise<ChatCompletionsResponse | null> {
     const text = await response.text();
@@ -171,17 +82,34 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         });
 
         this.emitProgress(onProgress, 'build-prompt', '正在拼接最终提示词');
-        const messages = this.buildMessages(template, input, instructionText);
+        const slotValues = this.createSlotValues(input, instructionText);
+        const messages = this.buildMessages(template, slotValues);
+        const initialMaxTokens = this.calculateGenerationMaxTokens(
+            template.recommendedParameters.maxTokens ?? 8192,
+            slotValues.textBlocksPlainText.length,
+        );
+
+        // 打印完整提示词到控制台
+        console.group('📤 分析请求 - 完整提示词');
+        console.info('🎯 评价目标:', input.evaluationGoal);
+        console.info('📝 槽位值:', slotValues);
+        console.info('─────────────────────────────────────');
+        messages.forEach((msg, index) => {
+            console.info(`${msg.role === 'system' ? '🤖 System' : '👤 User'} (消息 ${index + 1}):`);
+            console.info(msg.content);
+            console.info('─────────────────────────────────────');
+        });
+        console.groupEnd();
 
         this.emitProgress(onProgress, 'request-model', '模型正在生成分析结果');
         const requestPayload: ModelAnalysisRequest = {
             model: validatedConfig.data.selectedModel,
             messages,
             temperature: template.recommendedParameters.temperature,
-            max_tokens: template.recommendedParameters.maxTokens,
+            max_tokens: initialMaxTokens,
         };
 
-        const content = await this.requestRemoteAnalysis(
+        let content = await this.requestRemoteAnalysis(
             validatedConfig.data.baseUrl,
             validatedConfig.data.apiKey,
             requestPayload,
@@ -193,18 +121,48 @@ export class BasicRemoteAnalysisService implements AnalysisService {
             attempted: false,
             success: parsedPayload !== null && parsedPayload.usedRepair,
         };
+        let retryAttempted = false;
 
         if (!parsedPayload) {
-            repairAttempt = { attempted: true, success: false, reason: '模型返回内容不是合法 JSON' };
-            parsedPayload = await this.requestJsonRepair({
-                baseUrl: validatedConfig.data.baseUrl,
-                apiKey: validatedConfig.data.apiKey,
-                model: validatedConfig.data.selectedModel,
-                rawContent: content.content,
-                issueHint: '模型初次返回的内容不是合法 JSON，请只修复结构，不要重写分析结论。',
-                onProgress,
-            });
-            repairAttempt.success = true;
+            const truncationSignal = this.detectTruncation(content.content, parsedPayload, content.finishReason);
+
+            if (truncationSignal.isLikelyTruncated) {
+                this.logJsonDiagnostic('检测到疑似截断', {
+                    reason: truncationSignal.reason,
+                    finishReason: content.finishReason || null,
+                    missingTopLevelKeys: truncationSignal.missingTopLevelKeys,
+                    endsWithClosingBrace: truncationSignal.endsWithClosingBrace,
+                    hasUnterminatedString: truncationSignal.hasUnterminatedString,
+                    unclosedBraces: truncationSignal.unclosedBraces,
+                    unclosedBrackets: truncationSignal.unclosedBrackets,
+                });
+                retryAttempted = true;
+                const retryResult = await this.retryTruncatedAnalysis({
+                    baseUrl: validatedConfig.data.baseUrl,
+                    apiKey: validatedConfig.data.apiKey,
+                    requestPayload,
+                    reason: truncationSignal.reason,
+                    onProgress,
+                });
+
+                content = retryResult.response;
+                parsedPayload = retryResult.parsedPayload;
+                repairAttempt.success = parsedPayload !== null && parsedPayload.usedRepair;
+            }
+
+            if (!parsedPayload) {
+                repairAttempt = { attempted: true, success: false, reason: '模型返回内容不是合法 JSON' };
+                parsedPayload = await this.requestJsonRepair({
+                    baseUrl: validatedConfig.data.baseUrl,
+                    apiKey: validatedConfig.data.apiKey,
+                    model: validatedConfig.data.selectedModel,
+                    originalMessages: messages,
+                    rawContent: content.content,
+                    issueHint: '模型返回的内容无法完成解析，请只修复结构，不要重写分析结论。',
+                    onProgress,
+                });
+                repairAttempt.success = true;
+            }
         }
 
         this.emitProgress(onProgress, 'normalize-report', '正在校验结果结构并生成最终报告');
@@ -221,17 +179,55 @@ export class BasicRemoteAnalysisService implements AnalysisService {
                 throw error;
             }
 
+            const truncationSignal = this.detectTruncation(content.content, parsedPayload, content.finishReason);
+            if (truncationSignal.isLikelyTruncated && !retryAttempted) {
+                this.logJsonDiagnostic('Schema 校验前识别到疑似截断', {
+                    reason: truncationSignal.reason,
+                    finishReason: content.finishReason || null,
+                    missingTopLevelKeys: truncationSignal.missingTopLevelKeys,
+                    endsWithClosingBrace: truncationSignal.endsWithClosingBrace,
+                    hasUnterminatedString: truncationSignal.hasUnterminatedString,
+                    unclosedBraces: truncationSignal.unclosedBraces,
+                    unclosedBrackets: truncationSignal.unclosedBrackets,
+                    schemaError: error.message,
+                });
+                retryAttempted = true;
+                const retryResult = await this.retryTruncatedAnalysis({
+                    baseUrl: validatedConfig.data.baseUrl,
+                    apiKey: validatedConfig.data.apiKey,
+                    requestPayload,
+                    reason: `${truncationSignal.reason}；schema 校验失败：${error.message}`,
+                    onProgress,
+                });
+
+                content = retryResult.response;
+                parsedPayload = retryResult.parsedPayload;
+
+                if (parsedPayload) {
+                    this.emitProgress(onProgress, 'normalize-report', '正在校验重试后的结构化报告', 'recovering');
+                    return this.normalizeAnalysisReport(
+                        parsedPayload.parsed,
+                        template,
+                        validatedConfig.data.baseUrl,
+                        validatedConfig.data.selectedModel,
+                    );
+                }
+            }
+
             repairAttempt = {
                 attempted: true,
                 success: false,
                 reason: error.message,
             };
 
+            const repairSource = parsedPayload?.jsonText ?? content.content;
+
             parsedPayload = await this.requestJsonRepair({
                 baseUrl: validatedConfig.data.baseUrl,
                 apiKey: validatedConfig.data.apiKey,
                 model: validatedConfig.data.selectedModel,
-                rawContent: parsedPayload.jsonText,
+                originalMessages: messages,
+                rawContent: repairSource,
                 issueHint: `返回 JSON 缺少必要字段或字段类型不合法：${error.message}`,
                 onProgress,
             });
@@ -247,8 +243,7 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         }
     }
 
-    private buildMessages(template: PromptTemplateResource, input: EvaluationInput, instructionText?: string) {
-        const slotValues = this.createSlotValues(input, instructionText);
+    private buildMessages(template: PromptTemplateResource, slotValues: PromptSlotValues) {
         this.validateTemplateSlots(template, slotValues);
 
         return [
@@ -265,11 +260,8 @@ export class BasicRemoteAnalysisService implements AnalysisService {
 
     private createSlotValues(input: EvaluationInput, instructionText?: string): PromptSlotValues {
         return {
+            textBlocksMetadata: renderTextBlockMetadataForModel(input),
             textBlocksPlainText: renderTextBlocksForModel(input),
-            textBlocksSummary: summarizeTextBlocks(input),
-            textTypeLabel: getOptionLabel(textTypeOptions, input.textType),
-            textCompletenessLabel: getOptionLabel(textCompletenessOptions, input.textCompleteness),
-            evaluationGoalLabel: getOptionLabel(evaluationGoalOptions, input.evaluationGoal),
             dynamicInstructionText: instructionText?.trim() || '',
         };
     }
@@ -279,11 +271,9 @@ export class BasicRemoteAnalysisService implements AnalysisService {
             const key = rawKey.trim() as PromptTemplateSlotKey;
             const value = slotValues[key];
 
+            // 槽位缺失时返回空字符串，允许自由配置
             if (value == null) {
-                throw createAppError({
-                    code: 'template_response_invalid',
-                    message: `提示词槽位缺失：${key}`,
-                });
+                return '';
             }
 
             return value;
@@ -291,25 +281,8 @@ export class BasicRemoteAnalysisService implements AnalysisService {
     }
 
     private validateTemplateSlots(template: PromptTemplateResource, slotValues: PromptSlotValues) {
-        const placeholderKeys = this.extractPlaceholderKeys(template.systemPromptTemplate, template.userPromptTemplate);
-
-        for (const slot of template.slots) {
-            if (slot.required && !placeholderKeys.has(slot.key)) {
-                throw createAppError({
-                    code: 'template_response_invalid',
-                    message: `提示词模板缺少必填槽位占位符：${slot.key}`,
-                });
-            }
-        }
-
-        for (const key of placeholderKeys) {
-            if (!(key in slotValues)) {
-                throw createAppError({
-                    code: 'template_response_invalid',
-                    message: `提示词模板存在未知槽位：${key}`,
-                });
-            }
-        }
+        // 完全信任动态配置，不再进行严格验证
+        // 槽位缺失时会在 fillPromptTemplate 中用空字符串填充
     }
 
     private extractPlaceholderKeys(...templates: string[]): Set<string> {
@@ -328,6 +301,166 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         return keys;
     }
 
+    private calculateGenerationMaxTokens(recommendedMaxTokens: number, plainTextLength: number) {
+        const baseTokens = Math.max(recommendedMaxTokens, minimumInitialMaxTokens);
+
+        if (plainTextLength >= 30000) {
+            return Math.min(maximumGenerationMaxTokens, baseTokens + 800);
+        }
+
+        if (plainTextLength >= 18000) {
+            return Math.min(maximumGenerationMaxTokens, baseTokens + 500);
+        }
+
+        if (plainTextLength >= 8000) {
+            return Math.min(maximumGenerationMaxTokens, baseTokens + 250);
+        }
+
+        return baseTokens;
+    }
+
+    private calculateRetryMaxTokens(currentMaxTokens?: number) {
+        const baseTokens = Math.max(currentMaxTokens ?? minimumInitialMaxTokens, minimumRetryMaxTokens);
+        return Math.min(maximumGenerationMaxTokens, baseTokens + 400);
+    }
+
+    private calculateRepairMaxTokens(rawContentLength: number) {
+        if (rawContentLength >= 2800) {
+            return maximumRepairMaxTokens;
+        }
+
+        if (rawContentLength >= 2000) {
+            return 3000;
+        }
+
+        return minimumRetryMaxTokens;
+    }
+
+    private inspectJsonClosure(content: string) {
+        let inString = false;
+        let isEscaped = false;
+        let unclosedBraces = 0;
+        let unclosedBrackets = 0;
+
+        for (const char of content) {
+            if (isEscaped) {
+                isEscaped = false;
+                continue;
+            }
+
+            if (char === '\\') {
+                isEscaped = true;
+                continue;
+            }
+
+            if (char === '"') {
+                inString = !inString;
+                continue;
+            }
+
+            if (inString) {
+                continue;
+            }
+
+            if (char === '{') {
+                unclosedBraces += 1;
+            } else if (char === '}') {
+                unclosedBraces = Math.max(0, unclosedBraces - 1);
+            } else if (char === '[') {
+                unclosedBrackets += 1;
+            } else if (char === ']') {
+                unclosedBrackets = Math.max(0, unclosedBrackets - 1);
+            }
+        }
+
+        return {
+            endsWithClosingBrace: content.trimEnd().endsWith('}'),
+            hasUnterminatedString: inString,
+            unclosedBraces,
+            unclosedBrackets,
+        };
+    }
+
+    private detectTruncation(
+        content: string,
+        parsedPayload: ParsedAnalysisPayload | null,
+        finishReason?: string,
+    ): TruncationSignal {
+        const closure = this.inspectJsonClosure(content);
+        const normalizedContent = content.trim();
+        const hasKeyLiteral = (key: (typeof requiredTopLevelKeys)[number]) => normalizedContent.includes(`"${key}"`);
+        const parsedRecord = parsedPayload?.parsed && typeof parsedPayload.parsed === 'object' ? parsedPayload.parsed : null;
+        const parsedKeys = parsedRecord ? Object.keys(parsedRecord as Record<string, unknown>) : [];
+        const missingTopLevelKeys = requiredTopLevelKeys.filter((key) => {
+            if (parsedKeys.length > 0) {
+                return !parsedKeys.includes(key);
+            }
+
+            return !hasKeyLiteral(key);
+        });
+
+        const hasSummaryAndSubscores = parsedKeys.length > 0
+            ? parsedKeys.includes('summary') && parsedKeys.includes('subscores')
+            : hasKeyLiteral('summary') && hasKeyLiteral('subscores');
+
+        const isLikelyTruncated =
+            finishReason === 'length'
+            || closure.hasUnterminatedString
+            || closure.unclosedBraces > 0
+            || closure.unclosedBrackets > 0
+            || !closure.endsWithClosingBrace
+            || (hasSummaryAndSubscores && missingTopLevelKeys.length > 0);
+
+        const reason = finishReason === 'length'
+            ? 'provider finish_reason=length'
+            : closure.hasUnterminatedString
+                ? 'JSON 字符串未闭合'
+                : closure.unclosedBraces > 0 || closure.unclosedBrackets > 0
+                    ? 'JSON 结构未闭合'
+                    : !closure.endsWithClosingBrace
+                        ? '输出未以对象闭合'
+                        : hasSummaryAndSubscores && missingTopLevelKeys.length > 0
+                            ? `缺少顶层字段：${missingTopLevelKeys.join(', ')}`
+                            : '未检测到明显截断';
+
+        return {
+            isLikelyTruncated,
+            reason,
+            missingTopLevelKeys,
+            ...closure,
+        };
+    }
+
+    private async retryTruncatedAnalysis({
+        baseUrl,
+        apiKey,
+        requestPayload,
+        reason,
+        onProgress,
+    }: {
+        baseUrl: string;
+        apiKey: string;
+        requestPayload: ModelAnalysisRequest;
+        reason: string;
+        onProgress?: GenerateReportOptions['onProgress'];
+    }): Promise<{ response: RawModelResponse; parsedPayload: ParsedAnalysisPayload | null }> {
+        this.emitProgress(onProgress, 'request-model', `检测到输出疑似被截断，正在提高输出上限后重试：${reason}`, 'recovering');
+
+        const retryPayload: ModelAnalysisRequest = {
+            ...requestPayload,
+            temperature: 0,
+            max_tokens: this.calculateRetryMaxTokens(requestPayload.max_tokens),
+        };
+
+        const response = await this.requestRemoteAnalysis(baseUrl, apiKey, retryPayload);
+        this.emitProgress(onProgress, 'extract-json', '正在校验重试后的结构化结果', 'recovering');
+
+        return {
+            response,
+            parsedPayload: this.tryParseRemotePayload(response.content),
+        };
+    }
+
     private emitProgress(
         onProgress: GenerateReportOptions['onProgress'],
         stage: AnalysisProgressUpdate['stage'],
@@ -335,6 +468,15 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         status: AnalysisProgressUpdate['status'] = 'running',
     ) {
         onProgress?.({ stage, message, status });
+    }
+
+    private logJsonDiagnostic(label: string, payload?: Record<string, unknown>) {
+        if (payload) {
+            console.info(`[JSON解析诊断] ${label}`, payload);
+            return;
+        }
+
+        console.info(`[JSON解析诊断] ${label}`);
     }
 
     private extractContent(data: ChatCompletionsResponse | null): RawModelResponse | null {
@@ -358,6 +500,7 @@ export class BasicRemoteAnalysisService implements AnalysisService {
             return {
                 content: firstChoice.text,
                 source: 'choice_text',
+                finishReason: firstChoice.finish_reason,
             };
         }
 
@@ -366,6 +509,7 @@ export class BasicRemoteAnalysisService implements AnalysisService {
             return {
                 content: messageContent,
                 source: 'message_content',
+                finishReason: firstChoice.finish_reason,
             };
         }
 
@@ -380,6 +524,7 @@ export class BasicRemoteAnalysisService implements AnalysisService {
                 ? {
                     content: merged,
                     source: 'message_content',
+                    finishReason: firstChoice.finish_reason,
                 }
                 : null;
         }
@@ -524,6 +669,7 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         baseUrl,
         apiKey,
         model,
+        originalMessages,
         rawContent,
         issueHint,
         onProgress,
@@ -531,6 +677,7 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         baseUrl: string;
         apiKey: string;
         model: string;
+        originalMessages: ModelAnalysisMessage[];
         rawContent: string;
         issueHint: string;
         onProgress?: GenerateReportOptions['onProgress'];
@@ -540,25 +687,8 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         const repairPayload: ModelAnalysisRequest = {
             model,
             temperature: 0,
-            max_tokens: 2200,
-            messages: [
-                {
-                    role: 'system',
-                    content:
-                        '你是 JSON 修复助手。你只能输出一个严格合法的 JSON 对象，不要输出解释、注释、Markdown 代码块或额外文本。不得重新分析原文，只能基于已有内容补齐结构并修复格式。',
-                },
-                {
-                    role: 'user',
-                    content: [
-                        '请将下面已有的分析结果整理为严格合法的 JSON。',
-                        `问题说明：${issueHint}`,
-                        '输出必须符合以下结构：',
-                        reportSchemaGuide,
-                        '待修复内容如下：',
-                        rawContent,
-                    ].join('\n\n'),
-                },
-            ],
+            max_tokens: this.calculateRepairMaxTokens(rawContent.length),
+            messages: this.buildRepairMessages(originalMessages, rawContent, issueHint),
         };
 
         const repairedResponse = await this.requestRemoteAnalysis(baseUrl, apiKey, repairPayload);
@@ -576,83 +706,34 @@ export class BasicRemoteAnalysisService implements AnalysisService {
         return parsedPayload;
     }
 
+    private buildRepairMessages(
+        originalMessages: ModelAnalysisMessage[],
+        rawContent: string,
+        issueHint: string,
+    ): ModelAnalysisMessage[] {
+        return [
+            ...originalMessages,
+            {
+                role: 'assistant',
+                content: rawContent,
+            },
+            {
+                role: 'user',
+                content: [
+                    '以上是你刚才基于同一输入生成的结果。',
+                    `问题说明：${issueHint}`,
+                    '不要重新分析，不要改写既有判断，只修复结构并仅输出一个严格合法的 JSON 对象。',
+                ].join('\n'),
+            },
+        ];
+    }
+
     private normalizeAnalysisReport(
         payload: unknown,
         template: PromptTemplateResource,
         baseUrl: string,
         model: string,
     ): AnalysisReport {
-        const parsed = remoteAnalysisReportSchema.safeParse(payload);
-
-        if (!parsed.success) {
-            throw createAppError({
-                code: 'report_schema_invalid',
-                message: parsed.error.issues[0]?.message || '远程分析返回的报告结构不合法',
-                retryable: true,
-            });
-        }
-
-        const data: RemoteAnalysisReport = parsed.data;
-        const sections = data.sections.map((section: RemoteAnalysisSection, index: number) =>
-            this.normalizeRemoteSection(section, index),
-        );
-        const subscores = this.normalizeRemoteSubscores(data.dashboard.subscores);
-
-        const normalizedReport: NormalizedAnalysisReport = {
-            reportId: data.reportId || `report-${Date.now()}`,
-            reportVersion: data.reportVersion || template.version,
-            generatedAt: data.generatedAt || new Date().toISOString(),
-            summary: data.summary,
-            dashboard: {
-                ...data.dashboard,
-                subscores,
-                totalScore: calculateAverageScore(subscores),
-            },
-            conclusion: data.conclusion,
-            meta: {
-                frameworkVersion: data.meta?.frameworkVersion || template.version,
-                scoringPolicyVersion: data.meta?.scoringPolicyVersion || template.policyMeta.scoringPolicyVersion,
-                conclusionPolicyVersion: data.meta?.conclusionPolicyVersion || template.policyMeta.conclusionPolicyVersion,
-                provider: this.getProviderHost(baseUrl),
-                model,
-            },
-            sections,
-        };
-
-        return {
-            schemaVersion: 'report_schema_v3_subscores',
-            ...normalizedReport,
-            diagnostics: this.buildReportDiagnostics(sections),
-        };
-    }
-
-    private normalizeRemoteSubscores(subscores: RemoteAnalysisSubscore[]): ReportSubscore[] {
-        return subscores.map((subscore: RemoteAnalysisSubscore) => ({
-            ...subscore,
-            score: normalizeScore(subscore.score),
-        }));
-    }
-
-    private normalizeRemoteSection(section: RemoteAnalysisSection, index: number): ReportSection {
-        return {
-            id: section.id || `section-${index + 1}`,
-            title: section.title,
-            body: section.body,
-        };
-    }
-
-    private buildReportDiagnostics(sections: ReportSection[]): ReportNormalizationDiagnostics {
-        return {
-            normalizationMode: 'paragraph-sections',
-            sectionCount: sections.length,
-        };
-    }
-
-    private getProviderHost(baseUrl: string): string {
-        try {
-            return new URL(baseUrl).host;
-        } catch {
-            return 'remote-openai-compatible';
-        }
+        return normalizeModelMinimalReport(payload, template, baseUrl, model);
     }
 }

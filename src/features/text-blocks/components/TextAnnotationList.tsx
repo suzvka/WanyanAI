@@ -37,41 +37,47 @@ export default function TextAnnotationList({
   }
 
   return (
-    <div className="space-y-2 pt-2">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-xs font-medium text-muted-foreground">批注</div>
-        <Button type="button" variant="ghost" size="sm" onClick={onAddAnnotation} aria-label="添加批注">
-          <Plus className="h-4 w-4" />
-          批注
-        </Button>
-      </div>
+    <div className="space-y-2">
+      {/* 添加批注按钮 - 与删除按钮样式一致 */}
+      <button
+        type="button"
+        onClick={onAddAnnotation}
+        aria-label="添加批注"
+        className="inline-flex items-center gap-1 rounded-lg bg-muted/50 px-2 py-1 text-xs leading-tight text-muted-foreground transition-colors hover:bg-muted"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        添加批注
+      </button>
 
-      {annotations.map((annotation, index) => (
-        <div key={annotation.id} className="space-y-2 rounded-lg border border-slate-200 bg-muted/30 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-medium text-muted-foreground">批注 {index + 1}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => onRemoveAnnotation(annotation.id)}
-              aria-label="移除批注"
-            >
-              <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
-            </Button>
+      {/* 批注块 - 左间距加倍 */}
+      {annotations.map((annotation) => (
+        <div key={annotation.id} className="flex items-center gap-2 pl-8 animate-slide-down">
+          {/* 输入模块：宽度限制为三分之二 */}
+          <div className="w-2/3">
+            <ContentSourceEditor
+              titleForFileName={`${blockTitle}-批注`}
+              placeholder="在此处补充说明"
+              content={annotation.content}
+              inputId={`annotation-file-${blockId}-${annotation.id}`}
+              enableFileUpload={enableFileUpload}
+              compact={true}
+              onTextInput={(nextValue) => onTextInput(annotation.id, nextValue)}
+              onFileChange={(nextFile) => onFileChange(annotation.id, nextFile)}
+              onAlert={onAlert}
+              canApplyFile={(nextFile) => canApplyFile(annotation.id, nextFile)}
+            />
           </div>
-          <ContentSourceEditor
-            titleForFileName={`${blockTitle}-批注${index + 1}`}
-            placeholder="补充背景、评价或限制信息"
-            content={annotation.content}
-            inputId={`annotation-file-${blockId}-${annotation.id}`}
-            enableFileUpload={enableFileUpload}
-            onTextInput={(nextValue) => onTextInput(annotation.id, nextValue)}
-            onFileChange={(nextFile) => onFileChange(annotation.id, nextFile)}
-            onAlert={onAlert}
-            canApplyFile={(nextFile) => canApplyFile(annotation.id, nextFile)}
-          />
+          {/* 删除按钮：与上传按钮样式一致 */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 rounded-lg bg-muted/50 hover:bg-muted"
+            onClick={() => onRemoveAnnotation(annotation.id)}
+            aria-label="移除批注"
+          >
+            <Trash2 className="h-4 w-4 text-muted-foreground" />
+          </Button>
         </div>
       ))}
     </div>

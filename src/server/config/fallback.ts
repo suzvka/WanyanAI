@@ -1,7 +1,6 @@
 import 'server-only';
 
-import { defaultEvaluationInput } from '@/config/defaults';
-import { PublishedOpsConfig } from './types';
+import type { PublishedOpsConfig } from './types';
 
 export function createFallbackOpsConfig(): PublishedOpsConfig {
   return {
@@ -10,7 +9,7 @@ export function createFallbackOpsConfig(): PublishedOpsConfig {
       configVersion: 'fallback',
       publishedAt: new Date(0).toISOString(),
       publishedBy: 'system',
-      environment: process.env.NODE_ENV === 'production' ? 'production' : 'local',
+      environment: 'local',
     },
     site: {
       home: {
@@ -30,17 +29,38 @@ export function createFallbackOpsConfig(): PublishedOpsConfig {
         runningDescription: '服务端仅返回提示词模板，最终提示词拼接与模型调用均在浏览器内完成。',
       },
     },
-    defaults: {
-      textType: defaultEvaluationInput.textType,
-      textCompleteness: defaultEvaluationInput.textCompleteness,
-      evaluationGoal: defaultEvaluationInput.evaluationGoal,
-    },
     featureFlags: {
       enableFileUpload: true,
       enableAnnotations: true,
     },
     analysisControls: {
+      groups: [
+        {
+          id: 'default',
+          title: '分析设置',
+          enabled: true,
+          controls: [],
+        },
+      ],
       controls: [],
+    },
+    appearance: {
+      brand: {
+        name: 'AudienceAI',
+        slogan: 'AI 驱动的文本诊断专家',
+        fontFamily: 'var(--font-serif)',
+      },
+      theme: {
+        primary: '#2e2e2e',
+        backgroundOpacity: {
+          light: 0.08,
+          dark: 0.15,
+        },
+        brandColorOffset: {
+          light: -0.15,
+          dark: 0.1,
+        },
+      },
     },
   };
 }

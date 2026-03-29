@@ -30,14 +30,14 @@ export function useAnalysisControls({
 }: UseAnalysisControlsOptions) {
   const [controlSelections, setControlSelections] = useState<Record<string, string>>(() =>
     resolveInitialControlSelections(
-      getEnabledDynamicControls(opsConfig, initialEvaluationInput.evaluationGoal),
+      getEnabledDynamicControls(opsConfig),
       initialEvaluationInput,
     ),
   );
 
   const dynamicControls = useMemo(
-    () => getEnabledDynamicControls(opsConfig, formData.evaluationGoal),
-    [formData.evaluationGoal, opsConfig],
+    () => getEnabledDynamicControls(opsConfig),
+    [opsConfig],
   );
 
   useEffect(() => {

@@ -1,25 +1,7 @@
 import { z } from 'zod';
-import {
-  evaluationGoalValues,
-  textCompletenessValues,
-  textTypeValues,
-} from '@/config/evaluationDimensions';
-import type { PublishedOpsConfig } from './types';
+import type { AnalysisControlsInput, PublishedOpsConfig } from './types';
 
-const analysisControlBindingValues = ['textType', 'textCompleteness', 'evaluationGoal'] as const;
 const configTextSchema = z.string();
-const boundControlOptionValues: Record<(typeof analysisControlBindingValues)[number], readonly string[]> = {
-  textType: textTypeValues,
-  textCompleteness: textCompletenessValues,
-  evaluationGoal: evaluationGoalValues,
-};
-
-function isValidBoundControlOption(
-  binding: (typeof analysisControlBindingValues)[number],
-  value: string,
-) {
-  return boundControlOptionValues[binding].includes(value);
-}
 
 const analysisControlOptionSchema = z.object({
   value: z.string().trim().min(1),
@@ -32,15 +14,87 @@ const analysisControlSchema = z.object({
   id: z.string().trim().min(1),
   title: configTextSchema,
   enabled: z.boolean(),
-  sortOrder: z.number(),
-  bindTo: z.enum(analysisControlBindingValues).optional(),
-  appliesTo: z.array(z.enum(evaluationGoalValues)).min(1),
-  options: z.array(analysisControlOptionSchema).min(1),
+  options: z.array(analysisControlOptionSchema),
+});
+
+const analysisControlGroupSchema = z.object({
+  id: z.string().trim().min(1),
+  title: configTextSchema,
+  description: z.string().optional(),
+  enabled: z.boolean(),
+  controls: z.array(analysisControlSchema),
 });
 
 const analysisControlsSchemaBase = z.object({
-  controls: z.array(analysisControlSchema),
+  groups: z.array(analysisControlGroupSchema).optional(),
+  controls: z.array(analysisControlSchema).optional(),
 });
+
+type AnalysisControlOption = {
+  value: string;
+  label: string;
+  promptText: string;
+  enabled: boolean;
+};
+
+type AnalysisControl = {
+  id: string;
+  title: string;
+  enabled: boolean;
+  options: AnalysisControlOption[];
+};
+
+type AnalysisControlGroup = {
+  id: string;
+  title: string;
+  description?: string;
+  enabled: boolean;
+  controls: AnalysisControl[];
+};
+
+type AnalysisControlsConfigLike = {
+  groups?: AnalysisControlGroup[];
+  controls?: AnalysisControl[];
+};
+
+function cloneControl(control: AnalysisControl) {
+  return {
+    ...control,
+    options: control.options.map((option: AnalysisControlOption) => ({ ...option })),
+  };
+}
+
+function normalizeAnalysisControls(config: AnalysisControlsConfigLike): PublishedOpsConfig['analysisControls'] {
+  const sourceGroups: AnalysisControlGroup[] | null = config.groups && config.groups.length > 0 ? config.groups : null;
+
+  if (sourceGroups) {
+    const groups = sourceGroups.map((group: AnalysisControlGroup) => ({
+      ...group,
+      description: group.description?.trim() || undefined,
+      controls: group.controls.filter((control: AnalysisControl) => control.enabled).map(cloneControl),
+    }));
+
+    return {
+      groups,
+      controls: groups.flatMap((group: AnalysisControlGroup) => group.controls.map(cloneControl)),
+    };
+  }
+
+  const controls = (config.controls ?? []).filter((control: AnalysisControl) => control.enabled).map(cloneControl);
+
+  return {
+    groups: [
+      {
+        id: 'default',
+        title: '默认分组',
+        description: undefined,
+        enabled: true,
+        controls,
+      },
+    ],
+    controls: controls.map(cloneControl),
+  };
+}
 
 export const manifestSchema = z.object({
   configVersion: z.string().trim().min(1),
@@ -68,23 +122,57 @@ export const siteSchema = z.object({
   }),
 });
 
-export const evaluationDefaultsSchema = z.object({
-  textType: z.enum(textTypeValues),
-  textCompleteness: z.enum(textCompletenessValues),
-  evaluationGoal: z.enum(evaluationGoalValues),
-});
-
 export const featureFlagsSchema = z.object({
   enableFileUpload: z.boolean(),
   enableAnnotations: z.boolean(),
 });
 
-export const analysisControlsSchema = analysisControlsSchemaBase.superRefine(
-  (value: z.infer<typeof analysisControlsSchemaBase>, ctx: z.RefinementCtx) => {
-    const seenControlIds = new Set<string>();
-    const boundControls = new Map<(typeof analysisControlBindingValues)[number], string>();
+export const appearanceBrandSchema = z.object({
+  name: z.string().trim().min(1),
+  slogan: z.string().optional(),
+  fontFamily: z.string().optional(),
+});
 
-    value.controls.forEach((control: z.infer<typeof analysisControlSchema>, controlIndex: number) => {
+export const appearanceBackgroundOpacitySchema = z.object({
+  light: z.number().min(0).max(1),
+  dark: z.number().min(0).max(1),
+});
+
+export const appearanceBrandColorOffsetSchema = z.object({
+  light: z.number().min(-1).max(1),
+  dark: z.number().min(-1).max(1),
+});
+
+export const appearanceThemeSchema = z.object({
+  primary: z.string().regex(/^#[0-9a-fA-F]{6}$/, '主题色必须是有效的 HEX 颜色值'),
+  backgroundOpacity: appearanceBackgroundOpacitySchema,
+  brandColorOffset: appearanceBrandColorOffsetSchema,
+});
+
+export const appearanceSchema = z.object({
+  brand: appearanceBrandSchema,
+  theme: appearanceThemeSchema,
+});
+
+export const analysisControlsSchema = analysisControlsSchemaBase.superRefine(
+  (value: AnalysisControlsConfigLike, ctx: z.RefinementCtx) => {
+    const seenGroupIds = new Set<string>();
+    const seenControlIds = new Set<string>();
+    const groups = value.groups && value.groups.length > 0 ? value.groups : null;
+    const controls: AnalysisControl[] = groups ? groups.flatMap((group: AnalysisControlGroup) => group.controls) : value.controls ?? [];
+
+    groups?.forEach((group: AnalysisControlGroup, groupIndex: number) => {
+      if (seenGroupIds.has(group.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `动态检查项分组 ID 重复：${group.id}`,
+          path: ['groups', groupIndex, 'id'],
+        });
+      }
+      seenGroupIds.add(group.id);
+    });
+
+    controls.forEach((control: AnalysisControl, controlIndex: number) => {
       if (seenControlIds.has(control.id)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -94,42 +182,8 @@ export const analysisControlsSchema = analysisControlsSchemaBase.superRefine(
       }
       seenControlIds.add(control.id);
 
-      if (control.bindTo) {
-        const existingControlId = boundControls.get(control.bindTo);
-
-        if (existingControlId) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `核心分析设置 ${control.bindTo} 只能绑定一个控件，当前重复：${existingControlId} / ${control.id}`,
-            path: ['controls', controlIndex, 'bindTo'],
-          });
-        }
-
-        boundControls.set(control.bindTo, control.id);
-      }
-
-      if (!control.options[0]?.enabled) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: '动态检查项的首个选项必须启用，用于表达默认值。',
-          path: ['controls', controlIndex, 'options', 0, 'enabled'],
-        });
-      }
-
       const seenOptionValues = new Set<string>();
-      control.options.forEach((option: z.infer<typeof analysisControlOptionSchema>, optionIndex: number) => {
-        const bindTo = control.bindTo;
-
-        const validBoundOption = bindTo ? isValidBoundControlOption(bindTo, option.value) : true;
-
-        if (bindTo && !validBoundOption) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `核心分析设置 ${bindTo} 的选项值不合法：${option.value}`,
-            path: ['controls', controlIndex, 'options', optionIndex, 'value'],
-          });
-        }
-
+      control.options.forEach((option: AnalysisControlOption, optionIndex: number) => {
         if (seenOptionValues.has(option.value)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -140,64 +194,28 @@ export const analysisControlsSchema = analysisControlsSchemaBase.superRefine(
         seenOptionValues.add(option.value);
       });
     });
-
-    analysisControlBindingValues.forEach((binding) => {
-      if (!boundControls.has(binding)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `缺少核心分析设置控件：${binding}`,
-          path: ['controls'],
-        });
-      }
-    });
   },
 );
 
-function ensureBoundAnalysisControlsAlwaysVisible(config: PublishedOpsConfig) {
-  config.analysisControls.controls.forEach((control) => {
-    if (!control.bindTo) {
-      return;
-    }
+type PublishedOpsConfigInput = {
+  manifest: Parameters<typeof manifestSchema.parse>[0];
+  site: Parameters<typeof siteSchema.parse>[0];
+  featureFlags: Parameters<typeof featureFlagsSchema.parse>[0];
+  analysisControls: AnalysisControlsInput;
+  appearance: Parameters<typeof appearanceSchema.parse>[0];
+};
 
-    const missingGoals = evaluationGoalValues.filter((goal) => !control.appliesTo.includes(goal));
-
-    if (missingGoals.length > 0) {
-      throw new Error(`核心分析设置 ${control.id} 必须对所有报告类型可见：缺少 ${missingGoals.join(', ')}`);
-    }
-  });
-}
-
-function normalizeAnalysisControls(config: PublishedOpsConfig['analysisControls']): PublishedOpsConfig['analysisControls'] {
-  return {
-    controls: [...config.controls]
-      .sort((left, right) => {
-        if (left.sortOrder !== right.sortOrder) {
-          return left.sortOrder - right.sortOrder;
-        }
-
-        return left.title.localeCompare(right.title, 'zh-CN');
-      })
-      .map((control) => ({
-        ...control,
-        appliesTo: [...control.appliesTo],
-        options: control.options.map((option) => ({ ...option })),
-      })),
-  };
-}
-
-export function validatePublishedOpsConfig(config: Omit<PublishedOpsConfig, 'source'>, source: PublishedOpsConfig['source'] = 'published'): PublishedOpsConfig {
+export function validatePublishedOpsConfig(config: PublishedOpsConfigInput, source: PublishedOpsConfig['source'] = 'published'): PublishedOpsConfig {
   const parsedAnalysisControls = analysisControlsSchema.parse(config.analysisControls);
 
   const normalizedConfig: PublishedOpsConfig = {
     source,
     manifest: manifestSchema.parse(config.manifest),
     site: siteSchema.parse(config.site),
-    defaults: evaluationDefaultsSchema.parse(config.defaults),
     featureFlags: featureFlagsSchema.parse(config.featureFlags),
     analysisControls: normalizeAnalysisControls(parsedAnalysisControls),
+    appearance: appearanceSchema.parse(config.appearance),
   };
-
-  ensureBoundAnalysisControlsAlwaysVisible(normalizedConfig);
 
   return normalizedConfig;
 }

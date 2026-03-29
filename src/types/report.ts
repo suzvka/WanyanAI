@@ -3,6 +3,7 @@ import {
   textCompletenessValues,
   textTypeValues,
 } from '@/config/evaluationDimensions';
+import type { ReportRating } from '@/config/reportScoring';
 
 export type AnalysisReport = {
   schemaVersion: string;
@@ -13,6 +14,7 @@ export type AnalysisReport = {
   dashboard: ReportDashboard;
   conclusion: ReportConclusion;
   meta: ReportMeta;
+  groups: ReportSectionGroup[];
   sections: ReportSection[];
   diagnostics: ReportNormalizationDiagnostics;
 };
@@ -21,6 +23,14 @@ export type ReportSection = {
   id: string;
   title: string;
   body: string;
+  groupId?: string;
+  groupTitle?: string;
+};
+
+export type ReportSectionGroup = {
+  id: string;
+  title: string;
+  sections: ReportSection[];
 };
 
 export type ReportNormalizationDiagnostics = {
@@ -38,6 +48,7 @@ export type ReportSubscoreNature = 'internal' | 'internal_relational_boundary';
 export type ReportSubscore = {
   id: string;
   label: string;
+  grade: ReportRating;
   score: number;
   rationale: string;
   keyQuestion?: string;
@@ -46,13 +57,11 @@ export type ReportSubscore = {
 
 export type ReportDashboard = {
   totalScore: number;
-  grade: string;
-  publishReadiness: string;
+  grade: ReportRating;
   subscores: ReportSubscore[];
 };
 
 export type ReportConclusion = {
-  finalRecommendation: "publish" | "revise_then_publish" | "rework";
   rationale: string;
 };
 
@@ -70,7 +79,7 @@ export type TextCompleteness = (typeof textCompletenessValues)[number];
 
 export type EvaluationGoal = (typeof evaluationGoalValues)[number];
 
-export type TextBlockType = 'actual_text' | 'reference_material' | 'reference_review';
+export type TextBlockType = string;
 
 export type TextBlockAttachmentSource = 'upload';
 

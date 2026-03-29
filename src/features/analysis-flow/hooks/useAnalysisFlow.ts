@@ -8,6 +8,7 @@ import { toAppErrorPayload } from '@/types/errors';
 import type { AppFlowStep, AnalysisStatus } from '@/types/appFlow';
 import type { ModelConfig } from '@/types/modelConfig';
 import type { AnalysisReport, EvaluationInput } from '@/types/report';
+import { resolveBoundControlLabels } from '@/features/analysis-controls/lib/controlSelection';
 import { requestCompiledInstructions } from '../lib/requestCompiledInstructions';
 
 type UseAnalysisFlowOptions = {
@@ -73,10 +74,12 @@ export function useAnalysisFlow({
         controlSelections: activeControlSelections,
         configVersion: opsConfig.manifest.configVersion,
       });
+      const controlLabels = resolveBoundControlLabels(opsConfig, validatedInput);
 
       const result = await analysisService.generateReport({
         input: validatedInput,
         modelConfig: currentModelConfig,
+        controlLabels,
         instructionText: compiledInstructions.instructionText,
         onProgress: updateAnalysisProgress,
       });

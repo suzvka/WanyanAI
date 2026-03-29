@@ -3,6 +3,7 @@ import {
   ContentSource,
   EvaluationInput,
   SerializableEvaluationInput,
+  SerializableTextBlockContent,
   TextAnnotation,
   TextBlock,
   TextBlockAttachment,
@@ -27,6 +28,47 @@ function getDefaultBlockTitle(block: Pick<TextBlock, 'number'>) {
 
 function renderFileContent(file: Pick<TextBlockAttachment, 'storedName' | 'content'>) {
   return `[${file.storedName}]\n${file.content}`;
+}
+
+function getPromptContentReferenceName(source: ContentSource, fallbackFileName: string) {
+  return source.kind === 'file' ? source.file.storedName : fallbackFileName;
+}
+
+function renderPromptContentSegment(fileName: string, content: string) {
+  return `${fileName}\n${content}`;
+}
+
+function readContentSourceAsPromptContent(source: ContentSource | null | undefined): string | null {
+  if (!source || isContentSourceEmpty(source)) {
+    return null;
+  }
+
+  if (source.kind === 'file') {
+    return source.file.content;
+  }
+
+  return source.text;
+}
+
+function getPromptMetadataContent(
+  content: SerializableTextBlockContent | null,
+  fallbackFileName: string,
+): { kind: 'text' | 'file'; fileName: string } | null {
+  if (!content) {
+    return null;
+  }
+
+  if (content.kind === 'file') {
+    return {
+      kind: 'file',
+      fileName: content.fileName,
+    };
+  }
+
+  return {
+    kind: 'text',
+    fileName: fallbackFileName,
+  };
 }
 
 export function isContentSourceEmpty(source: ContentSource | null | undefined): boolean {
@@ -127,12 +169,56 @@ export function serializeTextBlocks(input: Pick<EvaluationInput, 'textBlocks'>):
 
 export function renderTextBlocksForModel(input: Pick<EvaluationInput, 'textBlocks'>): string {
   const segments = getRenderableTextBlocks(input).flatMap((block) => {
-    const blockSegments = [readContentSourceAsPlainText(block.content)];
-    const annotationSegments = block.annotations.map((annotation) => readContentSourceAsPlainText(annotation.content));
+    const blockSegments = block.content && !isContentSourceEmpty(block.content)
+      ? [
+          renderPromptContentSegment(
+            getPromptContentReferenceName(block.content, `block-${block.number}.txt`),
+            readContentSourceAsPromptContent(block.content) ?? '',
+          ),
+        ]
+      : [];
+    const annotationSegments = block.annotations.flatMap((annotation, index) => {
+      if (!annotation.content || isContentSourceEmpty(annotation.content)) {
+        return [];
+      }
+
+      return [
+        renderPromptContentSegment(
+          getPromptContentReferenceName(annotation.content, `block-${block.number}-annotation-${index + 1}.txt`),
+            readContentSourceAsPromptContent(annotation.content) ?? '',
+        ),
+      ];
+    });
     return [...blockSegments, ...annotationSegments].filter((value): value is string => Boolean(value));
   });
 
   return segments.join('\n\n');
+}
+
+export function renderTextBlockMetadataForModel(input: EvaluationInput): string {
+  const { submissionData } = prepareEvaluationSubmission(input);
+
+  return JSON.stringify(
+    {
+      textType: submissionData.textType,
+      textCompleteness: submissionData.textCompleteness,
+      evaluationGoal: submissionData.evaluationGoal,
+      blocks: submissionData.blocks.map((block) => ({
+        id: block.id,
+        number: block.number,
+        blockType: block.blockType,
+        title: block.title,
+        content: getPromptMetadataContent(block.content, `block-${block.number}.txt`),
+        annotations: block.annotations.map((annotation, index) => ({
+          id: annotation.id,
+          content: getPromptMetadataContent(annotation.content, `block-${block.number}-annotation-${index + 1}.txt`),
+        })),
+      })),
+      metadata: submissionData.metadata,
+    },
+    null,
+    2,
+  );
 }
 
 export function summarizeTextBlocks(input: Pick<EvaluationInput, 'textBlocks'>): string {

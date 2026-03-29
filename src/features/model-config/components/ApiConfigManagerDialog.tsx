@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Plus, Settings, Trash2 } from 'lucide-react';
+import { Check, CheckCircle2, ChevronDown, Loader2, Plus, Settings } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,6 +14,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import {
   Dialog,
   DialogContent,
@@ -32,13 +37,11 @@ interface ApiConfigManagerDialogProps {
   configs: ApiConfigRecord[];
   busy?: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelectConfig: (configId: string) => void;
+  onSelectConfig: (configId: string) => Promise<void>;
   onCreateConfig: (value: ApiConfigDraft) => Promise<void> | void;
   onUpdateConfig: (configId: string, value: ApiConfigDraft) => Promise<void> | void;
   onDeleteConfig: (configId: string) => Promise<void> | void;
 }
-
-type EditorMode = 'create' | 'edit';
 
 function getStatusBadgeVariant(status: ApiConfigRecord['lastValidationStatus']) {
   switch (status) {
@@ -75,153 +78,286 @@ export default function ApiConfigManagerDialog({
   onUpdateConfig,
   onDeleteConfig,
 }: ApiConfigManagerDialogProps) {
-  const [editorMode, setEditorMode] = useState<EditorMode>('edit');
+  // 展开的配置 ID（null 表示新建模式，undefined 表示无展开）
+  const [expandedConfigId, setExpandedConfigId] = useState<string | null | undefined>(undefined);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
-  const selectedConfig = useMemo(() => {
-    return configs.find((config) => config.id === selectedConfigId) || null;
-  }, [configs, selectedConfigId]);
+  // 当前展开的配置（null 表示新建模式）
+  const expandedConfig = useMemo(() => {
+    if (expandedConfigId === null) return null; // 新建模式
+    if (expandedConfigId === undefined) return undefined; // 无展开
+    return configs.find((config) => config.id === expandedConfigId) || undefined;
+  }, [configs, expandedConfigId]);
 
-  const editingConfig = editorMode === 'edit' ? selectedConfig : null;
+  // 是否处于新建模式
+  const isCreateMode = expandedConfigId === null;
 
-  const handleCreate = async (value: ApiConfigDraft) => {
-    await onCreateConfig(value);
-    setEditorMode('edit');
+  // 处理卡片点击（展开/折叠）
+  const handleCardToggle = (configId: string) => {
+    if (busy) return;
+    // 如果点击的是已展开的卡片，则折叠
+    setExpandedConfigId(expandedConfigId === configId ? undefined : configId);
   };
 
-  const handleUpdate = async (value: ApiConfigDraft) => {
-    if (!editingConfig) {
-      return;
-    }
-
-    await onUpdateConfig(editingConfig.id, value);
+  // 处理新增块点击
+  const handleAddNew = () => {
+    if (busy) return;
+    setExpandedConfigId(null); // 进入新建模式
   };
 
-  const handleDelete = async () => {
-    if (!deleteTargetId) {
-      return;
-    }
+  // 处理选择配置（标题栏的选择按钮）
+  const handleSelectConfig = async (e: React.MouseEvent, configId: string) => {
+    e.stopPropagation(); // 阻止触发折叠
+    if (busy) return;
+    await onSelectConfig(configId);
+  };
 
+  // 处理保存按钮（编辑模式）
+  const handleSave = async (value: ApiConfigDraft) => {
+    if (!expandedConfig) return;
+    await onUpdateConfig(expandedConfig.id, value);
+    setExpandedConfigId(undefined);
+  };
+
+  // 处理删除
+  const handleDeleteFromEditor = () => {
+    if (!expandedConfig) return;
+    setDeleteTargetId(expandedConfig.id);
+  };
+
+  // 处理删除确认
+  const handleDeleteConfirm = async () => {
+    if (!deleteTargetId) return;
     await onDeleteConfig(deleteTargetId);
     setDeleteTargetId(null);
-    if (configs.length <= 1) {
-      setEditorMode('create');
+    // 如果删除的是当前展开的配置，关闭展开
+    if (expandedConfigId === deleteTargetId) {
+      setExpandedConfigId(undefined);
+    }
+  };
+
+  // 处理创建
+  const handleCreate = async (value: ApiConfigDraft) => {
+    await onCreateConfig(value);
+    setExpandedConfigId(undefined);
+  };
+
+  // 处理关闭对话框
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && busy) {
+      // 验证中允许取消
+      onOpenChange(false);
+      return;
+    }
+    onOpenChange(nextOpen);
+    if (!nextOpen) {
+      setExpandedConfigId(undefined);
     }
   };
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl p-0 sm:max-w-5xl" showCloseButton={!busy}>
-          <DialogHeader className="border-b px-6 pt-6">
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className="max-w-lg p-0 sm:max-w-lg" showCloseButton={!busy}>
+          <DialogHeader className="border-b px-4 py-4 sm:px-6">
             <DialogTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
               API 配置管理
             </DialogTitle>
-            <DialogDescription>本地保存多个 API 配置，支持切换、编辑、删除，并在切换后自动刷新模型列表。</DialogDescription>
+            <DialogDescription>
+              点击卡片展开编辑，点击标题栏的选择按钮切换当前使用的配置。
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="grid min-h-[560px] gap-0 md:grid-cols-[280px_minmax(0,1fr)]">
-            <aside className="border-r bg-slate-50/70">
-              <div className="flex items-center justify-between px-4 py-4">
-                <div>
-                  <div className="text-sm font-medium text-slate-900">配置列表</div>
-                  <div className="text-xs text-slate-500">名称允许重复，系统按 ID 区分。</div>
-                </div>
-                <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => setEditorMode('create')}>
-                  <Plus className="mr-1 h-4 w-4" />
-                  新建
+          {/* 验证中的遮罩层 */}
+          {busy && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">正在验证配置...</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenChange(false)}
+                >
+                  取消
                 </Button>
               </div>
+            </div>
+          )}
 
-              <ScrollArea className="h-[480px] px-3 pb-4">
-                <div className="space-y-2">
-                  {configs.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
-                      还没有 API 配置，请先新建一条。
-                    </div>
-                  ) : (
-                    configs.map((config) => (
-                      <button
-                        key={config.id}
-                        type="button"
-                        disabled={busy}
-                        onClick={() => {
-                          onSelectConfig(config.id);
-                          setEditorMode('edit');
-                        }}
-                        className={cn(
-                          'w-full rounded-lg border bg-white p-3 text-left transition hover:border-slate-300 hover:bg-slate-100',
-                          selectedConfigId === config.id && 'border-blue-500 bg-blue-50',
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 space-y-1">
-                            <div className="truncate text-sm font-medium text-slate-900">{config.name}</div>
-                            <div className="truncate text-xs text-slate-500">{config.baseUrl}</div>
+          <ScrollArea className="h-[60vh] max-h-[560px] px-4 py-4 sm:px-6">
+            <div className="space-y-3">
+              {configs.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+                  还没有 API 配置，请点击下方新增。
+                </div>
+              ) : (
+                configs.map((config) => {
+                  const isExpanded = expandedConfigId === config.id;
+                  const isActive = selectedConfigId === config.id;
+
+                  return (
+                    <Collapsible
+                      key={config.id}
+                      open={isExpanded}
+                      onOpenChange={() => handleCardToggle(config.id)}
+                      className={cn(
+                        'rounded-lg border bg-card transition-colors',
+                        // 已选配置的脉冲动画效果
+                        isActive && 'api-config-selected',
+                      )}
+                    >
+                      {/* 卡片头部 */}
+                      <CollapsibleTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className={cn(
+                            'flex w-full items-center gap-3 p-4 text-left transition-colors',
+                            'hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50',
+                            // 激活状态的卡片使用特殊样式
+                            isActive && 'bg-primary/5 ring-1 ring-primary/30',
+                            isExpanded && 'border-b',
+                          )}
+                        >
+                          {/* 展开箭头 */}
+                          <ChevronDown
+                            className={cn(
+                              'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                              isExpanded && 'rotate-180',
+                            )}
+                          />
+
+                          {/* 卡片内容 */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate text-sm font-medium">
+                                {config.name}
+                              </span>
+                              {/* 激活标记 */}
+                              {isActive && (
+                                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                              )}
+                            </div>
+                            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                              <span className="truncate">{config.baseUrl}</span>
+                              <span>·</span>
+                              <Badge
+                                variant={getStatusBadgeVariant(config.lastValidationStatus)}
+                                className="px-1.5 py-0 text-[10px]"
+                              >
+                                {getStatusLabel(config.lastValidationStatus)}
+                              </Badge>
+                              <span>·</span>
+                              <span>{config.modelsCache.length} 个模型</span>
+                            </div>
                           </div>
-                          {selectedConfigId === config.id && <CheckCircle2 className="mt-0.5 h-4 w-4 text-blue-600" />}
-                        </div>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <Badge variant={getStatusBadgeVariant(config.lastValidationStatus)}>{getStatusLabel(config.lastValidationStatus)}</Badge>
-                          <span className="text-xs text-slate-500">模型 {config.modelsCache.length} 个</span>
-                        </div>
-                        {config.lastValidationMessage && (
-                          <div className="mt-2 line-clamp-2 text-xs text-slate-500">{config.lastValidationMessage}</div>
-                        )}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
-            </aside>
 
-            <section className="flex h-full flex-col px-6 py-6">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-semibold text-slate-900">{editingConfig ? '编辑配置' : '新建配置'}</h3>
-                  <p className="text-sm text-slate-500">
-                    {editingConfig
-                      ? '保存后将重新校验该配置，并刷新当前可用模型列表。'
-                      : '保存后将自动选中并立即校验这条新配置。'}
-                  </p>
-                </div>
-                {editingConfig && (
-                  <Button type="button" variant="ghost" className="text-red-600 hover:text-red-700" disabled={busy} onClick={() => setDeleteTargetId(editingConfig.id)}>
-                    <Trash2 className="mr-1 h-4 w-4" />
-                    删除
-                  </Button>
+                          {/* 选择配置按钮 - 仅在非激活状态显示 */}
+                          {!isActive && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className={cn(
+                                'h-8 w-8 shrink-0',
+                                'text-primary hover:bg-primary/10 hover:text-primary',
+                              )}
+                              disabled={busy}
+                              onClick={(e) => handleSelectConfig(e, config.id)}
+                              title="选择此配置"
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </button>
+                      </CollapsibleTrigger>
+
+                      {/* 展开内容 - 动画由全局 CSS 控制 */}
+                      <CollapsibleContent>
+                        <div className="bg-muted/20 p-4">
+                          <ApiConfigEditor
+                            initialValue={{
+                              name: config.name,
+                              baseUrl: config.baseUrl,
+                              apiKey: config.apiKey,
+                            }}
+                            busy={busy}
+                            submitLabel="保存"
+                            showDelete
+                            onDelete={handleDeleteFromEditor}
+                            onSubmit={handleSave}
+                          />
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })
+              )}
+
+              {/* 新增块 */}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleAddNew}
+                className={cn(
+                  'flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed',
+                  'border-border bg-muted/20 p-4 text-muted-foreground transition-colors',
+                  'hover:border-primary/50 hover:bg-muted/40 hover:text-foreground',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                  isCreateMode && 'border-primary/50 bg-primary/5 text-foreground',
                 )}
-              </div>
+              >
+                <Plus className="h-5 w-5" />
+                <span className="text-sm">新增配置</span>
+              </button>
 
-              <ApiConfigEditor
-                initialValue={
-                  editingConfig
-                    ? {
-                        name: editingConfig.name,
-                        baseUrl: editingConfig.baseUrl,
-                        apiKey: editingConfig.apiKey,
-                      }
-                    : undefined
-                }
-                busy={busy}
-                submitLabel={editingConfig ? '保存并重新校验' : '创建并立即校验'}
-                onSubmit={editingConfig ? handleUpdate : handleCreate}
-              />
-            </section>
-          </div>
+              {/* 新建配置展开区域 */}
+              {isCreateMode && (
+                <div className="rounded-lg border bg-card p-4">
+                  <h4 className="mb-3 text-sm font-medium">新建 API 配置</h4>
+                  <ApiConfigEditor
+                    busy={busy}
+                    submitLabel="创建并验证"
+                    onSubmit={handleCreate}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 w-full"
+                    disabled={busy}
+                    onClick={() => setExpandedConfigId(undefined)}
+                  >
+                    取消
+                  </Button>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={deleteTargetId !== null} onOpenChange={(nextOpen: boolean) => !nextOpen && setDeleteTargetId(null)}>
+      {/* 删除确认对话框 */}
+      <AlertDialog
+        open={deleteTargetId !== null}
+        onOpenChange={(nextOpen: boolean) => !nextOpen && setDeleteTargetId(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>删除该 API 配置？</AlertDialogTitle>
-            <AlertDialogDescription>删除后仅会清理当前浏览器中的本地缓存，不会影响远端服务。</AlertDialogDescription>
+            <AlertDialogDescription>
+              删除后仅会清理当前浏览器中的本地缓存，不会影响远端服务。
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>取消</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-600 hover:bg-red-700" disabled={busy} onClick={handleDelete}>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={busy}
+              onClick={handleDeleteConfirm}
+            >
               确认删除
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -6,6 +6,7 @@ export type AppErrorCode =
   | 'template_fetch_failed'
   | 'template_response_invalid'
   | 'provider_request_failed'
+  | 'provider_request_timeout'
   | 'provider_response_invalid'
   | 'json_parse_failed'
   | 'json_repair_failed'

@@ -1,18 +1,33 @@
-import {
-  EvaluationGoal,
-  TextCompleteness,
-  TextType,
-} from '@/types/report';
-
-export type EvaluationDefaultsConfig = {
-  textType: TextType;
-  textCompleteness: TextCompleteness;
-  evaluationGoal: EvaluationGoal;
-};
-
 export type FeatureFlagsConfig = {
   enableFileUpload: boolean;
   enableAnnotations: boolean;
+};
+
+export type AppearanceBrandConfig = {
+  name: string;
+  slogan?: string;
+  fontFamily?: string;
+};
+
+export type AppearanceBackgroundOpacityConfig = {
+  light: number;
+  dark: number;
+};
+
+export type AppearanceBrandColorOffsetConfig = {
+  light: number;
+  dark: number;
+};
+
+export type AppearanceThemeConfig = {
+  primary: string;
+  backgroundOpacity: AppearanceBackgroundOpacityConfig;
+  brandColorOffset: AppearanceBrandColorOffsetConfig;
+};
+
+export type AppearanceConfig = {
+  brand: AppearanceBrandConfig;
+  theme: AppearanceThemeConfig;
 };
 
 export type AnalysisControlOptionConfig = {
@@ -22,20 +37,29 @@ export type AnalysisControlOptionConfig = {
   enabled: boolean;
 };
 
-export type AnalysisControlBinding = 'textType' | 'textCompleteness' | 'evaluationGoal';
-
 export type AnalysisControlConfig = {
   id: string;
   title: string;
   enabled: boolean;
-  sortOrder: number;
-  bindTo?: AnalysisControlBinding;
-  appliesTo: EvaluationGoal[];
   options: AnalysisControlOptionConfig[];
 };
 
-export type AnalysisControlsConfig = {
+export type AnalysisControlGroupConfig = {
+  id: string;
+  title: string;
+  description?: string;
+  enabled: boolean;
   controls: AnalysisControlConfig[];
+};
+
+export type AnalysisControlsConfig = {
+  groups: AnalysisControlGroupConfig[];
+  controls: AnalysisControlConfig[];
+};
+
+export type AnalysisControlsInput = {
+  groups?: AnalysisControlGroupConfig[];
+  controls?: AnalysisControlConfig[];
 };
 
 export type SiteConfig = {
@@ -68,7 +92,7 @@ export type PublishedOpsConfig = {
   source: 'published' | 'fallback';
   manifest: OpsConfigManifest;
   site: SiteConfig;
-  defaults: EvaluationDefaultsConfig;
   featureFlags: FeatureFlagsConfig;
   analysisControls: AnalysisControlsConfig;
+  appearance: AppearanceConfig;
 };

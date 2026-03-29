@@ -1,0 +1,18 @@
+{
+  "brand": {
+    "name": "AudienceAI",
+    "slogan": "AI 驱动的文本诊断专家",
+    "fontFamily": "var(--font-serif)"
+  },
+  "theme": {
+    "primary": "#425066",
+    "backgroundOpacity": {
+      "light": 0.08,
+      "dark": 0.15
+    },
+    "brandColorOffset": {
+      "light": -0.15,
+      "dark": 0.1
+    }
+  }
+}

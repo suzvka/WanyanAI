@@ -15,6 +15,7 @@ type TextBlockCardProps = {
   block: TextBlock;
   enableFileUpload: boolean;
   enableAnnotations: boolean;
+  fixedBlockType?: string;
   onTitleChange: (value: string) => void;
   onBlockTypeChange: (value: TextBlockType) => void;
   onRemoveBlock: () => void;
@@ -33,6 +34,7 @@ export default function TextBlockCard({
   block,
   enableFileUpload,
   enableAnnotations,
+  fixedBlockType,
   onTitleChange,
   onBlockTypeChange,
   onRemoveBlock,
@@ -49,32 +51,41 @@ export default function TextBlockCard({
   const blockTitle = block.title.trim() || `文本${block.number}`;
 
   return (
-    <div className="space-y-4 rounded-xl border border-slate-200 p-4 shadow-sm">
+    <div className="space-y-4 py-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           <Input
             id={`title-${block.id}`}
             value={block.title}
             placeholder={`文本块 ${block.number}`}
-            className="h-9 w-auto min-w-[120px] max-w-[240px] border-0 bg-transparent px-0 text-base font-semibold text-slate-900 shadow-none focus-visible:ring-0"
+            className="h-9 w-auto min-w-[120px] max-w-[240px] px-3 text-base font-semibold"
             onChange={(event: ChangeEvent<HTMLInputElement>) => onTitleChange(event.target.value)}
           />
-          <Select value={block.blockType} onValueChange={(value: string) => onBlockTypeChange(value as TextBlockType)}>
-            <SelectTrigger className="h-8 w-auto min-w-[100px] text-sm">
-              <SelectValue placeholder="类型" />
-            </SelectTrigger>
-            <SelectContent>
-              {textBlockTypeOptions.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {getTextBlockTypeLabel(option)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!fixedBlockType && (
+            <Select value={block.blockType} onValueChange={(value: string) => onBlockTypeChange(value as TextBlockType)}>
+              <SelectTrigger className="h-8 w-auto min-w-[100px] text-sm">
+                <SelectValue placeholder="类型" />
+              </SelectTrigger>
+              <SelectContent>
+                {textBlockTypeOptions.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {getTextBlockTypeLabel(option)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
-        <div className="flex items-center gap-1">
-          <Button type="button" variant="ghost" size="icon" onClick={onRemoveBlock} aria-label="删除文本块">
-            <Trash2 className="h-4 w-4 text-muted-foreground hover:text-red-500" />
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onRemoveBlock}
+            aria-label="删除文本块"
+            className="h-8 w-8 rounded-lg bg-[color:var(--report-danger-soft)] hover:bg-[color:var(--report-danger-soft)]"
+          >
+            <Trash2 className="h-4 w-4 text-[color:var(--report-danger)]" />
           </Button>
         </div>
       </div>

@@ -7,6 +7,8 @@ import {
 import { validateModelConnectionInput } from '@/lib/validation/modelConfig';
 import { toAppErrorPayload } from '@/types/errors';
 
+const VALIDATION_TIMEOUT_MS = 5000; // 5秒超时
+
 const normalizeBaseUrl = (baseUrl: string) => baseUrl.trim().replace(/\/$/, '');
 
 function normalizeModels(response: ModelListResponse): ModelInfo[] | null {
@@ -40,13 +42,37 @@ export const modelConfigProvider: ModelConfigProvider = {
       const cleanBaseUrl = normalizeBaseUrl(validatedConnection.data.baseUrl);
       const cleanApiKey = validatedConnection.data.apiKey;
 
-      const response = await fetch(`${cleanBaseUrl}/models`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${cleanApiKey}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      // 创建 AbortController 用于超时控制
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), VALIDATION_TIMEOUT_MS);
+
+      let response: Response;
+      try {
+        response = await fetch(`${cleanBaseUrl}/models`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${cleanApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        // 检查是否为超时错误
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          return {
+            success: false,
+            error: {
+              code: 'provider_request_timeout',
+              message: '验证超时，请检查网络连接或稍后重试',
+              retryable: true,
+            },
+          };
+        }
+        throw fetchError;
+      }
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         let errorMsg = `HTTP ${response.status}`;

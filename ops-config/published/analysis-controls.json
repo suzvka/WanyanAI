@@ -1,240 +1,343 @@
 {
-  "controls": [
+  "groups": [
     {
-      "id": "text_type",
-      "title": "文本类型",
+      "id": "basic_context",
+      "title": "基础信息",
+      "description": "用于定义作品的基本属性。",
       "enabled": true,
       "sortOrder": 10,
-      "bindTo": "textType",
-      "appliesTo": [
-        "overall_check",
-        "opening_attraction",
-        "rhythm_progression",
-        "character_development",
-        "style_consistency",
-        "structure_completeness",
-        "reader_acceptance"
-      ],
-      "options": [
+      "controls": [
         {
-          "value": "general_text",
-          "label": "自由体裁",
+          "id": "evaluation_lens",
+          "title": "评价视角",
           "enabled": true,
-          "promptText": ""
+          "sortOrder": 70,
+          "options": [
+            {
+              "value": "general_reader",
+              "label": "大众读者",
+              "enabled": true,
+              "promptText": "你是一位普通读者，偏好正文所属的文风和类型。你第一次读到这篇作品。"
+            },
+            {
+              "value": "fast_paced_reader",
+              "label": "快节奏读者",
+              "enabled": true,
+              "promptText": "你是一位上班族读者，你没有时间揣摩文字背后的隐喻，只想快速了解剧情。"
+            },
+            {
+              "value": "plot_reader",
+              "label": "剧情读者",
+              "enabled": true,
+              "promptText": "你很容易代入故事，你的兴趣在故事本身。"
+            },
+            {
+              "value": "emotion_reader",
+              "label": "情感读者",
+              "enabled": true,
+              "promptText": "你很容易代入故事，你倾向于体验阅读时的情感和心理变化。"
+            },
+            {
+              "value": "world_reader",
+              "label": "设定读者",
+              "enabled": true,
+              "promptText": "你很容易代入故事，并探索世界观和设定，仿佛自己已置身于此。"
+            },
+            {
+              "value": "literary_reader",
+              "label": "文学表达读者",
+              "enabled": true,
+              "promptText": "你的兴趣在文字本身，你关注语言质感、修辞表现、叙述韵律与表达完整性。"
+            },
+            {
+              "value": "editor_lens",
+              "label": "编辑/审稿",
+              "enabled": true,
+              "promptText": "你是一位相关文学领域的编辑，现在你收到了投稿。"
+            }
+          ]
         },
         {
-          "value": "web_serial",
-          "label": "网络连载",
+          "id": "work_form",
+          "title": "作品形态",
           "enabled": true,
-          "promptText": ""
+          "sortOrder": 10,
+          "options": [
+            {
+              "value": "complete_work",
+              "label": "完整作品",
+              "enabled": true,
+              "promptText": "当前文本属于完整作品，可以对整体结构、人物发展、前后照应与完成度进行更完整判断。"
+            },
+            {
+              "value": "opening_excerpt",
+              "label": "开头",
+              "enabled": true,
+              "promptText": "当前文本属于开篇部分，请优先关注开场吸引力、信息进入方式、阅读动力建立与潜在劝退点。"
+            },
+            {
+              "value": "excerpt",
+              "label": "节选片段",
+              "enabled": true,
+              "promptText": "当前文本属于节选片段，请优先进行局部可读性与局部完成度判断，避免对全文结构做过强结论。"
+            },
+            {
+              "value": "outline_or_setup",
+              "label": "大纲/设定稿",
+              "enabled": true,
+              "promptText": "当前文本属于大纲或设定稿，请重点评价框架合理性、卖点清晰度、结构潜力与潜在风险，不要求正文级语言表现。"
+            },
+            {
+              "value": "draft",
+              "label": "草稿/初稿",
+              "enabled": true,
+              "promptText": "当前文本属于草稿或初稿，请优先指出方向性问题、关键短板与高收益修改点，弱化对细节润色的要求。"
+            }
+          ]
         },
         {
-          "value": "short_story",
-          "label": "短篇小说",
+          "id": "target_channel",
+          "title": "目标场景",
           "enabled": true,
-          "promptText": ""
-        },
-        {
-          "value": "light_novel",
-          "label": "轻小说/青年向",
-          "enabled": true,
-          "promptText": ""
-        },
-        {
-          "value": "literary_submission",
-          "label": "文学投稿",
-          "enabled": true,
-          "promptText": ""
+          "sortOrder": 20,
+          "options": [
+            {
+              "value": "literary_submission",
+              "label": "传统文学",
+              "enabled": true,
+              "promptText": "请适当提高对语言质感、叙述控制、主题凝聚度、结构完成度与表达稳定性的关注。"
+            },
+            {
+              "value": "web_serial",
+              "label": "网络文学",
+              "enabled": true,
+              "promptText": "请适当提高对节奏效率、追读动力、信息投放时机、章节钩子与读者留存风险的关注。"
+            },
+            {
+              "value": "light_novel",
+              "label": "轻小说/青年向",
+              "enabled": true,
+              "promptText": "请适当提高对角色魅力、对白可读性、设定入口友好度、轻快节奏与阅读亲和力的关注。"
+            }
+          ]
         }
       ]
     },
     {
-      "id": "text_completeness",
-      "title": "文本完整度",
+      "id": "analysis_focus",
+      "title": "分析关注",
       "enabled": true,
       "sortOrder": 20,
-      "bindTo": "textCompleteness",
-      "appliesTo": [
-        "overall_check",
-        "opening_attraction",
-        "rhythm_progression",
-        "character_development",
-        "style_consistency",
-        "structure_completeness",
-        "reader_acceptance"
-      ],
-      "options": [
+      "controls": [
         {
-          "value": "complete",
-          "label": "完整作品",
+          "id": "genre_focus",
+          "title": "内容倾向",
           "enabled": true,
-          "promptText": ""
+          "sortOrder": 30,
+          "options": [
+            {
+              "value": "unspecified",
+              "label": "不特别限定",
+              "enabled": true,
+              "promptText": ""
+            },
+            {
+              "value": "plot_conflict",
+              "label": "剧情/冲突驱动",
+              "enabled": true,
+              "promptText": "本次评价重点为：对事件推动、矛盾建立、情节转折与推进效率。"
+            },
+            {
+              "value": "character_relationship",
+              "label": "人物/关系驱动",
+              "enabled": true,
+              "promptText": "本次评价重点为：人物动机、关系变化、情绪递进与角色存在感。"
+            },
+            {
+              "value": "world_setting",
+              "label": "设定/世界观驱动",
+              "enabled": true,
+              "promptText": "本次评价重点为：设定清晰度、进入门槛、信息组织与设定吸引力。"
+            },
+            {
+              "value": "atmosphere_expression",
+              "label": "氛围/表达驱动",
+              "enabled": true,
+              "promptText": "本次评价重点为：氛围营造、叙述节奏、语言韵律与表达完成度。"
+            }
+          ]
         },
         {
-          "value": "excerpt",
-          "label": "节选片段",
+          "id": "creation_stage",
+          "title": "创作阶段",
           "enabled": true,
-          "promptText": ""
+          "sortOrder": 40,
+          "options": [
+            {
+              "value": "pre_publish",
+              "label": "发布前",
+              "enabled": true,
+              "promptText": "本作品即将发布：重点关注整体可读性、主要短板、明显风险、读者体验与发布前排查角度。"
+            },
+            {
+              "value": "ideation",
+              "label": "构思阶段",
+              "enabled": true,
+              "promptText": "本作品尚在构思：偏重方向性建议、卖点判断、结构潜力与明显风险，不要求成熟正文标准。优先指出方向性短板、关键问题与高收益修改点，避免过度关注微观润色。"
+            },
+            {
+              "value": "revising",
+              "label": "修稿阶段",
+              "enabled": true,
+              "promptText": "本作品尚在修改：保留价值与问题清理，重点指出仍影响成稿质量的关键问题。"
+            },
+            {
+              "value": "post_publish",
+              "label": "已发布",
+              "enabled": true,
+              "promptText": "本作品已发布：对读者反馈、市场表现、潜在修改空间与后续发展建议的关注。"
+            }
+          ]
         },
         {
-          "value": "single_chapter",
-          "label": "单章/样章",
+          "id": "review_mode",
+          "title": "本次评审模式",
           "enabled": true,
-          "promptText": ""
-        },
-        {
-          "value": "draft",
-          "label": "草稿",
-          "enabled": true,
-          "promptText": ""
+          "sortOrder": 50,
+          "options": [
+            {
+              "value": "overall_pre_publish",
+              "label": "均衡",
+              "enabled": true,
+              "promptText": ""
+            },
+            {
+              "value": "opening_hook",
+              "label": "开篇评审",
+              "enabled": true,
+              "promptText": "请重点判断\n- 开篇是否足够吸引人，是否及时建立阅读动力、冲突、悬念或情绪牵引；\n信息投放是否清晰自然，是否存在理解门槛、设定堆积或进入困难;\n是否存在拖沓、停滞、无效铺陈、信息迟滞或阅读疲劳;"
+            },
+            {
+              "value": "reader_retention",
+              "label": "读者吸引力",
+              "enabled": true,
+              "promptText": "请从继续阅读意愿、追读动力、段落吸附力、阶段性满足感与章节钩子角度进行判断。"
+            },
+            {
+              "value": "risk_scan",
+              "label": "风险扫描",
+              "enabled": true,
+              "promptText": "请重点扫描明显劝退点、理解障碍、节奏风险、人物风险、结构风险与接受度风险。"
+            },
+            {
+              "value": "character_establishment",
+              "label": "人物塑造",
+              "enabled": true,
+              "promptText": "请重点判断主要人物是否鲜明可信，动机、个性、行动逻辑与存在感是否成立。"
+            },
+            {
+              "value": "emotion_progression",
+              "label": "情感推进",
+              "enabled": true,
+              "promptText": "请重点判断人物关系推进、情绪递进、互动层次与情感张力是否自然有效。"
+            },
+            {
+              "value": "plot_structure",
+              "label": "情节/结构",
+              "enabled": true,
+              "promptText": "请重点判断情节因果、段落组织、结构安排与整体推进是否清晰、稳固且有效。"
+            },
+            {
+              "value": "style_consistency",
+              "label": "文风统一",
+              "enabled": true,
+              "promptText": "请重点判断语言风格、叙述口吻、表达密度与整体气质是否稳定统一。"
+            }
+          ]
         }
       ]
     },
     {
-      "id": "evaluation_goal",
-      "title": "本次评价目标",
+      "id": "reader_profile",
+      "title": "评价目标",
       "enabled": true,
       "sortOrder": 30,
-      "bindTo": "evaluationGoal",
-      "appliesTo": [
-        "overall_check",
-        "opening_attraction",
-        "rhythm_progression",
-        "character_development",
-        "style_consistency",
-        "structure_completeness",
-        "reader_acceptance"
-      ],
-      "options": [
+      "controls": [
         {
-          "value": "overall_check",
-          "label": "发布前总体检查",
+          "id": "priority_bias",
+          "title": "维度优先原则",
           "enabled": true,
-          "promptText": ""
+          "sortOrder": 80,
+          "options": [
+            {
+              "value": "balanced",
+              "label": "均衡",
+              "enabled": true,
+              "promptText": ""
+            },
+            {
+              "value": "readability_first",
+              "label": "可读性",
+              "enabled": true,
+              "promptText": "优先考虑可读性、理解效率与阅读推进感。"
+            },
+            {
+              "value": "commercial_first",
+              "label": "读者留存/商业性",
+              "enabled": true,
+              "promptText": "优先考虑读者留存、追读动力、卖点感知与商业接受度。"
+            },
+            {
+              "value": "literary_first",
+              "label": "文学性",
+              "enabled": true,
+              "promptText": "优先考虑表达完整性、语言质感、氛围与叙述控制。"
+            },
+            {
+              "value": "character_first",
+              "label": "人物成立",
+              "enabled": true,
+              "promptText": "优先考虑人物可信度、人物驱动与关系推进效果。"
+            },
+            {
+              "value": "structure_first",
+              "label": "结构稳固",
+              "enabled": true,
+              "promptText": "优先考虑结构完整性、因果稳固性与整体组织效果。"
+            }
+          ]
         },
         {
-          "value": "opening_attraction",
-          "label": "开篇吸引力检查",
+          "id": "feedback_style",
+          "title": "反馈风格",
           "enabled": true,
-          "promptText": ""
-        },
-        {
-          "value": "rhythm_progression",
-          "label": "节奏与推进问题",
-          "enabled": true,
-          "promptText": ""
-        },
-        {
-          "value": "character_development",
-          "label": "人物塑造检查",
-          "enabled": true,
-          "promptText": ""
-        },
-        {
-          "value": "style_consistency",
-          "label": "文风一致性检查",
-          "enabled": true,
-          "promptText": ""
-        },
-        {
-          "value": "structure_completeness",
-          "label": "结构完整性检查",
-          "enabled": true,
-          "promptText": ""
-        },
-        {
-          "value": "reader_acceptance",
-          "label": "读者接受度预估",
-          "enabled": true,
-          "promptText": ""
-        }
-      ]
-    },
-    {
-      "id": "reader_preference",
-      "title": "目标读者偏好",
-      "enabled": true,
-      "sortOrder": 40,
-      "appliesTo": [
-        "overall_check",
-        "opening_attraction",
-        "rhythm_progression",
-        "character_development",
-        "style_consistency",
-        "structure_completeness",
-        "reader_acceptance"
-      ],
-      "options": [
-        {
-          "value": "none",
-          "label": "不评价",
-          "enabled": true,
-          "promptText": ""
-        },
-        {
-          "value": "fast_paced",
-          "label": "偏快节奏",
-          "enabled": true,
-          "promptText": "请优先从快节奏读者视角判断内容是否足够紧凑、信息投放是否及时。"
-        },
-        {
-          "value": "plot_driven",
-          "label": "偏剧情推进",
-          "enabled": true,
-          "promptText": "请优先从剧情推进读者视角判断情节推进效率、事件驱动性与停滞风险。"
-        },
-        {
-          "value": "character_emotion",
-          "label": "偏人物情感",
-          "enabled": true,
-          "promptText": "请优先从人物情感读者视角判断人物动机、关系推进与情绪张力是否充足。"
-        },
-        {
-          "value": "world_building",
-          "label": "偏世界观/设定",
-          "enabled": true,
-          "promptText": "请优先从世界观与设定读者视角判断设定信息是否清晰、自然且有吸引力。"
-        },
-        {
-          "value": "literary_expression",
-          "label": "偏文学表达",
-          "enabled": true,
-          "promptText": "请优先从重视文学表达的读者视角判断语言质感、修辞表现与叙述韵律。"
-        }
-      ]
-    },
-    {
-      "id": "feedback_style",
-      "title": "反馈风格",
-      "enabled": true,
-      "sortOrder": 50,
-      "appliesTo": [
-        "overall_check",
-        "opening_attraction",
-        "rhythm_progression",
-        "character_development",
-        "style_consistency",
-        "structure_completeness",
-        "reader_acceptance"
-      ],
-      "options": [
-        {
-          "value": "balanced",
-          "label": "平衡反馈",
-          "enabled": true,
-          "promptText": "请兼顾优点与问题，保持反馈平衡。"
-        },
-        {
-          "value": "strict",
-          "label": "严格问题导向",
-          "enabled": true,
-          "promptText": "请采用直接、问题导向的反馈方式，优先指出影响结果的关键问题与修改优先级。"
-        },
-        {
-          "value": "encouraging",
-          "label": "鼓励式反馈",
-          "enabled": true,
-          "promptText": "请保持鼓励式反馈，在指出问题时同时明确保留价值与可执行的改进方向。"
+          "sortOrder": 90,
+          "options": [
+            {
+              "value": "balanced",
+              "label": "均衡",
+              "enabled": true,
+              "promptText": ""
+            },
+            {
+              "value": "strict",
+              "label": "严格",
+              "enabled": true,
+              "promptText": "作者希望更严格的审查：你对文段中的缺点容忍度更低。"
+            },
+            {
+              "value": "encouraging",
+              "label": "初学者",
+              "enabled": true,
+              "promptText": "作者是初学者：你更重视写作基本功，整体评价标准更宽松。但你对失败的炫技评价更低。"
+            },
+            {
+              "value": "editorial",
+              "label": "商业角度",
+              "enabled": true,
+              "promptText": "请采用冷静、清晰、专业编辑审稿的反馈方式，强调判断依据、问题性质与成稿建议。优先指出是否抓人、是否好读、是否有卖点、是否容易流失读者。"
+            }
+          ]
         }
       ]
     }

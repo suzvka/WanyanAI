@@ -12,11 +12,11 @@ export const textBlockTypeOptions: TextBlockType[] = [
   'reference_review',
 ];
 
-export function createTextBlock(number: number): TextBlock {
+export function createTextBlock(number: number, blockType?: string): TextBlock {
   return {
     id: crypto.randomUUID(),
     number,
-    blockType: 'actual_text',
+    blockType: blockType ?? 'actual_text',
     title: `文本${number}`,
     content: null,
     annotations: [],

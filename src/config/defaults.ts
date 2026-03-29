@@ -2,7 +2,7 @@ import { EvaluationInput } from '@/types/report';
 
 export type EvaluationInputDefaults = Pick<EvaluationInput, 'textType' | 'textCompleteness' | 'evaluationGoal'>;
 
-export function createDefaultEvaluationInput(overrides: Partial<EvaluationInputDefaults> = {}): EvaluationInput {
+export function createDefaultEvaluationInput(defaults: EvaluationInputDefaults): EvaluationInput {
   return {
     textBlocks: [
       {
@@ -14,10 +14,8 @@ export function createDefaultEvaluationInput(overrides: Partial<EvaluationInputD
         annotations: [],
       },
     ],
-    textType: overrides.textType ?? 'general_text',
-    textCompleteness: overrides.textCompleteness ?? 'excerpt',
-    evaluationGoal: overrides.evaluationGoal ?? 'overall_check',
+    textType: defaults.textType,
+    textCompleteness: defaults.textCompleteness,
+    evaluationGoal: defaults.evaluationGoal,
   };
 }
-
-export const defaultEvaluationInput: EvaluationInput = createDefaultEvaluationInput();

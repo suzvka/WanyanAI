@@ -1,15 +1,13 @@
 import type { AnalysisReport, EvaluationGoal } from '@/types/report';
 import type { AppErrorPayload } from '@/types/errors';
+import type { ReportRating } from '@/config/reportScoring';
 
 export const providerProfileValues = ['openai-compatible'] as const;
 export type ProviderProfile = (typeof providerProfileValues)[number];
 
 export type PromptTemplateSlotKey =
   | 'textBlocksPlainText'
-  | 'textBlocksSummary'
-  | 'textTypeLabel'
-  | 'textCompletenessLabel'
-  | 'evaluationGoalLabel'
+  | 'textBlocksMetadata'
   | 'dynamicInstructionText';
 
 export type PromptTemplateSlotDefinition = {
@@ -36,7 +34,7 @@ export type PromptTemplateResource = {
   };
   recommendedParameters: {
     temperature: number;
-    maxTokens: number;
+    maxTokens?: number;
   };
 };
 
@@ -52,14 +50,62 @@ export type PromptTemplateErrorResponse = {
   error: AppErrorPayload;
 };
 
+export type ModelAnalysisMessage = {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+};
+
 export type ModelAnalysisRequest = {
   model: string;
-  messages: Array<{
-    role: 'system' | 'user';
-    content: string;
-  }>;
+  messages: ModelAnalysisMessage[];
   temperature?: number;
   max_tokens?: number;
+};
+
+export const modelSubscoreIdValues = [
+  'language_expression',
+  'structural_logic',
+  'human_depth',
+  'inner_complexity',
+  'semantic_openness',
+  'empathic_effectiveness',
+] as const;
+
+export type ModelSubscoreId = (typeof modelSubscoreIdValues)[number];
+
+export type ModelMinimalSummary = {
+  title?: string;
+  overview: string;
+};
+
+export type ModelMinimalSubscore = {
+  id: ModelSubscoreId;
+  grade: ReportRating;
+  rationale: string;
+};
+
+export type ModelMinimalConclusion = {
+  rationale: string;
+};
+
+export type ModelMinimalSection = {
+  title: string;
+  body: string;
+};
+
+export type ModelMinimalSectionGroup = {
+  id?: string;
+  title: string;
+  sections: ModelMinimalSection[];
+};
+
+export type ModelMinimalReport = {
+  summary: ModelMinimalSummary;
+  subscores: ModelMinimalSubscore[];
+  conclusion: ModelMinimalConclusion;
+  groups?: ModelMinimalSectionGroup[];
+  // sections 已迁移到 groups 中，保留为可选以兼容旧格式
+  sections?: ModelMinimalSection[];
 };
 
 export type RawModelResponseSource = 'output_text' | 'choice_text' | 'message_content';
@@ -67,6 +113,7 @@ export type RawModelResponseSource = 'output_text' | 'choice_text' | 'message_co
 export type RawModelResponse = {
   content: string;
   source: RawModelResponseSource;
+  finishReason?: string;
 };
 
 export type ParsedAnalysisPayload = {

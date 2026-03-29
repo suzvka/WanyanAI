@@ -1,11 +1,12 @@
 'use client';
 
 import { ChangeEvent, useEffect, useState } from 'react';
-import { AlertCircle, Key, Link2, PencilLine, Save } from 'lucide-react';
+import { AlertCircle, Key, Link2, PencilLine, Save, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { validateApiConfigDraft } from '@/lib/validation/modelConfig';
 import type { ApiConfigDraft } from '@/types/modelConfig';
 
@@ -13,6 +14,8 @@ interface ApiConfigEditorProps {
   initialValue?: ApiConfigDraft;
   submitLabel?: string;
   busy?: boolean;
+  showDelete?: boolean;
+  onDelete?: () => void;
   onSubmit: (value: ApiConfigDraft) => Promise<void> | void;
 }
 
@@ -26,6 +29,8 @@ export default function ApiConfigEditor({
   initialValue,
   submitLabel = '保存配置',
   busy = false,
+  showDelete = false,
+  onDelete,
   onSubmit,
 }: ApiConfigEditorProps) {
   const [draft, setDraft] = useState<ApiConfigDraft>(initialValue || emptyDraft);
@@ -98,13 +103,36 @@ export default function ApiConfigEditor({
           disabled={busy}
           onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, apiKey: event.target.value })}
         />
-        <p className="text-sm text-slate-500">仅保存在当前浏览器本地，不会发送到本项目服务端。</p>
+        <p className="text-sm text-[color:var(--report-text-subtle)]">仅保存在当前浏览器本地，不会发送到本项目服务端。</p>
       </div>
 
-      <Button type="button" className="w-full" disabled={busy} onClick={handleSubmit}>
-        <Save className="mr-2 h-4 w-4" />
-        {submitLabel}
-      </Button>
+      {/* 按钮区域 */}
+      <div className="space-y-2">
+        <Button type="button" className="w-full" disabled={busy} onClick={handleSubmit}>
+          <Save className="mr-2 h-4 w-4" />
+          {submitLabel}
+        </Button>
+
+        {/* 删除按钮 - 红色样式，位于保存按钮下方 */}
+        {showDelete && onDelete && (
+          <Button
+            type="button"
+            variant="outline"
+            className={cn(
+              'w-full',
+              // 红色主题 - 局部定义，不修改全局配置
+              'border-[oklch(0.55_0.18_28)] bg-transparent text-[oklch(0.50_0.16_28)]',
+              'hover:bg-[oklch(0.55_0.18_28)] hover:text-white',
+              'focus-visible:ring-[oklch(0.55_0.18_28)]',
+            )}
+            disabled={busy}
+            onClick={onDelete}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            删除此配置
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

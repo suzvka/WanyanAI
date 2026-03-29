@@ -1,69 +1,39 @@
-import { AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
-import type { ReportConclusion } from '@/types/report';
+import type { ReportRating } from '@/config/reportScoring';
 
 export function formatNumber(num: number): string {
   const value = Number(num);
   return Number.isInteger(value) ? value.toString() : value.toFixed(2);
 }
 
-export function getScoreColor(score: number): string {
-  if (score >= 80) return '#059669';
-  if (score >= 60) return '#d97706';
-  return '#dc2626';
-}
-
-export function getGradeColor(grade: string): string {
+export function getScoreColor(grade: ReportRating): string {
   switch (grade) {
+    case 'S':
+      return 'var(--report-grade-s)';
     case 'A':
-      return 'text-green-600 bg-green-50';
+      return 'var(--report-grade-a)';
     case 'B':
-      return 'text-blue-600 bg-blue-50';
+      return 'var(--report-grade-b)';
     case 'C':
-      return 'text-yellow-600 bg-yellow-50';
+      return 'var(--report-grade-c)';
     case 'D':
-      return 'text-orange-600 bg-orange-50';
-    case 'E':
-      return 'text-red-600 bg-red-50';
     default:
-      return 'text-slate-600 bg-slate-50';
+      return 'var(--report-grade-d)';
   }
 }
 
-export function getRecommendationColor(recommendation: ReportConclusion['finalRecommendation']): string {
-  switch (recommendation) {
-    case 'publish':
-      return 'border-green-200 bg-green-50';
-    case 'revise_then_publish':
-      return 'border-yellow-200 bg-yellow-50';
-    case 'rework':
-      return 'border-red-200 bg-red-50';
+export function getGradeColor(grade: ReportRating): string {
+  switch (grade) {
+    case 'S':
+      return 'text-[color:var(--report-grade-s)] bg-[color:var(--report-grade-s-soft)]';
+    case 'A':
+      return 'text-[color:var(--report-grade-a)] bg-[color:var(--report-grade-a-soft)]';
+    case 'B':
+      return 'text-[color:var(--report-grade-b)] bg-[color:var(--report-grade-b-soft)]';
+    case 'C':
+      return 'text-[color:var(--report-grade-c)] bg-[color:var(--report-grade-c-soft)]';
+    case 'D':
+      return 'text-[color:var(--report-grade-d)] bg-[color:var(--report-grade-d-soft)]';
     default:
-      return 'border-slate-200 bg-slate-50';
-  }
-}
-
-export function getRecommendationText(recommendation: ReportConclusion['finalRecommendation']): string {
-  switch (recommendation) {
-    case 'publish':
-      return '建议发布';
-    case 'revise_then_publish':
-      return '修改后发布';
-    case 'rework':
-      return '建议重构';
-    default:
-      return '待定';
-  }
-}
-
-export function getRecommendationIcon(recommendation: ReportConclusion['finalRecommendation']) {
-  switch (recommendation) {
-    case 'publish':
-      return <CheckCircle2 className="w-6 h-6 text-green-600" />;
-    case 'revise_then_publish':
-      return <AlertCircle className="w-6 h-6 text-yellow-600" />;
-    case 'rework':
-      return <XCircle className="w-6 h-6 text-red-600" />;
-    default:
-      return <AlertCircle className="w-6 h-6 text-slate-600" />;
+      return 'text-[color:var(--report-neutral)] bg-[color:var(--report-neutral-soft)]';
   }
 }
