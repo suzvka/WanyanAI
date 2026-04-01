@@ -21,5 +21,14 @@
       "targetBaseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
       "targetApiKey": "sk-86e434f06a40442c9a90afce8178f161"
     }
+    ,
+    {
+      "id": "qwen3.5-plus",
+      "displayName": "Qwen3.5",
+      "minPermissionLevel": 1,
+      "maxCallsPerHour": 100,
+      "targetBaseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "targetApiKey": "sk-86e434f06a40442c9a90afce8178f161"
+    }
   ]
 }

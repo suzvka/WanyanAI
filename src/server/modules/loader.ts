@@ -5,17 +5,13 @@ import path from 'node:path';
 import { validateModuleManifest, validateModuleContainers } from './schemas';
 import { createFallbackModuleConfig } from './fallback';
 import { validateSiteConfig, validateAnalysisControls, normalizeAnalysisControls } from '@/server/config/schemas';
+import { getRegisteredOutputModes } from '@/features/output-modes';
 import type { ModuleConfig, ModuleRegistry } from '@/types/module';
 
 /**
  * 内置容器类型列表（服务端固定）
  */
 const BUILTIN_CONTAINER_TYPES = ['analysis-controls', 'text-blocks'];
-
-/**
- * 内置输出模式列表（服务端固定）
- */
-const BUILTIN_OUTPUT_MODES = ['report-json'];
 
 const modulesDir = path.join(process.cwd(), 'app-modules');
 
@@ -90,11 +86,11 @@ async function loadModule(moduleDir: string): Promise<ModuleConfig | null> {
 
   const manifest = validateModuleManifest(JSON.parse(mainRaw));
 
-  // 验证容器配置完整性
+  // 验证容器配置完整性（动态获取已注册的输出模式列表）
   const validationErrors = validateModuleContainers(
     manifest,
     BUILTIN_CONTAINER_TYPES,
-    BUILTIN_OUTPUT_MODES,
+    getRegisteredOutputModes(),
   );
 
   if (validationErrors.length > 0) {

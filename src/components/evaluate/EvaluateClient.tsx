@@ -38,6 +38,7 @@ import { getOutputMode } from '@/features/output-modes';
 import { validateEvaluationInput } from '@/lib/validation/evaluationInput';
 import { useHasUnsavedContent } from '@/hooks/useHasUnsavedContent';
 import type { ProgressSnapshot } from '@/features/analysis-progress';
+import { ReportErrorBoundary } from '@/components/evaluate/ReportErrorBoundary';
 
 function AnalysisProgressState({
   phase,
@@ -180,16 +181,23 @@ function getContainerId(config: ContainerConfig): string {
 }
 
 /**
+ * 生成唯一 ID
+ */
+function generateUniqueId(): string {
+  // 使用时间戳 + 随机字符串确保唯一性
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/**
  * 创建初始文本块
  */
 function createInitialTextBlocks(count: number): TextBlock[] {
   if (count <= 0) return [];
   
-  const timestamp = Date.now();
   const blocks: TextBlock[] = [];
   for (let i = 0; i < count; i++) {
     blocks.push({
-      id: `block-${timestamp}-${i}`,
+      id: `block-${generateUniqueId()}`,
       title: '',
       content: null,
       annotations: [],
@@ -390,11 +398,16 @@ function EvaluateContent({
         modules={modules}
       >
         {shouldShowReport && OutputRenderer ? (
-          <OutputRenderer
-            data={report}
-            onStartNew={clearAllContainerData}
+          <ReportErrorBoundary
             onBackToEdit={resetAnalysis}
-          />
+            onRetry={retryAnalysis}
+          >
+            <OutputRenderer
+              data={report}
+              onStartNew={clearAllContainerData}
+              onBackToEdit={resetAnalysis}
+            />
+          </ReportErrorBoundary>
         ) : analysisState.status !== 'idle' && analysisState.status !== 'failed' ? (
           <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
             <AnalysisProgressState
