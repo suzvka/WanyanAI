@@ -1,5 +1,6 @@
 import { prepareEvaluationSubmission } from '@/lib/evaluationSubmission';
-import {
+import type {
+  ContainerData,
   ContentSource,
   EvaluationInput,
   SerializableEvaluationInput,
@@ -7,24 +8,26 @@ import {
   TextAnnotation,
   TextBlock,
   TextBlockAttachment,
-  TextBlockType,
 } from '@/types/report';
 
 export const MAX_BLOCK_CONTENT_LENGTH = 100000;
 
-const textBlockTypeLabels: Record<TextBlockType, string> = {
-  actual_text: '正文',
-  reference_material: '参考材料',
-  reference_review: '参考评价',
+/**
+ * 文本块元数据结构
+ */
+type TextBlockMetadata = {
+  containerTitle: string;
+  texts: Array<{
+    title?: string;
+    fileName?: string;
+    annotations?: Array<{ fileName?: string }>;
+  }>;
+  prompt?: string;
 };
 
-export function getTextBlockTypeLabel(blockType: TextBlockType): string {
-  return textBlockTypeLabels[blockType];
-}
-
-function getDefaultBlockTitle(block: Pick<TextBlock, 'number'>) {
-  return `文本${block.number}`;
-}
+type TextBlocksMetadataOutput = {
+  containers: TextBlockMetadata[];
+};
 
 function renderFileContent(file: Pick<TextBlockAttachment, 'storedName' | 'content'>) {
   return `[${file.storedName}]\n${file.content}`;
@@ -50,8 +53,8 @@ function readContentSourceAsPromptContent(source: ContentSource | null | undefin
   return source.text;
 }
 
-function getPromptMetadataContent(
-  content: SerializableTextBlockContent | null,
+function getPromptMetadataContentFromSource(
+  content: ContentSource | null,
   fallbackFileName: string,
 ): { kind: 'text' | 'file'; fileName: string } | null {
   if (!content) {
@@ -61,7 +64,7 @@ function getPromptMetadataContent(
   if (content.kind === 'file') {
     return {
       kind: 'file',
-      fileName: content.fileName,
+      fileName: content.file.storedName,
     };
   }
 
@@ -123,116 +126,145 @@ export function getRenderableTextBlocks(input: Pick<EvaluationInput, 'textBlocks
   return input.textBlocks.filter((block) => hasRenderableTextBlockContent(block));
 }
 
-function serializeSingleTextBlock(block: TextBlock): string {
-  const title = block.title.trim() || getDefaultBlockTitle(block);
-  const lines = [
-    `## ${title}`,
-    `- 编号：${block.number}`,
-    `- 类型：${getTextBlockTypeLabel(block.blockType)}`,
-    '',
-    getContentSourceDisplayText(block.content),
-  ];
-
-  const renderableAnnotations = block.annotations.filter((annotation) => !isTextAnnotationEmpty(annotation));
-  if (renderableAnnotations.length > 0) {
-    lines.push('', '### 批注');
-
-    renderableAnnotations.forEach((annotation, index) => {
-      lines.push(`#### 批注 ${index + 1}`, '', getContentSourceDisplayText(annotation.content));
-    });
-  }
-
-  return lines.join('\n');
+/**
+ * 获取默认块标题
+ */
+function getDefaultBlockTitle(index: number): string {
+  return `文本${index + 1}`;
 }
 
-export function hasReferenceTextBlock(input: Pick<EvaluationInput, 'textBlocks'>): boolean {
-  return input.textBlocks.some((block) => block.blockType === 'reference_material');
-}
+/**
+ * 渲染文本块内容供模型使用
+ */
+export function renderTextBlocksForModel(input: EvaluationInput): string {
+  const segments: string[] = [];
 
-export function getTopLevelTextBlockCount(input: Pick<EvaluationInput, 'textBlocks'>): number {
-  return input.textBlocks.length;
-}
+  for (const container of input.containers) {
+    const renderableBlocks = container.textBlocks.filter((block) => hasRenderableTextBlockContent(block));
 
-export function getTopLevelTextBlockTypes(input: Pick<EvaluationInput, 'textBlocks'>): TextBlockType[] {
-  return [...new Set(input.textBlocks.map((block) => block.blockType))];
-}
-
-export function serializeTextBlocks(input: Pick<EvaluationInput, 'textBlocks'>): string {
-  const renderableBlocks = getRenderableTextBlocks(input);
-
-  if (renderableBlocks.length === 0) {
-    return '未提供文本块';
-  }
-
-  return renderableBlocks.map((block) => serializeSingleTextBlock(block)).join('\n\n');
-}
-
-export function renderTextBlocksForModel(input: Pick<EvaluationInput, 'textBlocks'>): string {
-  const segments = getRenderableTextBlocks(input).flatMap((block) => {
-    const blockSegments = block.content && !isContentSourceEmpty(block.content)
-      ? [
+    renderableBlocks.forEach((block, blockIndex) => {
+      // 添加文本块内容
+      if (block.content && !isContentSourceEmpty(block.content)) {
+        segments.push(
           renderPromptContentSegment(
-            getPromptContentReferenceName(block.content, `block-${block.number}.txt`),
+            getPromptContentReferenceName(block.content, `${container.id}-${blockIndex + 1}.txt`),
             readContentSourceAsPromptContent(block.content) ?? '',
           ),
-        ]
-      : [];
-    const annotationSegments = block.annotations.flatMap((annotation, index) => {
-      if (!annotation.content || isContentSourceEmpty(annotation.content)) {
-        return [];
+        );
       }
 
-      return [
-        renderPromptContentSegment(
-          getPromptContentReferenceName(annotation.content, `block-${block.number}-annotation-${index + 1}.txt`),
-            readContentSourceAsPromptContent(annotation.content) ?? '',
-        ),
-      ];
+      // 添加批注内容
+      block.annotations.forEach((annotation, annIndex) => {
+        if (annotation.content && !isContentSourceEmpty(annotation.content)) {
+          segments.push(
+            renderPromptContentSegment(
+              getPromptContentReferenceName(annotation.content, `${container.id}-${blockIndex + 1}-annotation-${annIndex + 1}.txt`),
+              readContentSourceAsPromptContent(annotation.content) ?? '',
+            ),
+          );
+        }
+      });
     });
-    return [...blockSegments, ...annotationSegments].filter((value): value is string => Boolean(value));
-  });
+  }
 
   return segments.join('\n\n');
 }
 
+/**
+ * 渲染文本块元数据供模型使用
+ */
 export function renderTextBlockMetadataForModel(input: EvaluationInput): string {
-  const { submissionData } = prepareEvaluationSubmission(input);
-
-  return JSON.stringify(
-    {
-      textType: submissionData.textType,
-      textCompleteness: submissionData.textCompleteness,
-      evaluationGoal: submissionData.evaluationGoal,
-      blocks: submissionData.blocks.map((block) => ({
-        id: block.id,
-        number: block.number,
-        blockType: block.blockType,
-        title: block.title,
-        content: getPromptMetadataContent(block.content, `block-${block.number}.txt`),
-        annotations: block.annotations.map((annotation, index) => ({
-          id: annotation.id,
-          content: getPromptMetadataContent(annotation.content, `block-${block.number}-annotation-${index + 1}.txt`),
-        })),
-      })),
-      metadata: submissionData.metadata,
-    },
-    null,
-    2,
-  );
+  return JSON.stringify({ containers: buildTextBlockMetadataContainers(input) }, null, 2);
 }
 
-export function summarizeTextBlocks(input: Pick<EvaluationInput, 'textBlocks'>): string {
-  const renderableBlocks = getRenderableTextBlocks(input);
+/**
+ * 构建文本块元数据容器列表
+ */
+function buildTextBlockMetadataContainers(input: EvaluationInput): TextBlockMetadata[] {
+  const containers: TextBlockMetadata[] = [];
 
-  if (renderableBlocks.length === 0) {
-    return '未提供文本块';
+  for (const container of input.containers) {
+    const renderableBlocks = container.textBlocks.filter((block) => hasRenderableTextBlockContent(block));
+
+    if (renderableBlocks.length === 0) {
+      continue;
+    }
+
+    const containerMetadata: TextBlockMetadata = {
+      containerTitle: container.title,
+      texts: renderableBlocks.map((block, blockIndex) => {
+        const text: { title?: string; fileName?: string; annotations?: Array<{ fileName?: string }> } = {};
+
+        const title = block.title.trim() || getDefaultBlockTitle(blockIndex);
+        if (title) {
+          text.title = title;
+        }
+
+        const contentMeta = getPromptMetadataContentFromSource(
+          block.content,
+          `${container.id}-${blockIndex + 1}.txt`
+        );
+        if (contentMeta) {
+          text.fileName = contentMeta.fileName;
+        }
+
+        const renderableAnnotations = block.annotations.filter(
+          (annotation) => annotation.content && !isContentSourceEmpty(annotation.content)
+        );
+
+        if (renderableAnnotations.length > 0) {
+          text.annotations = renderableAnnotations.map((annotation, annIndex) => {
+            const annotationMeta: { fileName?: string } = {};
+            const annotationContentMeta = getPromptMetadataContentFromSource(
+              annotation.content,
+              `${container.id}-${blockIndex + 1}-annotation-${annIndex + 1}.txt`
+            );
+            if (annotationContentMeta) {
+              annotationMeta.fileName = annotationContentMeta.fileName;
+            }
+            return annotationMeta;
+          });
+        }
+
+        return text;
+      }),
+    };
+
+    // 注入容器级提示词
+    if (container.prompt) {
+      containerMetadata.prompt = container.prompt;
+    }
+
+    containers.push(containerMetadata);
   }
 
-  return renderableBlocks
-    .map((block) => `${block.number}. ${getTextBlockTypeLabel(block.blockType)} / ${block.title.trim() || getDefaultBlockTitle(block)}`)
-    .join('；');
+  return containers;
 }
 
+/**
+ * 汇总文本块信息
+ */
+export function summarizeTextBlocks(input: EvaluationInput): string {
+  const segments: string[] = [];
+
+  for (const container of input.containers) {
+    const renderableBlocks = container.textBlocks.filter((block) => hasRenderableTextBlockContent(block));
+
+    if (renderableBlocks.length > 0) {
+      const blockSummaries = renderableBlocks.map((block, index) => {
+        const title = block.title.trim() || getDefaultBlockTitle(index);
+        return `${container.title} - ${title}`;
+      });
+      segments.push(...blockSummaries);
+    }
+  }
+
+  return segments.length > 0 ? segments.join('；') : '未提供文本块';
+}
+
+/**
+ * 获取文本块纯文本总长度
+ */
 export function getTextBlockPlainTextLength(input: Pick<EvaluationInput, 'textBlocks'>): number {
   return input.textBlocks.reduce(
     (total, block) =>
@@ -243,10 +275,86 @@ export function getTextBlockPlainTextLength(input: Pick<EvaluationInput, 'textBl
   );
 }
 
-export function getRenderedTextBlockLength(input: Pick<EvaluationInput, 'textBlocks'>): number {
+/**
+ * 获取渲染后的文本块总长度
+ */
+export function getRenderedTextBlockLength(input: EvaluationInput): number {
   return renderTextBlocksForModel(input).length;
 }
 
+/**
+ * 转换为可序列化的评估输入
+ */
 export function toSerializableEvaluationInput(input: EvaluationInput): SerializableEvaluationInput {
   return prepareEvaluationSubmission(input).submissionData;
+}
+
+// === 长度计算相关（用于文本块编辑器的限制检查）===
+
+/**
+ * 计算下一个原始长度
+ */
+export function getNextRawLength(
+  textBlocks: TextBlock[],
+  currentTextLength: number,
+  nextTextLength: number,
+): number {
+  const currentTotal = textBlocks.reduce((total, block) => {
+    const blockLength = getContentSourceRawLength(block.content);
+    const annotationsLength = block.annotations.reduce(
+      (annTotal, ann) => annTotal + getContentSourceRawLength(ann.content),
+      0
+    );
+    return total + blockLength + annotationsLength;
+  }, 0);
+
+  return currentTotal - currentTextLength + nextTextLength;
+}
+
+/**
+ * 检查是否在纯文本限制内
+ */
+export function isWithinPlainTextLimit(textBlocks: TextBlock[]): boolean {
+  const totalLength = textBlocks.reduce((total, block) => {
+    const blockLength = getContentSourceRawLength(block.content);
+    const annotationsLength = block.annotations.reduce(
+      (annTotal, ann) => annTotal + getContentSourceRawLength(ann.content),
+      0
+    );
+    return total + blockLength + annotationsLength;
+  }, 0);
+
+  return totalLength <= MAX_BLOCK_CONTENT_LENGTH;
+}
+
+/**
+ * 检查是否在渲染后文本限制内
+ */
+export function isWithinRenderedTextLimit(textBlocks: TextBlock[]): boolean {
+  // 简化计算：纯文本长度 * 1.2 作为估算
+  const plainLength = textBlocks.reduce((total, block) => {
+    const blockLength = getContentSourceRawLength(block.content);
+    const annotationsLength = block.annotations.reduce(
+      (annTotal, ann) => annTotal + getContentSourceRawLength(ann.content),
+      0
+    );
+    return total + blockLength + annotationsLength;
+  }, 0);
+
+  return plainLength * 1.2 <= MAX_BLOCK_CONTENT_LENGTH;
+}
+
+/**
+ * 是否需要确认溢出
+ */
+export function shouldConfirmOverflow(
+  textBlocks: TextBlock[],
+  nextRawLength: number,
+  hasConfirmedOverflow: boolean,
+): boolean {
+  if (hasConfirmedOverflow) {
+    return false;
+  }
+
+  return nextRawLength > MAX_BLOCK_CONTENT_LENGTH;
 }

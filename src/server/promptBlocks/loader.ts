@@ -26,7 +26,6 @@ function parsePromptBlock(fileName: string, content: string): PromptBlock | null
   const title = rawTitle.trim();
 
   if (!title) {
-    console.warn(`Skipping prompt block without title: ${fileName}`);
     return null;
   }
 
@@ -50,16 +49,14 @@ export async function loadPromptBlocks(): Promise<PromptBlock[]> {
         try {
           const content = await readFile(path.join(promptBlocksDir, fileName), 'utf-8');
           return parsePromptBlock(fileName, content);
-        } catch (error) {
-          console.warn(`Skipping unreadable prompt block: ${fileName}`, error);
+        } catch {
           return null;
         }
       }),
     );
 
     return blocks.filter((block: PromptBlock | null): block is PromptBlock => block !== null);
-  } catch (error) {
-    console.error('Failed to read prompt blocks directory:', error);
+  } catch {
     return [];
   }
 }

@@ -1,6 +1,8 @@
 import {
+  ContainerData,
   ContentSource,
   EvaluationInput,
+  SerializableContainerData,
   SerializableEvaluationInput,
   SerializableEvaluationMetadataFile,
   SerializableTextAnnotation,
@@ -88,8 +90,6 @@ function prepareTextBlock(
   return {
     serializableBlock: {
       id: block.id,
-      number: block.number,
-      blockType: block.blockType,
       title: block.title,
       content: blockUnit.content,
       annotations,
@@ -100,14 +100,25 @@ function prepareTextBlock(
   };
 }
 
+function prepareContainer(container: ContainerData): SerializableContainerData {
+  return {
+    id: container.id,
+    title: container.title,
+    prompt: container.prompt,
+    textBlocks: container.textBlocks.map((block) => prepareTextBlock(block).serializableBlock),
+  };
+}
+
 export function prepareEvaluationSubmission(input: EvaluationInput): PreparedEvaluationSubmission {
   const blocks = input.textBlocks.map((block) => prepareTextBlock(block));
+  const containers = input.containers.map((container) => prepareContainer(container));
 
   const submissionData: SerializableEvaluationInput = {
     blocks: blocks.map((item) => item.serializableBlock),
     metadata: {
       files: blocks.flatMap((item) => item.metadataFiles),
     },
+    containers,
     textType: input.textType,
     textCompleteness: input.textCompleteness,
     evaluationGoal: input.evaluationGoal,

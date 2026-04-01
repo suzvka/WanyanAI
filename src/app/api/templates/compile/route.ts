@@ -20,13 +20,11 @@ export async function POST(request: Request) {
       return NextResponse.json(response, { status: 400 });
     }
 
-    const template = await getPromptTemplate(parsed.data.evaluationGoal);
+    const template = await getPromptTemplate(parsed.data.evaluationGoal, parsed.data.outputMode);
     const response: PromptTemplateSuccessResponse = { template };
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Prompt template compile route failed:', error);
-
     const response: PromptTemplateErrorResponse = {
       error: toAppErrorPayload(error, {
         code: 'template_fetch_failed',

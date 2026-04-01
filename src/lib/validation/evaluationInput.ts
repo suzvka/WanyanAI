@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ContentSource, EvaluationInput, TextBlock, TextBlockAttachment } from '@/types/report';
+import type { ContentSource, EvaluationInput, TextBlock, TextBlockAttachment } from '@/types/report';
 import type { FeatureFlagsConfig } from '@/server/config/types';
 import {
   getRenderedTextBlockLength,
@@ -7,34 +7,15 @@ import {
   isTextAnnotationEmpty,
   MAX_BLOCK_CONTENT_LENGTH,
 } from '@/lib/textBlocks';
+import {
+  textTypeValues,
+  textCompletenessValues,
+  evaluationGoalValues,
+} from '@/config/evaluationDimensions';
 
-const textTypeSchema = z.enum([
-  'web_serial',
-  'short_story',
-  'light_novel',
-  'literary_submission',
-  'general_text',
-]);
-
-const textCompletenessSchema = z.enum([
-  'complete',
-  'single_chapter',
-  'first_chapters',
-  'excerpt',
-  'draft',
-]);
-
-const evaluationGoalSchema = z.enum([
-  'overall_check',
-  'opening_attraction',
-  'rhythm_progression',
-  'character_development',
-  'style_consistency',
-  'structure_completeness',
-  'reader_acceptance',
-]);
-
-const textBlockTypeSchema = z.enum(['actual_text', 'reference_material', 'reference_review']);
+const textTypeSchema = z.enum(textTypeValues);
+const textCompletenessSchema = z.enum(textCompletenessValues);
+const evaluationGoalSchema = z.enum(evaluationGoalValues);
 
 const textBlockAttachmentSourceSchema = z.enum(['upload']);
 
@@ -87,11 +68,16 @@ const textAnnotationSchema = z.object({
 
 const textBlockSchema = z.object({
   id: z.string().trim().min(1, '文本块标识缺失'),
-  number: z.number().int().min(1, '文本块编号不合法'),
-  blockType: textBlockTypeSchema,
   title: z.string().default(''),
   content: contentSourceSchema,
   annotations: z.array(textAnnotationSchema).default([]),
+});
+
+const containerDataSchema = z.object({
+  id: z.string().trim().min(1, '容器标识缺失'),
+  title: z.string().default(''),
+  prompt: z.string().optional(),
+  textBlocks: z.array(textBlockSchema).default([]),
 });
 
 export const evaluationInputSchema = z.object({
@@ -112,6 +98,7 @@ export const evaluationInputSchema = z.object({
       seenIds.add(block.id);
     });
   }),
+  containers: z.array(containerDataSchema).default([]),
   textType: textTypeSchema,
   textCompleteness: textCompletenessSchema,
   evaluationGoal: evaluationGoalSchema,
@@ -134,20 +121,48 @@ function hasAnyAnnotations(input: EvaluationInput) {
   return input.textBlocks.some((block) => block.annotations.length > 0);
 }
 
-function getInvalidBlockNumbers(input: EvaluationInput) {
-  return input.textBlocks.filter((block) => isContentSourceEmpty(block.content)).map((block) => block.number);
+/**
+ * 获取无效块的位置信息（用于错误提示）
+ */
+function getInvalidBlockPositions(input: EvaluationInput) {
+  const positions: string[] = [];
+  
+  for (const container of input.containers) {
+    const invalidIndices: number[] = [];
+    container.textBlocks.forEach((block, index) => {
+      if (isContentSourceEmpty(block.content)) {
+        invalidIndices.push(index + 1);
+      }
+    });
+    
+    if (invalidIndices.length > 0) {
+      positions.push(`${container.title} 的第 ${invalidIndices.join('、')} 块`);
+    }
+  }
+  
+  return positions;
 }
 
-function getAnnotationOnlyBlockNumbers(input: EvaluationInput) {
-  return input.textBlocks
-    .filter(
-      (block) => isContentSourceEmpty(block.content) && block.annotations.some((annotation) => !isTextAnnotationEmpty(annotation)),
-    )
-    .map((block) => block.number);
-}
-
-function formatBlockNumbers(blockNumbers: number[]) {
-  return blockNumbers.join('、');
+/**
+ * 获取仅有批注的块的位置信息
+ */
+function getAnnotationOnlyBlockPositions(input: EvaluationInput) {
+  const positions: string[] = [];
+  
+  for (const container of input.containers) {
+    const annotationOnlyIndices: number[] = [];
+    container.textBlocks.forEach((block, index) => {
+      if (isContentSourceEmpty(block.content) && block.annotations.some((annotation) => !isTextAnnotationEmpty(annotation))) {
+        annotationOnlyIndices.push(index + 1);
+      }
+    });
+    
+    if (annotationOnlyIndices.length > 0) {
+      positions.push(`${container.title} 的第 ${annotationOnlyIndices.join('、')} 块`);
+    }
+  }
+  
+  return positions;
 }
 
 export function validateEvaluationInput(input: EvaluationInput, options: ValidationOptions = {}):
@@ -165,16 +180,16 @@ export function validateEvaluationInput(input: EvaluationInput, options: Validat
       };
     }
 
-    const invalidBlockNumbers = getInvalidBlockNumbers(result.data);
-    if (invalidBlockNumbers.length > 0) {
-      const annotationOnlyBlockNumbers = getAnnotationOnlyBlockNumbers(result.data);
-      const emptyBlockMessage = `文本块 ${formatBlockNumbers(invalidBlockNumbers)} 的正文为空，请填写正文或删除这些文本块后再提交。`;
+    const invalidBlockPositions = getInvalidBlockPositions(result.data);
+    if (invalidBlockPositions.length > 0) {
+      const annotationOnlyPositions = getAnnotationOnlyBlockPositions(result.data);
+      const emptyBlockMessage = `${invalidBlockPositions.join('、')} 的正文为空，请填写正文或删除这些文本块后再提交。`;
 
       return {
         success: false,
         errors: {
           textBlocks:
-            annotationOnlyBlockNumbers.length > 0
+            annotationOnlyPositions.length > 0
               ? `${emptyBlockMessage} 批注不能脱离正文单独提交。`
               : emptyBlockMessage,
         },

@@ -22,23 +22,35 @@ import { useTextBlocksEditor } from '@/features/text-blocks/hooks/useTextBlocksE
 
 type TextBlocksEditorProps = {
   title?: string;
-  description?: string;
+  /** 副标题（可选，显示在主标题下方） */
+  subtitle?: string;
+  /**
+   * 提示词（可选，对用户不可见）
+   * 仅用于生成用户文本元数据时在对应容器属性中增加一个字符串字段
+   */
+  prompt?: string;
   textBlocks: TextBlock[];
   enableFileUpload?: boolean;
   enableAnnotations?: boolean;
-  fixedBlockType?: string;
   defaultExpanded?: boolean;
+  /**
+   * 最大文本块数量（可选）
+   * - 未配置或为 undefined 时：无限制（默认）
+   * - 配置后：达到上限时隐藏"添加更多"按钮，不影响已有块
+   */
+  maxBlockCount?: number;
   onTextBlocksChange: (value: TextBlock[]) => void;
 };
 
 export default function TextBlocksEditor({
   title = '文本输入',
-  description,
+  subtitle,
+  prompt,
   textBlocks,
   enableFileUpload = true,
   enableAnnotations = true,
-  fixedBlockType,
   defaultExpanded = true,
+  maxBlockCount,
   onTextBlocksChange,
 }: TextBlocksEditorProps) {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -49,7 +61,6 @@ export default function TextBlocksEditor({
     addBlock,
     removeBlock,
     changeBlockTitle,
-    changeBlockType,
     addAnnotation,
     removeAnnotation,
     handleTextInput,
@@ -60,7 +71,6 @@ export default function TextBlocksEditor({
   } = useTextBlocksEditor({
     textBlocks,
     onTextBlocksChange,
-    fixedBlockType,
   });
 
   const handleConfirmDelete = () => {
@@ -70,11 +80,18 @@ export default function TextBlocksEditor({
     }
   };
 
+  // 计算是否可以添加更多块
+  const canAddMoreBlocks = maxBlockCount === undefined || textBlocks.length < maxBlockCount;
+
+  // prompt 存储在组件中，供后续元数据生成使用
+  // 当前组件不直接使用，但保留参数以便外部访问
+  void prompt; // 显式标记为已使用
+
   return (
     <>
       <CollapsiblePanel
         title={title}
-        subtitle={description}
+        subtitle={subtitle}
         defaultExpanded={defaultExpanded}
       >
         <div className="space-y-0">
@@ -87,11 +104,10 @@ export default function TextBlocksEditor({
               <div key={block.id} className="animate-slide-down">
                 <TextBlockCard
                   block={block}
+                  index={index}
                   enableFileUpload={enableFileUpload}
                   enableAnnotations={enableAnnotations}
-                  fixedBlockType={fixedBlockType}
                   onTitleChange={(value: string) => changeBlockTitle(block.id, value)}
-                  onBlockTypeChange={(value) => changeBlockType(block.id, value)}
                   onRemoveBlock={() => setDeleteTargetId(block.id)}
                   onBlockTextInput={(value: string) => handleTextInput(block.id, value)}
                   onBlockFileChange={(nextFile: TextBlockAttachment | null) => handleFileChange(block.id, nextFile)}
@@ -107,34 +123,36 @@ export default function TextBlocksEditor({
                     canApplyFileChange(block.id, nextFile, annotationId)
                   }
                 />
-                {/* 文本块分隔线 + 新增按钮 */}
+                {/* 文本块分隔线 + 新增按钮（仅在未达上限时显示） */}
                 {index < textBlocks.length - 1 ? (
                   <div className="border-t-3 border-border/100 my-1" />
                 ) : (
-                  <div className="border-t-3 border-border/100 py-3 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={addBlock}
-                      className={cn(
-                        'flex items-center justify-center gap-2 rounded-lg',
-                        'bg-muted/50 transition-all duration-200',
-                        'h-10 px-6',
-                        'text-muted-foreground hover:bg-muted hover:text-primary',
-                        'select-none',
-                      )}
-                      title="添加文本块"
-                    >
-                      <Plus className="h-5 w-5" />
-                      <span className="text-sm">添加文本块</span>
-                    </button>
-                  </div>
+                  canAddMoreBlocks && (
+                    <div className="border-t-3 border-border/100 py-3 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={addBlock}
+                        className={cn(
+                          'flex items-center justify-center gap-2 rounded-lg',
+                          'bg-muted/50 transition-all duration-200',
+                          'h-10 px-6',
+                          'text-muted-foreground hover:bg-muted hover:text-primary',
+                          'select-none',
+                        )}
+                        title="添加文本块"
+                      >
+                        <Plus className="h-5 w-5" />
+                        <span className="text-sm">添加文本块</span>
+                      </button>
+                    </div>
+                  )
                 )}
               </div>
             ))
           )}
 
-          {/* 当没有文本块时，显示新增按钮 */}
-          {textBlocks.length === 0 && (
+          {/* 当没有文本块时，显示新增按钮（仅在未达上限时显示） */}
+          {textBlocks.length === 0 && canAddMoreBlocks && (
             <div className="flex justify-center py-8">
               <button
                 type="button"

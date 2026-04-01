@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import { showError } from '@/lib/alert';
 import { MAX_BLOCK_CONTENT_LENGTH } from '@/lib/textBlocks';
-import type { TextBlock, TextBlockAttachment, TextBlockType } from '@/types/report';
+import type { TextBlock, TextBlockAttachment } from '@/types/report';
 import {
   buildNextBlocks,
   createAnnotation,
   createTextBlock,
   findCurrentContent,
-  getNextBlockNumber,
   type PendingTextChange,
   toTextContent,
   updateBlock,
@@ -18,37 +18,19 @@ import {
   isWithinPlainTextLimit,
   isWithinRenderedTextLimit,
   shouldConfirmOverflow,
-} from '@/features/text-blocks/lib/textBlockLength';
+} from '@/lib/textBlocks';
 
 type UseTextBlocksEditorOptions = {
   textBlocks: TextBlock[];
   onTextBlocksChange: (value: TextBlock[]) => void;
-  fixedBlockType?: string;
 };
 
-export function useTextBlocksEditor({ textBlocks, onTextBlocksChange, fixedBlockType }: UseTextBlocksEditorOptions) {
-  const nextBlockNumberRef = useRef(getNextBlockNumber(textBlocks));
+export function useTextBlocksEditor({ textBlocks, onTextBlocksChange }: UseTextBlocksEditorOptions) {
   const [pendingTextChange, setPendingTextChange] = useState<PendingTextChange | null>(null);
   const [hasConfirmedOverflow, setHasConfirmedOverflow] = useState(false);
 
-  useEffect(() => {
-    nextBlockNumberRef.current = Math.max(nextBlockNumberRef.current, getNextBlockNumber(textBlocks));
-  }, [textBlocks]);
-
-  useEffect(() => {
-    if (isWithinPlainTextLimit(textBlocks)) {
-      setHasConfirmedOverflow(false);
-    }
-  }, [textBlocks]);
-
   const alertUser = (message: string) => {
-    window.alert(message);
-  };
-
-  const allocateBlockNumber = () => {
-    const nextNumber = Math.max(nextBlockNumberRef.current, getNextBlockNumber(textBlocks));
-    nextBlockNumberRef.current = nextNumber + 1;
-    return nextNumber;
+    showError(message);
   };
 
   const applyTextBlocks = (nextBlocks: TextBlock[]) => {
@@ -82,15 +64,6 @@ export function useTextBlocksEditor({ textBlocks, onTextBlocksChange, fixedBlock
       updateBlock(textBlocks, blockId, (current: TextBlock) => ({
         ...current,
         title,
-      })),
-    );
-  };
-
-  const changeBlockType = (blockId: string, blockType: TextBlockType) => {
-    applyTextBlocks(
-      updateBlock(textBlocks, blockId, (current: TextBlock) => ({
-        ...current,
-        blockType,
       })),
     );
   };
@@ -139,7 +112,7 @@ export function useTextBlocksEditor({ textBlocks, onTextBlocksChange, fixedBlock
   };
 
   const addBlock = () => {
-    applyTextBlocks([...textBlocks, createTextBlock(allocateBlockNumber(), fixedBlockType)]);
+    applyTextBlocks([...textBlocks, createTextBlock()]);
   };
 
   const removeBlock = (blockId: string) => {
@@ -193,7 +166,6 @@ export function useTextBlocksEditor({ textBlocks, onTextBlocksChange, fixedBlock
     addBlock,
     removeBlock,
     changeBlockTitle,
-    changeBlockType,
     addAnnotation,
     removeAnnotation,
     handleTextInput,

@@ -45,13 +45,36 @@ export interface ModelConfigStore {
   saveState(state: ApiConfigStoreState): void;
 }
 
+// Chat Completions 请求体（OpenAI 格式）
+export interface ChatCompletionsRequest {
+  model: string;
+  messages: Array<{
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+  }>;
+  stream?: boolean;
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+  [key: string]: unknown;
+}
+
+// Chat Completions 结果
+export interface ChatCompletionsResult {
+  success: boolean;
+  error?: AppErrorPayload;
+  response?: Response;
+}
+
 export interface ModelConfigProvider {
   validateAndFetchModels(baseUrl: string, apiKey: string): Promise<ConfigValidationResult>;
+  chatCompletions(baseUrl: string, apiKey: string, body: ChatCompletionsRequest): Promise<ChatCompletionsResult>;
 }
 
 export interface ModelListResponse {
   data?: Array<{
     id: string;
+    name?: string;
     description?: string;
   }>;
 }

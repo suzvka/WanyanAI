@@ -1,8 +1,11 @@
 import 'server-only';
 
-import type { PublishedOpsConfig } from './types';
+import type { PlatformConfig } from '@/types/platform';
 
-export function createFallbackOpsConfig(): PublishedOpsConfig {
+/**
+ * 创建 fallback 平台配置
+ */
+export function createFallbackPlatformConfig(): PlatformConfig {
   return {
     source: 'fallback',
     manifest: {
@@ -10,39 +13,6 @@ export function createFallbackOpsConfig(): PublishedOpsConfig {
       publishedAt: new Date(0).toISOString(),
       publishedBy: 'system',
       environment: 'local',
-    },
-    site: {
-      home: {
-        title: '观者AI AudienceAI',
-        subtitle: '',
-      },
-      inputPanel: {
-        title: '文本输入',
-        description: '支持多个文本块及块内批注。',
-      },
-      settingsPanel: {
-        title: '分析设置',
-        description: '当前未加载动态分析配置，将使用系统默认值。',
-      },
-      progress: {
-        runningTitle: '正在准备客户端分析请求...',
-        runningDescription: '服务端仅返回提示词模板，最终提示词拼接与模型调用均在浏览器内完成。',
-      },
-    },
-    featureFlags: {
-      enableFileUpload: true,
-      enableAnnotations: true,
-    },
-    analysisControls: {
-      groups: [
-        {
-          id: 'default',
-          title: '分析设置',
-          enabled: true,
-          controls: [],
-        },
-      ],
-      controls: [],
     },
     appearance: {
       brand: {
@@ -61,6 +31,10 @@ export function createFallbackOpsConfig(): PublishedOpsConfig {
           dark: 0.1,
         },
       },
+    },
+    featureFlags: {
+      enableFileUpload: true,
+      enableAnnotations: true,
     },
   };
 }

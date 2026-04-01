@@ -158,7 +158,7 @@
   --muted-foreground: oklch(0.708 0 0);
   --accent: color-mix(in oklab, var(--theme-primary) 10%, var(--background));
   --accent-foreground: var(--foreground);
-  --destructive: var(--report-danger);
+  --destructive: var(--report-score-dark-red);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -185,6 +185,8 @@
   --report-score-green-soft: color-mix(in oklab, var(--report-score-green) 18%, transparent);
   --report-score-dark-red: oklch(0.68 0.15 28);
   --report-score-dark-red-soft: color-mix(in oklab, var(--report-score-dark-red) 18%, transparent);
+  --report-danger: var(--report-score-dark-red);
+  --report-danger-soft: var(--report-score-dark-red-soft);
   --report-neutral: color-mix(in oklab, var(--theme-primary) 34%, var(--foreground));
   --report-neutral-soft: color-mix(in oklab, var(--theme-primary) 8%, transparent);
   --report-score-high: var(--report-score-gold);
@@ -633,4 +635,13 @@ body {
   .animate-fade-in {
     animation: fadeIn 0.3s ease-out;
   }
+}
+
+/* Sonner Toast 错误提示样式强化 */
+.toaster [data-sonner-toast][data-type="error"] {
+  border: 2px solid var(--destructive) !important;
+}
+
+.toaster [data-sonner-toast][data-type="error"] [data-icon] {
+  color: var(--destructive) !important;
 }

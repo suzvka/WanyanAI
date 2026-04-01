@@ -32,6 +32,7 @@ interface CollapsiblePanelProps {
  * - 内容区：应用主题色派生的柔和底色，高透明 + 高斯模糊
  * - 标题栏高度与"开始分析"按钮一致 (h-14)
  * - 支持平滑的折叠/展开动画 (通过 CSS Grid 实现)
+ * - 边框跟随内容同步过渡
  */
 export default function CollapsiblePanel({
   title,
@@ -57,6 +58,8 @@ export default function CollapsiblePanel({
         'rounded-xl overflow-hidden',
         // 边框和阴影
         'border border-border shadow-sm',
+        // 边框过渡动画
+        'transition-all duration-[280ms] ease-[cubic-bezier(0.16,1,0.3,1)]',
         className,
       )}
     >
@@ -68,22 +71,28 @@ export default function CollapsiblePanel({
         <div
           className={cn(
             'flex h-14 items-center justify-between px-4',
-            'bg-background border-b border-border',
-            'transition-colors duration-200 ease-out',
+            'bg-background',
+            // 边框过渡：折叠时透明度渐变
+            'border-b border-border transition-all duration-[280ms] ease-[cubic-bezier(0.16,1,0.3,1)]',
+            // 展开时显示下边框，折叠时隐藏
+            isExpanded ? 'border-b-border' : 'border-b-transparent',
             !disabled && 'cursor-pointer hover:bg-[color:var(--report-surface-strong)] select-none',
             disabled && 'cursor-default select-none',
             headerClassName,
           )}
         >
           {/* 左侧标题区 */}
-          <div className="flex flex-col justify-center gap-0.5 min-w-0 select-none">
+          <div className="flex items-center gap-2 min-w-0 select-none">
             {hasTitle && (
               <span className="text-lg font-semibold leading-tight truncate text-foreground">
                 {title}
               </span>
             )}
+            {hasTitle && hasSubtitle && (
+              <span className="text-muted-foreground select-none">·</span>
+            )}
             {hasSubtitle && (
-              <span className="text-xs text-muted-foreground leading-tight truncate">
+              <span className="text-sm text-muted-foreground leading-tight truncate">
                 {subtitle}
               </span>
             )}
@@ -95,7 +104,7 @@ export default function CollapsiblePanel({
             {!disabled && (
               <ChevronDown
                 className={cn(
-                  'h-4 w-4 text-muted-foreground transition-transform duration-200 ease-out',
+                  'h-4 w-4 text-muted-foreground transition-transform duration-[280ms] ease-[cubic-bezier(0.16,1,0.3,1)]',
                   isExpanded && 'rotate-180',
                 )}
               />

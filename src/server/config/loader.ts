@@ -2,50 +2,41 @@ import 'server-only';
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { getCachedOpsConfig, setCachedOpsConfig } from './cache';
-import { createFallbackOpsConfig } from './fallback';
-import {
-  analysisControlsSchema,
-  appearanceSchema,
-  featureFlagsSchema,
-  manifestSchema,
-  siteSchema,
-  validatePublishedOpsConfig,
-} from './schemas';
+import { getCachedPlatformConfig, setCachedPlatformConfig } from './cache';
+import { createFallbackPlatformConfig } from './fallback';
+import { validatePlatformConfig, platformManifestSchema, appearanceSchema, featureFlagsSchema } from './schemas';
 
-const publishedConfigDir = path.join(process.cwd(), 'ops-config', 'published');
+const configDir = path.join(process.cwd(), 'ops-config');
 
 async function readJsonFile<T>(fileName: string): Promise<T> {
-  const content = await readFile(path.join(publishedConfigDir, fileName), 'utf-8');
+  const content = await readFile(path.join(configDir, fileName), 'utf-8');
   return JSON.parse(content) as T;
 }
 
-export async function getPublishedOpsConfig() {
-  const cached = getCachedOpsConfig();
+/**
+ * 获取平台配置
+ */
+export async function getPlatformConfig() {
+  const cached = getCachedPlatformConfig();
   if (cached) {
     return cached;
   }
 
   try {
-    const [manifest, site, featureFlags, analysisControls, appearance] = await Promise.all([
+    const [manifest, appearance, featureFlags] = await Promise.all([
       readJsonFile('manifest.json'),
-      readJsonFile('site.json'),
-      readJsonFile('feature-flags.json'),
-      readJsonFile('analysis-controls.json'),
       readJsonFile('appearance.json'),
+      readJsonFile('feature-flags.json'),
     ]);
 
-    const config = validatePublishedOpsConfig({
-      manifest: manifestSchema.parse(manifest),
-      site: siteSchema.parse(site),
-      featureFlags: featureFlagsSchema.parse(featureFlags),
-      analysisControls: analysisControlsSchema.parse(analysisControls),
+    const config = validatePlatformConfig({
+      manifest: platformManifestSchema.parse(manifest),
       appearance: appearanceSchema.parse(appearance),
+      featureFlags: featureFlagsSchema.parse(featureFlags),
     });
 
-    return setCachedOpsConfig(config);
-  } catch (error) {
-    console.error('Failed to load published operations config:', error);
-    return setCachedOpsConfig(createFallbackOpsConfig());
+    return setCachedPlatformConfig(config);
+  } catch {
+    return setCachedPlatformConfig(createFallbackPlatformConfig());
   }
 }

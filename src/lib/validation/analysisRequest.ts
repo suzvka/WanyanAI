@@ -3,6 +3,7 @@ import { evaluationGoalValues } from '@/config/evaluationDimensions';
 
 export const promptFrameworkCompileRequestSchema = z.object({
   evaluationGoal: z.enum(evaluationGoalValues),
+  outputMode: z.string().optional(),
 });
 
 export function validatePromptTemplateRequest(input: unknown) {

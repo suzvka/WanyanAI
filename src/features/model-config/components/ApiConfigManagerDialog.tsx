@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, CheckCircle2, ChevronDown, Loader2, Plus, Settings } from 'lucide-react';
+import { Check, CheckCircle2, ChevronDown, Loader2, Plus, Server, Settings, ToggleLeft, ToggleRight } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import type { ApiConfigDraft, ApiConfigRecord } from '@/types/modelConfig';
+import type { ApiConfigDraft, ApiConfigRecord, ApiConfigValidationStatus, ModelInfo } from '@/types/modelConfig';
 import ApiConfigEditor from './ApiConfigEditor';
 
 interface ApiConfigManagerDialogProps {
@@ -41,6 +41,14 @@ interface ApiConfigManagerDialogProps {
   onCreateConfig: (value: ApiConfigDraft) => Promise<void> | void;
   onUpdateConfig: (configId: string, value: ApiConfigDraft) => Promise<void> | void;
   onDeleteConfig: (configId: string) => Promise<void> | void;
+  // 内置模式
+  useBuiltInMode: boolean;
+  setUseBuiltInMode: (value: boolean) => void;
+  builtInModels: ModelInfo[];
+  builtInSelectedModel: string | null;
+  builtInValidationStatus: ApiConfigValidationStatus;
+  onSelectBuiltInModel: (modelId: string) => void;
+  onRefreshBuiltInModels: () => Promise<void>;
 }
 
 function getStatusBadgeVariant(status: ApiConfigRecord['lastValidationStatus']) {
@@ -77,7 +85,18 @@ export default function ApiConfigManagerDialog({
   onCreateConfig,
   onUpdateConfig,
   onDeleteConfig,
+  // 内置模式
+  useBuiltInMode,
+  setUseBuiltInMode,
+  builtInModels,
+  builtInSelectedModel,
+  builtInValidationStatus,
+  onSelectBuiltInModel,
+  onRefreshBuiltInModels,
 }: ApiConfigManagerDialogProps) {
+  // useCustomEndpoint = !useBuiltInMode（开关控制是否使用自定义端点）
+  const useCustomEndpoint = !useBuiltInMode;
+
   // 展开的配置 ID（null 表示新建模式，undefined 表示无展开）
   const [expandedConfigId, setExpandedConfigId] = useState<string | null | undefined>(undefined);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -165,9 +184,57 @@ export default function ApiConfigManagerDialog({
               API 配置管理
             </DialogTitle>
             <DialogDescription>
-              点击卡片展开编辑，点击标题栏的选择按钮切换当前使用的配置。
+              {useCustomEndpoint
+                ? ''
+                : ''}
             </DialogDescription>
           </DialogHeader>
+
+          {/* 端点切换开关 */}
+          <div className="border-b bg-muted/30 px-4 py-3 sm:px-6">
+            <button
+              type="button"
+              onClick={() => setUseBuiltInMode(useCustomEndpoint)}
+              className={cn(
+                'flex w-full items-center justify-between rounded-lg p-2 transition-colors',
+                'hover:bg-muted/50'
+              )}
+            >
+              <div className="flex items-center gap-2">
+                {useCustomEndpoint ? (
+                  <ToggleRight className="h-5 w-5 text-primary" />
+                ) : (
+                  <ToggleLeft className="h-5 w-5 text-muted-foreground" />
+                )}
+                <span className="text-sm font-medium">使用自定义端点</span>
+              </div>
+              <span className={cn(
+                'text-xs',
+                useCustomEndpoint ? 'text-primary' : 'text-muted-foreground'
+              )}>
+                {useCustomEndpoint ? '已开启' : '已关闭'}
+              </span>
+            </button>
+          </div>
+
+          {/* 站内模型提示 */}
+          {!useCustomEndpoint && (
+            <div className="px-4 py-8 sm:px-6">
+              <div className="flex flex-col items-center justify-center gap-4 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                  <Server className="h-8 w-8 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium">站内端点激活</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    已提供站内模型，请查看模型选择器
+                    <br />
+                    如需使用自定义 API 端点，请开启上方的开关。
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 验证中的遮罩层 */}
           {busy && (
@@ -186,7 +253,9 @@ export default function ApiConfigManagerDialog({
             </div>
           )}
 
-          <ScrollArea className="h-[60vh] max-h-[560px] px-4 py-4 sm:px-6">
+          {/* 自定义端点配置列表 */}
+          {useCustomEndpoint && (
+            <ScrollArea className="h-[60vh] max-h-[560px] px-4 py-4 sm:px-6">
             <div className="space-y-3">
               {configs.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
@@ -241,16 +310,16 @@ export default function ApiConfigManagerDialog({
                               )}
                             </div>
                             <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                              <span className="truncate">{config.baseUrl}</span>
+                              <span className="max-w-[120px] truncate">{config.baseUrl}</span>
                               <span>·</span>
                               <Badge
                                 variant={getStatusBadgeVariant(config.lastValidationStatus)}
-                                className="px-1.5 py-0 text-[10px]"
+                                className="shrink-0 px-1.5 py-0 text-[10px]"
                               >
                                 {getStatusLabel(config.lastValidationStatus)}
                               </Badge>
                               <span>·</span>
-                              <span>{config.modelsCache.length} 个模型</span>
+                              <span className="shrink-0 whitespace-nowrap">{config.modelsCache.length} 个模型</span>
                             </div>
                           </div>
 
@@ -336,6 +405,7 @@ export default function ApiConfigManagerDialog({
               )}
             </div>
           </ScrollArea>
+          )}
         </DialogContent>
       </Dialog>
 

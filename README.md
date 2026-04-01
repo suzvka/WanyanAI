@@ -1,56 +1,70 @@
-# projects
+# AudienceAI
 
-这是一个基于 [Next.js 16](https://nextjs.org) + [shadcn/ui](https://ui.shadcn.com) 的全栈应用项目。
+这是一个基于 [Next.js 16](https://nextjs.org) + [shadcn/ui](https://ui.shadcn.com) 的模块化文本评估应用。项目使用 `pnpm` 管理依赖，并通过 `src/server.ts` 启动自定义 Node.js Server 承载 Next.js。
 
 ## 快速开始
 
 ### 启动开发服务器
 
 ```bash
-coze dev
+pnpm install
+pnpm dev
 ```
 
 启动后，在浏览器中打开 [http://localhost:5000](http://localhost:5000) 查看应用。
 
 开发服务器支持热更新，修改代码后页面会自动刷新。
 
+> 当前 `package.json` 中的脚本实际调用 `bash ./scripts/*.sh`。本地运行需具备兼容 `bash` 的环境（例如 Git Bash、WSL 或类 Unix 环境）。
+
 ### 构建生产版本
 
 ```bash
-coze build
+pnpm build
 ```
 
 ### 启动生产服务器
 
 ```bash
-coze start
+pnpm start
 ```
 
 ## 项目结构
 
 ```
 src/
-├── app/                      # Next.js App Router 目录
-│   ├── layout.tsx           # 根布局组件
-│   ├── page.tsx             # 首页
-│   ├── globals.css          # 全局样式（包含 shadcn 主题变量）
-│   └── [route]/             # 其他路由页面
-├── components/              # React 组件目录
-│   └── ui/                  # shadcn/ui 基础组件（优先使用）
-│       ├── button.tsx
-│       ├── card.tsx
-│       └── ...
-├── lib/                     # 工具函数库
-│   └── utils.ts            # cn() 等工具函数
-└── hooks/                   # 自定义 React Hooks（可选）
+├── app/                                 # Next.js App Router 目录
+│   ├── (landing)/page.tsx               # 首页
+│   ├── (evaluate)/evaluate/[moduleId]/page.tsx  # 模块评估页
+│   ├── api/instructions/compile/route.ts        # 动态指令编译 API
+│   ├── api/templates/compile/route.ts           # 模板编译 API
+│   ├── globals.css                       # 全局样式
+│   └── layout.tsx                        # 根布局组件
+├── components/                           # React 组件目录
+├── containers/                           # 页面容器注册与渲染
+├── features/                             # 业务功能模块
+├── lib/                                  # 工具函数库
+├── server/                               # 服务端配置、模块与指令逻辑
+└── server.ts                             # 自定义 Node.js Server 入口
+
+app-modules/
+└── <module-id>/                          # 评估模块目录
+    ├── main.json                         # 模块注册信息（必需）
+    ├── site.json                         # 模块文案配置（可选）
+    └── analysis-controls.json            # 分析选项与 promptText（可选）
 
 ops-config/
-└── prompt-blocks/           # 系统提示词块目录（按文件名顺序拼接）
+├── manifest.json                         # 平台配置版本信息
+├── appearance.json                       # 品牌与主题配置
+├── feature-flags.json                    # 平台功能开关
+└── prompt-blocks/                        # 预留目录，当前运行时未接入
 
-server/
-├── index.ts                 # 自定义服务器入口
-├── tsconfig.json           # Server TypeScript 配置
-└── dist/                    # 编译输出目录（自动生成）
+scripts/
+├── dev.sh
+├── build.sh
+└── start.sh
+
+dist/                                     # 生产构建后的服务端输出目录
 ```
 
 ## 核心开发规范
@@ -302,26 +316,26 @@ export default function ClientComponent() {
 }
 ```
 
-### 7. 系统提示词块
+### 7. 平台配置与动态指令
 
-系统提示词通过 `ops-config/prompt-blocks/` 目录下的多个 Markdown 文件进行热更新管理。
+当前程序运行时使用两级配置：
 
-- 使用 `.md` 文件
-- **第一行是标题**，其余内容为正文
-- 最终组装时保留 Markdown 形式，例如 `# 标题`
-- **完全按文件名字典序** 拼接，不引入额外元数据
-- **全空文件会跳过**
-- **只有标题没有正文的文件允许正常组装**
+- 平台级配置位于 `ops-config/`
+  - `manifest.json`：配置版本与环境信息
+  - `appearance.json`：品牌名称、口号、主题色
+  - `feature-flags.json`：平台级功能开关
+- 模块级配置位于 `app-modules/<module-id>/`
+  - `main.json`：模块 ID、路由、侧栏入口、容器声明、输出模式
+  - `site.json`：输入页与进度文案
+  - `analysis-controls.json`：分析选项、默认值与各选项对应的 `promptText`
 
-推荐使用数字前缀控制顺序，例如：
+动态指令的当前实现方式：
 
-```text
-ops-config/prompt-blocks/
-├── 010-task-overview.md
-├── 020-execution-guide.md
-├── 030-core-scoring.md
-└── 040-report-format.md
-```
+- 页面根据模块的 `analysis-controls.json` 渲染分析选项
+- 用户选择后，请求 `/api/instructions/compile`
+- 服务端将所选项对应的 `promptText` 按顺序拼接成最终动态指令
+
+`ops-config/prompt-blocks/` 目录当前为预留目录，运行时尚未直接使用该目录组装提示词。
 
 ## 常见开发场景
 
@@ -330,6 +344,14 @@ ops-config/prompt-blocks/
 1. 在 `src/app/` 下创建文件夹和 `page.tsx`
 2. 使用 shadcn 组件构建 UI
 3. 根据需要添加 `layout.tsx` 和 `loading.tsx`
+
+### 添加新评估模块
+
+1. 在 `app-modules/` 下创建新的独立目录
+2. 添加 `main.json` 作为模块注册信息
+3. 按需添加 `site.json` 与 `analysis-controls.json`
+4. 在 `main.json` 中声明 `route`、`sidebar`、`containers` 与 `outputMode`
+5. 页面会在运行时自动扫描并加载包含 `main.json` 的模块目录
 
 ### 创建业务组件
 
@@ -363,11 +385,12 @@ export const useStore = create<Store>((set) => ({
 ## 技术栈
 
 - **框架**: Next.js 16.1.1 (App Router)
+- **服务端入口**: 自定义 Node.js Server (`src/server.ts`)
 - **UI 组件**: shadcn/ui (基于 Radix UI)
 - **样式**: Tailwind CSS v4
 - **表单**: React Hook Form + Zod
 - **图标**: Lucide React
-- **字体**: Geist Sans & Geist Mono
+- **字体**: `next/font/google` 的 `Inter`
 - **包管理器**: pnpm 9+
 - **TypeScript**: 5.x
 
@@ -386,3 +409,5 @@ export const useStore = create<Store>((set) => ({
 4. **使用 TypeScript** 进行类型安全开发
 5. **使用 `@/` 路径别名** 导入模块（已配置）
 6. **颜色统一规则**：除黑白外，其余颜色应从单一主题色派生，优先通过 CSS 变量和语义 token 表达
+7. **新增评估能力优先走模块配置**：复用 `app-modules/<module-id>/` 下的 `main.json`、`site.json`、`analysis-controls.json`
+8. **动态指令当前来自 `analysis-controls.json` 的 `promptText`**，而不是 `ops-config/prompt-blocks/`

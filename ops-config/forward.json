@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "rateLimit": {
+    "globalMaxCallsPerMinute": 1000,
+    "browserMaxCallsPerHour": 10
+  },
+  "models": [
+    {
+      "id": "deepseek-chat",
+      "displayName": "DeepSeek",
+      "minPermissionLevel": 1,
+      "maxCallsPerHour": 100,
+      "targetBaseUrl": "https://api.deepseek.com/v1",
+      "targetApiKey": "sk-6a08b5ace0924e86a305c663d680e0d2"
+    },
+    {
+      "id": "qwen3-235b-a22b-instruct-2507",
+      "displayName": "Qwen3",
+      "minPermissionLevel": 1,
+      "maxCallsPerHour": 100,
+      "targetBaseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "targetApiKey": "sk-86e434f06a40442c9a90afce8178f161"
+    }
+  ]
+}

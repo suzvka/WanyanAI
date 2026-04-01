@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getPublishedOpsConfig } from '@/server/config';
+import { getModuleById } from '@/server/modules';
 import { createAppError } from '@/types/errors';
 import type { CompileInstructionsRequest, CompileInstructionsSuccessResponse } from '@/types/instructions';
 
@@ -23,9 +23,10 @@ function createInvalidControlSelectionError() {
 export async function compileDynamicInstructions(
   request: CompileInstructionsRequest,
 ): Promise<CompileInstructionsSuccessResponse> {
-  const opsConfig = await getPublishedOpsConfig();
+  // configVersion 现在是 moduleId
+  const moduleConfig = await getModuleById(request.configVersion);
 
-  if (request.configVersion !== opsConfig.manifest.configVersion) {
+  if (!moduleConfig) {
     throw createStaleConfigError();
   }
 
@@ -33,7 +34,7 @@ export async function compileDynamicInstructions(
   const instructionParts: string[] = [];
 
   for (const [controlId, selectedValue] of Object.entries(request.controlSelections)) {
-    const control = opsConfig.analysisControls.controls.find(
+    const control = moduleConfig.analysisControls.controls.find(
       (item) => item.id === controlId && item.enabled,
     );
     if (!control) {
@@ -54,6 +55,6 @@ export async function compileDynamicInstructions(
   return {
     instructionText: instructionParts.join('\n'),
     resolvedSelections,
-    configVersion: opsConfig.manifest.configVersion,
+    configVersion: moduleConfig.manifest.id,
   };
 }

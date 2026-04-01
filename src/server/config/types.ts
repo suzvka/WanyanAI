@@ -35,6 +35,8 @@ export type AnalysisControlOptionConfig = {
   label: string;
   promptText: string;
   enabled: boolean;
+  /** 自定义字段（渲染器可声明需要哪些字段） */
+  [key: string]: unknown;
 };
 
 export type AnalysisControlConfig = {
@@ -81,16 +83,23 @@ export type SiteConfig = {
   };
 };
 
-export type OpsConfigManifest = {
+/**
+ * 平台版本信息
+ */
+export type PlatformManifest = {
   configVersion: string;
   publishedAt: string;
   publishedBy: string;
   environment: 'production' | 'staging' | 'local';
 };
 
+/**
+ * 平台配置（已废弃，请使用 PlatformConfig from @/types/platform）
+ * @deprecated 使用 PlatformConfig 替代
+ */
 export type PublishedOpsConfig = {
   source: 'published' | 'fallback';
-  manifest: OpsConfigManifest;
+  manifest: PlatformManifest;
   site: SiteConfig;
   featureFlags: FeatureFlagsConfig;
   analysisControls: AnalysisControlsConfig;

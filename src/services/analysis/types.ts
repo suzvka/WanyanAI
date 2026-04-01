@@ -1,15 +1,7 @@
-import { AnalysisPhase, AnalysisStatus } from '@/types/appFlow';
-import { AnalysisResult, PromptTemplateRequest, PromptTemplateResource } from '@/types/analysis';
-import { ModelConfig } from '@/types/modelConfig';
-import { EvaluationInput } from '@/types/report';
+import type { AnalysisPhase, AnalysisStatus } from '@/types/appFlow';
+import type { PromptTemplateRequest, PromptTemplateResource } from '@/types/analysis';
 
 export type AnalysisStage = AnalysisPhase;
-
-export type BoundControlLabels = {
-  textTypeLabel: string;
-  textCompletenessLabel: string;
-  evaluationGoalLabel: string;
-};
 
 export type AnalysisProgressUpdate = {
   stage: AnalysisStage;
@@ -17,18 +9,6 @@ export type AnalysisProgressUpdate = {
   status?: Extract<AnalysisStatus, 'running' | 'recovering'>;
 };
 
-export type GenerateReportOptions = {
-  input: EvaluationInput;
-  modelConfig: ModelConfig;
-  controlLabels: BoundControlLabels;
-  instructionText?: string;
-  onProgress?: (update: AnalysisProgressUpdate) => void;
-};
-
 export interface PromptTemplateService {
   getTemplate(request: PromptTemplateRequest): Promise<PromptTemplateResource>;
-}
-
-export interface AnalysisService {
-  generateReport(options: GenerateReportOptions): Promise<AnalysisResult>;
 }

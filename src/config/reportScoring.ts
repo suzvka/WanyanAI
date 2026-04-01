@@ -20,11 +20,11 @@ export const reportRatingBaseScores: Record<ReportRating, number> = {
 
 export const reportWeightMultiplier = 4;
 
-export const reportSubscoreCount = 6;
+/** 中性乘子（幂次映射的锚点） */
+export const reportNeutralMultiplier = 1;
 
-export function calculateMaximumReportScore(
-	weightMultiplier = reportWeightMultiplier,
-	subscoreCount = reportSubscoreCount,
-) {
-	return reportRatingBaseScores.S * weightMultiplier * subscoreCount;
-}
+/** 基准分（中性状态下S级的分数） */
+export const reportBaseScore = 20;
+
+/** 最高基础分（用于归一化） */
+export const reportMaxBaseScore = 5;

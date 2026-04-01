@@ -1,11 +1,13 @@
 'use client';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Label } from '@/components/ui/label';
 import CollapsiblePanel from '@/components/ui/collapsible-panel';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sparkles } from 'lucide-react';
 import type { AnalysisControlConfig, AnalysisControlGroupConfig } from '@/server/config/types';
+
+/** 下拉菜单固定宽度 */
+const SELECT_FIXED_WIDTH = '200px';
 
 type AnalysisControlsPanelProps = {
   title?: string;
@@ -38,25 +40,37 @@ export default function AnalysisControlsPanel({
         {groups && groups.length > 0 ? (
           <div className="space-y-6">
             {groups.map((group, groupIndex) => (
-              <div key={group.id} className="space-y-4 rounded-lg border border-[color:var(--report-border)] bg-[color:var(--report-surface)] p-4 sm:p-5">
-                <div className="space-y-1">
+              <div key={group.id}>
+                {/* 分组标题 */}
+                <div className="mb-4 space-y-1">
                   <h3 className="text-base font-semibold text-[color:var(--report-text-heading)]">{group.title}</h3>
                   {group.description ? <p className="text-sm text-[color:var(--report-text-subtle)]">{group.description}</p> : null}
                 </div>
 
-                <div className="space-y-4 pl-1 sm:pl-2">
+                {/* 控件列表 */}
+                <div className="space-y-3">
                   {group.controls.map((control) => (
-                    <div key={control.id} className="space-y-3">
-                      <Label className="text-base font-medium">{control.title}</Label>
+                    <div
+                      key={control.id}
+                      className="flex items-center justify-between gap-4"
+                    >
+                      {/* 控件名：左侧，宽度自适应 */}
+                      <span className="flex-1 text-sm text-[color:var(--report-text-heading)]">
+                        {control.title}
+                      </span>
+                      {/* 下拉菜单：右侧，固定宽度 */}
                       <Select
                         value={controlSelections[control.id]}
                         onValueChange={(value: string) => onControlChange(control.id, value)}
                         disabled={isSubmitting}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger
+                          className="shrink-0"
+                          style={{ width: SELECT_FIXED_WIDTH }}
+                        >
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent style={{ minWidth: SELECT_FIXED_WIDTH }}>
                           {control.options.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
@@ -68,32 +82,47 @@ export default function AnalysisControlsPanel({
                   ))}
                 </div>
 
-                {groupIndex < groups.length - 1 && <div className="border-t border-[color:var(--report-border)] pt-2" />}
+                {/* 分组分隔符：最后一个分组不显示 */}
+                {groupIndex < groups.length - 1 && (
+                  <div className="mt-6 border-t border-[color:var(--report-border)]" />
+                )}
               </div>
             ))}
           </div>
         ) : controls.length > 0 ? (
-          controls.map((control) => (
-            <div key={control.id} className="space-y-3">
-              <Label className="text-base font-medium">{control.title}</Label>
-              <Select
-                value={controlSelections[control.id]}
-                onValueChange={(value: string) => onControlChange(control.id, value)}
-                disabled={isSubmitting}
+          <div className="space-y-3">
+            {controls.map((control) => (
+              <div
+                key={control.id}
+                className="flex items-center justify-between gap-4"
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {control.options.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ))
+                {/* 控件名：左侧，宽度自适应 */}
+                <span className="flex-1 text-sm text-[color:var(--report-text-heading)]">
+                  {control.title}
+                </span>
+                {/* 下拉菜单：右侧，固定宽度 */}
+                <Select
+                  value={controlSelections[control.id]}
+                  onValueChange={(value: string) => onControlChange(control.id, value)}
+                  disabled={isSubmitting}
+                >
+                  <SelectTrigger
+                    className="shrink-0"
+                    style={{ width: SELECT_FIXED_WIDTH }}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent style={{ minWidth: SELECT_FIXED_WIDTH }}>
+                    {control.options.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </div>
         ) : (
           <Alert>
             <Sparkles className="h-4 w-4" />

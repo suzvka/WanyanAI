@@ -83,8 +83,7 @@ export const modelConfigStore: ModelConfigStore = {
 
       persistState(migratedState);
       return migratedState;
-    } catch (error) {
-      console.error('Failed to read config state from storage:', error);
+    } catch {
       return emptyStoreState;
     }
   },
@@ -102,7 +101,6 @@ export const modelConfigStore: ModelConfigStore = {
 
       persistState(parsed.data);
     } catch (error) {
-      console.error('Failed to save config state to storage:', error);
       throw new Error(error instanceof Error ? error.message : '保存配置失败');
     }
   },

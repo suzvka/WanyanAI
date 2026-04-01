@@ -1,4 +1,6 @@
 import {
+  ChatCompletionsRequest,
+  ChatCompletionsResult,
   ConfigValidationResult,
   ModelConfigProvider,
   ModelInfo,
@@ -20,7 +22,7 @@ function normalizeModels(response: ModelListResponse): ModelInfo[] | null {
     .filter((model) => typeof model.id === 'string' && model.id.trim().length > 0)
     .map((model) => ({
       id: model.id,
-      name: model.id,
+      name: model.name || model.id, // 优先使用 name，否则使用 id
       description: model.description || '',
     }));
 }
@@ -113,12 +115,70 @@ export const modelConfigProvider: ModelConfigProvider = {
         models,
       };
     } catch (error) {
-      console.error('Validation error:', error);
       return {
         success: false,
         error: toAppErrorPayload(error, {
           code: 'provider_request_failed',
           message: '验证失败，请检查 URL 和 API Key',
+          retryable: true,
+        }),
+      };
+    }
+  },
+
+  /**
+   * Chat Completions 请求转发
+   * 支持流式和非流式两种模式
+   */
+  async chatCompletions(
+    baseUrl: string,
+    apiKey: string,
+    body: ChatCompletionsRequest
+  ): Promise<ChatCompletionsResult> {
+    try {
+      const cleanBaseUrl = normalizeBaseUrl(baseUrl);
+
+      const response = await fetch(`${cleanBaseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        let errorMsg = `HTTP ${response.status}`;
+
+        try {
+          const errorData = (await response.json()) as { error?: { message?: string } };
+          errorMsg = errorData.error?.message || errorMsg;
+        } catch {
+          // 忽略响应体解析错误
+        }
+
+        return {
+          success: false,
+          error: {
+            code: 'provider_request_failed',
+            message: `请求失败：${errorMsg}`,
+            retryable: response.status >= 500,
+            status: response.status,
+          },
+        };
+      }
+
+      // 返回原始响应（支持流式和非流式）
+      return {
+        success: true,
+        response,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: toAppErrorPayload(error, {
+          code: 'provider_request_failed',
+          message: '请求失败，请检查网络连接',
           retryable: true,
         }),
       };

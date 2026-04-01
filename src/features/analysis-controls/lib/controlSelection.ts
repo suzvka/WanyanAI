@@ -1,8 +1,8 @@
 import type {
   AnalysisControlGroupConfig,
   AnalysisControlConfig,
-  PublishedOpsConfig,
 } from '@/server/config/types';
+import type { ModuleConfig } from '@/types/module';
 import type { EvaluationInput } from '@/types/report';
 import {
   readBoundControlValue,
@@ -24,8 +24,8 @@ function normalizeControl(control: AnalysisControlConfig): AnalysisControlConfig
   };
 }
 
-export function getEnabledDynamicControlGroups(opsConfig: PublishedOpsConfig): AnalysisControlGroupConfig[] {
-  return opsConfig.analysisControls.groups
+export function getEnabledDynamicControlGroups(moduleConfig: ModuleConfig): AnalysisControlGroupConfig[] {
+  return moduleConfig.analysisControls.groups
     .filter((group) => group.enabled)
     .map((group: AnalysisControlGroupConfig) => ({
       ...group,
@@ -37,9 +37,9 @@ export function getEnabledDynamicControlGroups(opsConfig: PublishedOpsConfig): A
 }
 
 export function getEnabledDynamicControls(
-  opsConfig: PublishedOpsConfig,
+  moduleConfig: ModuleConfig,
 ): AnalysisControlConfig[] {
-  return getEnabledDynamicControlGroups(opsConfig)
+  return getEnabledDynamicControlGroups(moduleConfig)
     .flatMap((group) => group.controls)
     .filter((control) => control.options.length > 0);
 }
@@ -131,8 +131,8 @@ function getBoundControlOptionLabel(
   return option.label;
 }
 
-export function resolveBoundControlLabels(opsConfig: PublishedOpsConfig, input: EvaluationInput) {
-  const controls = getEnabledDynamicControls(opsConfig);
+export function resolveBoundControlLabels(moduleConfig: ModuleConfig, input: EvaluationInput) {
+  const controls = getEnabledDynamicControls(moduleConfig);
   const textTypeLabel = getBoundControlOptionLabel(controls, 'text_type', input) ?? '未设置';
   const textCompletenessLabel = getBoundControlOptionLabel(controls, 'text_completeness', input) ?? '未设置';
   const evaluationGoalLabel = getBoundControlOptionLabel(controls, 'evaluation_goal', input) ?? '未设置';

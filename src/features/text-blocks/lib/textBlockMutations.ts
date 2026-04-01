@@ -1,4 +1,4 @@
-import type { ContentSource, TextAnnotation, TextBlock, TextBlockType } from '@/types/report';
+import type { ContentSource, TextAnnotation, TextBlock } from '@/types/report';
 
 export type PendingTextChange = {
   blockId: string;
@@ -6,23 +6,21 @@ export type PendingTextChange = {
   nextText: string;
 };
 
-export const textBlockTypeOptions: TextBlockType[] = [
-  'actual_text',
-  'reference_material',
-  'reference_review',
-];
-
-export function createTextBlock(number: number, blockType?: string): TextBlock {
+/**
+ * 创建文本块
+ */
+export function createTextBlock(): TextBlock {
   return {
     id: crypto.randomUUID(),
-    number,
-    blockType: blockType ?? 'actual_text',
-    title: `文本${number}`,
+    title: '',
     content: null,
     annotations: [],
   };
 }
 
+/**
+ * 创建批注
+ */
 export function createAnnotation(): TextAnnotation {
   return {
     id: crypto.randomUUID(),
@@ -30,14 +28,16 @@ export function createAnnotation(): TextAnnotation {
   };
 }
 
-export function getNextBlockNumber(textBlocks: TextBlock[]) {
-  return textBlocks.reduce((max, block) => Math.max(max, block.number), 0) + 1;
-}
-
+/**
+ * 将文本转换为 ContentSource
+ */
 export function toTextContent(nextText: string): ContentSource | null {
   return nextText === '' ? null : { kind: 'text', text: nextText };
 }
 
+/**
+ * 更新指定文本块
+ */
 export function updateBlock(
   textBlocks: TextBlock[],
   blockId: string,
@@ -46,6 +46,9 @@ export function updateBlock(
   return textBlocks.map((block) => (block.id === blockId ? updater(block) : block));
 }
 
+/**
+ * 构建更新后的文本块数组
+ */
 export function buildNextBlocks(
   textBlocks: TextBlock[],
   blockId: string,
@@ -78,6 +81,9 @@ export function buildNextBlocks(
   });
 }
 
+/**
+ * 查找当前内容
+ */
 export function findCurrentContent(textBlocks: TextBlock[], blockId: string, annotationId?: string) {
   const block = textBlocks.find((item) => item.id === blockId);
   if (!block) {

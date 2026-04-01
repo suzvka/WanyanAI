@@ -1,23 +1,24 @@
 # Operations Config
 
-`published/` 目录用于存放当前已发布配置文件。
+`ops-config/` 目录当前用于存放平台级运行配置，服务端直接从该目录根级文件读取配置。
 
-当前实际生效的发布文件：
-- `manifest.json`
-- `site.json`
-- `feature-flags.json`
-- `analysis-controls.json`
+当前实际生效的文件：
+- `manifest.json`：平台配置版本、发布时间与环境标识
+- `appearance.json`：品牌名称、口号与主题色
+- `feature-flags.json`：平台级功能开关
 
-发布方式：
-1. 团队确认配置内容。
-2. 系统管理员将定稿文件上传到服务器上的 `ops-config/published/`。
-3. 前台请求时读取已发布配置；若读取失败则回退到内置最小配置。
+当前未由该目录直接承载的内容：
+- 模块注册信息不在 `ops-config/`，而在 `app-modules/<module-id>/main.json`
+- 模块文案不在 `ops-config/`，而在 `app-modules/<module-id>/site.json`
+- 动态分析选项不在 `ops-config/`，而在 `app-modules/<module-id>/analysis-controls.json`
+
+读取行为：
+1. 服务端启动后读取 `ops-config/manifest.json`、`ops-config/appearance.json`、`ops-config/feature-flags.json`。
+2. 任一文件读取或校验失败时，回退到内置最小平台配置。
+3. 模块配置由 `app-modules/` 目录单独扫描加载，与平台配置分开管理。
 
 当前阶段：
-- 已发布配置驱动站点文案、功能开关与动态检查项
-- 动态下拉的选项注册、默认值与文案统一由 `analysis-controls.json` 控制，顺序直接按数组排列
-- 核心控件使用保留 `id`：`text_type`、`text_completeness`、`evaluation_goal`
-- 动态下拉默认值取各控件 `options` 数组中的第一个选项
-- 提示词模板配置化与版本回滚在二期处理
-- 回退配置仅保留最小可运行默认值，不声明未接入的提示能力
-- 人类可见的配置文本允许为空字符串，可通过热更快速显示或隐藏对应文本元素
+- 平台配置驱动品牌展示与平台级开关
+- 模块的分析选项、默认值与选项文案统一由各模块自己的 `analysis-controls.json` 控制
+- 动态指令编译当前基于分析选项中的 `promptText`
+- `prompt-blocks/` 目录目前为预留目录，运行时尚未直接接入

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { ThemeProvider } from 'next-themes';
 import './globals.css';
 import { Toaster } from '@/components/ui/sonner';
+import { ModelConfigProvider } from '@/providers/ModelConfigProvider';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -21,7 +22,9 @@ export default function RootLayout({
         <html lang="zh-CN" suppressHydrationWarning>
             <body className={`${inter.variable} font-sans antialiased`}>
                 <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-                    {children}
+                    <ModelConfigProvider>
+                        {children}
+                    </ModelConfigProvider>
                     <Toaster />
                 </ThemeProvider>
             </body>

@@ -1,0 +1,111 @@
+{
+  "groups": [
+    {
+      "id": "basic_context",
+      "title": "基础信息",
+      "description": "用于定义作品的基本属性。",
+      "enabled": true,
+      "sortOrder": 10,
+      "controls": [
+        {
+          "id": "evaluation_lens",
+          "title": "评价视角",
+          "enabled": true,
+          "sortOrder": 70,
+          "options": [
+            {
+              "value": "general_reader",
+              "label": "普通读者",
+              "enabled": true,
+              "promptText": "你是一位普通读者，对古典诗词有基本了解。"
+            },
+            {
+              "value": "literary_reader",
+              "label": "文学爱好者",
+              "enabled": true,
+              "promptText": "你是一位诗词爱好者，对诗歌格律、意象、意境有较深的理解。"
+            },
+            {
+              "value": "scholar_lens",
+              "label": "学术研究",
+              "enabled": true,
+              "promptText": "你是一位诗词研究者，从学术角度分析作品的文学价值与历史地位。"
+            }
+          ]
+        },
+        {
+          "id": "work_form",
+          "title": "作品形态",
+          "enabled": true,
+          "sortOrder": 10,
+          "options": [
+            {
+              "value": "complete_work",
+              "label": "完整作品",
+              "enabled": true,
+              "promptText": "当前文本属于完整作品，可以对整体意境、结构完整性进行全面判断。"
+            },
+            {
+              "value": "excerpt",
+              "label": "节选片段",
+              "enabled": true,
+              "promptText": "当前文本属于节选片段，请优先进行局部鉴赏分析。"
+            },
+            {
+              "value": "draft",
+              "label": "草稿/习作",
+              "enabled": true,
+              "promptText": "当前文本属于草稿或习作，请优先指出改进方向与写作技巧。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analysis_focus",
+      "title": "分析关注",
+      "enabled": true,
+      "sortOrder": 20,
+      "controls": [
+        {
+          "id": "review_mode",
+          "title": "本次评审模式",
+          "enabled": true,
+          "sortOrder": 50,
+          "options": [
+            {
+              "value": "overall_pre_publish",
+              "label": "均衡鉴赏",
+              "enabled": true,
+              "promptText": ""
+            },
+            {
+              "value": "imagery_analysis",
+              "label": "意象分析",
+              "enabled": true,
+              "promptText": "请重点分析诗歌意象的选择、组合与象征意义。"
+            },
+            {
+              "value": "emotion_expression",
+              "label": "情感表达",
+              "enabled": true,
+              "promptText": "请重点分析情感的抒发方式与情感层次。"
+            },
+            {
+              "value": "form_technique",
+              "label": "格律技巧",
+              "enabled": true,
+              "promptText": "请重点分析诗歌的格律、韵律与修辞技巧。"
+            },
+            {
+              "value": "artistic_conception",
+              "label": "意境营造",
+              "enabled": true,
+              "promptText": "请重点分析意境的营造方式与审美效果。"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

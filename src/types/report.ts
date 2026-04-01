@@ -73,11 +73,11 @@ export type ReportMeta = {
   model: string;
 };
 
-export type TextType = (typeof textTypeValues)[number];
+export type TextType = string;
 
-export type TextCompleteness = (typeof textCompletenessValues)[number];
+export type TextCompleteness = string;
 
-export type EvaluationGoal = (typeof evaluationGoalValues)[number];
+export type EvaluationGoal = string;
 
 export type TextBlockType = string;
 
@@ -114,10 +114,14 @@ export type TextAnnotation = {
   content: ContentSource | null;
 };
 
+/**
+ * 文本块
+ * 
+ * 文本块是纯数据载体，不携带归属信息。
+ * 归属关系由外层容器决定（通过数组位置或容器 id 关联）。
+ */
 export type TextBlock = {
   id: string;
-  number: number;
-  blockType: TextBlockType;
   title: string;
   content: ContentSource | null;
   annotations: TextAnnotation[];
@@ -141,8 +145,6 @@ export type SerializableTextBlockContent =
 
 export type SerializableTextBlock = {
   id: string;
-  number: number;
-  blockType: TextBlockType;
   title: string;
   content: SerializableTextBlockContent | null;
   annotations: SerializableTextAnnotation[];
@@ -160,15 +162,40 @@ export type SerializableEvaluationMetadataFile = {
   source: TextBlockAttachmentSource;
 };
 
-export type EvaluationInput = {
+/**
+ * 容器数据（用于序列化和模型渲染）
+ */
+export type ContainerData = {
+  /** 容器唯一标识 */
+  id: string;
+  /** 容器标题 */
+  title: string;
+  /** 容器提示词（可选） */
+  prompt?: string;
+  /** 该容器下的文本块 */
   textBlocks: TextBlock[];
+};
+
+/**
+ * 可序列化的容器数据
+ */
+export type SerializableContainerData = Omit<ContainerData, 'textBlocks'> & {
+  textBlocks: SerializableTextBlock[];
+};
+
+export type EvaluationInput = {
+  /** 所有文本块（扁平列表，保持向后兼容） */
+  textBlocks: TextBlock[];
+  /** 容器数据（按容器分组） */
+  containers: ContainerData[];
   textType: TextType;
   textCompleteness: TextCompleteness;
   evaluationGoal: EvaluationGoal;
 };
 
-export type SerializableEvaluationInput = Omit<EvaluationInput, 'textBlocks'> & {
+export type SerializableEvaluationInput = Omit<EvaluationInput, 'textBlocks' | 'containers'> & {
   blocks: SerializableTextBlock[];
+  containers: SerializableContainerData[];
   metadata: {
     files: SerializableEvaluationMetadataFile[];
   };

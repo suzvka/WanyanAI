@@ -1,17 +1,17 @@
 import 'server-only';
 
-import { PublishedOpsConfig } from './types';
+import type { PlatformConfig } from '@/types/platform';
 
 const CONFIG_CACHE_TTL_MS = process.env.NODE_ENV === 'development' ? 0 : 5000;
 
 type CacheEntry = {
-  value: PublishedOpsConfig;
+  value: PlatformConfig;
   expiresAt: number;
 };
 
 let cacheEntry: CacheEntry | null = null;
 
-export function getCachedOpsConfig(): PublishedOpsConfig | null {
+export function getCachedPlatformConfig(): PlatformConfig | null {
   if (CONFIG_CACHE_TTL_MS <= 0 || cacheEntry === null) {
     return null;
   }
@@ -24,7 +24,7 @@ export function getCachedOpsConfig(): PublishedOpsConfig | null {
   return cacheEntry.value;
 }
 
-export function setCachedOpsConfig(value: PublishedOpsConfig) {
+export function setCachedPlatformConfig(value: PlatformConfig) {
   if (CONFIG_CACHE_TTL_MS <= 0) {
     return value;
   }
@@ -37,6 +37,6 @@ export function setCachedOpsConfig(value: PublishedOpsConfig) {
   return value;
 }
 
-export function clearCachedOpsConfig() {
+export function clearCachedPlatformConfig() {
   cacheEntry = null;
 }

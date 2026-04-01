@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { showError, showSuccess } from '@/lib/alert';
 import { modelConfigService } from '@/services/modelConfig';
 import { toAppErrorPayload } from '@/types/errors';
 import type { ApiConfigDraft, ApiConfigRecord, ModelConfig } from '@/types/modelConfig';
@@ -56,9 +56,9 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
 
       if (showToast) {
         if (result.validation.success) {
-          toast.success(result.config?.lastValidationMessage || 'API 配置校验成功。');
+          showSuccess(result.config?.lastValidationMessage || 'API 配置校验成功。');
         } else {
-          toast.error(result.validation.error?.message || 'API 配置校验失败。');
+          showError(result.validation.error?.message || 'API 配置校验失败。');
         }
       }
 
@@ -70,7 +70,7 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
       });
 
       if (showToast) {
-        toast.error(payload.message);
+        showError(payload.message);
       }
 
       return {
@@ -99,7 +99,7 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
         code: 'config_invalid',
         message: '创建配置失败，请检查输入。',
       });
-      toast.error(payload.message);
+      showError(payload.message);
     } finally {
       setIsConfigMutating(false);
       syncConfigState();
@@ -119,7 +119,7 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
         code: 'config_invalid',
         message: '更新配置失败，请检查输入。',
       });
-      toast.error(payload.message);
+      showError(payload.message);
     } finally {
       setIsConfigMutating(false);
       syncConfigState();
@@ -132,13 +132,13 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
     try {
       modelConfigService.removeConfig(configId);
       syncConfigState();
-      toast.success('API 配置已删除。');
+      showSuccess('API 配置已删除。');
     } catch (error) {
       const payload = toAppErrorPayload(error, {
         code: 'unknown_error',
         message: '删除配置失败，请重试。',
       });
-      toast.error(payload.message);
+      showError(payload.message);
     } finally {
       setIsConfigMutating(false);
       syncConfigState();

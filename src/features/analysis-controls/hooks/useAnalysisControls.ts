@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { AnalysisControlConfig, PublishedOpsConfig } from '@/server/config/types';
+import type { AnalysisControlConfig } from '@/server/config/types';
+import type { ModuleConfig } from '@/types/module';
 import type { EvaluationInput } from '@/types/report';
 import {
   applyBoundControlSelection,
@@ -14,7 +15,7 @@ import {
 } from '../lib/controlSelection';
 
 type UseAnalysisControlsOptions = {
-  opsConfig: PublishedOpsConfig;
+  moduleConfig: ModuleConfig;
   formData: EvaluationInput;
   initialEvaluationInput: EvaluationInput;
   updateField: EvaluationInputUpdater;
@@ -22,7 +23,7 @@ type UseAnalysisControlsOptions = {
 };
 
 export function useAnalysisControls({
-  opsConfig,
+  moduleConfig,
   formData,
   initialEvaluationInput,
   updateField,
@@ -30,14 +31,14 @@ export function useAnalysisControls({
 }: UseAnalysisControlsOptions) {
   const [controlSelections, setControlSelections] = useState<Record<string, string>>(() =>
     resolveInitialControlSelections(
-      getEnabledDynamicControls(opsConfig),
+      getEnabledDynamicControls(moduleConfig),
       initialEvaluationInput,
     ),
   );
 
   const dynamicControls = useMemo(
-    () => getEnabledDynamicControls(opsConfig),
-    [opsConfig],
+    () => getEnabledDynamicControls(moduleConfig),
+    [moduleConfig],
   );
 
   useEffect(() => {

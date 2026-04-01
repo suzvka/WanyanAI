@@ -1,11 +1,10 @@
 import { ApiAnalysisService } from './apiAnalysisService';
-import { BasicRemoteAnalysisService } from './basicRemoteAnalysisService';
 
+// 导出提示词模板服务
 const promptTemplateService = new ApiAnalysisService();
+export { promptTemplateService };
 
-export const analysisService = new BasicRemoteAnalysisService(promptTemplateService);
-export const aiAnalysisService = analysisService;
-
-export type { AnalysisService } from './types';
+// 导出类型
+export type { PromptTemplateService, AnalysisProgressUpdate } from './types';
 export { ApiAnalysisService } from './apiAnalysisService';
-export { BasicRemoteAnalysisService } from './basicRemoteAnalysisService';
+export { StreamingClient } from './streamingClient';
