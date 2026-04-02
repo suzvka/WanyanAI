@@ -20,6 +20,47 @@ type AnalysisControlsPanelProps = {
   onControlChange: (controlId: string, value: string) => void;
 };
 
+type ControlRowProps = {
+  control: AnalysisControlConfig;
+  selectedValue?: string;
+  isSubmitting: boolean;
+  onControlChange: (controlId: string, value: string) => void;
+};
+
+function ControlRow({
+  control,
+  selectedValue,
+  isSubmitting,
+  onControlChange,
+}: ControlRowProps) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="flex-1 text-sm text-[color:var(--report-text-heading)]">
+        {control.title}
+      </span>
+      <Select
+        value={selectedValue}
+        onValueChange={(value: string) => onControlChange(control.id, value)}
+        disabled={isSubmitting}
+      >
+        <SelectTrigger
+          className="shrink-0"
+          style={{ width: SELECT_FIXED_WIDTH }}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent style={{ minWidth: SELECT_FIXED_WIDTH }}>
+          {control.options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 export default function AnalysisControlsPanel({
   title = '分析设置',
   description,
@@ -50,34 +91,13 @@ export default function AnalysisControlsPanel({
                 {/* 控件列表 */}
                 <div className="space-y-3">
                   {group.controls.map((control) => (
-                    <div
-                      key={control.id}
-                      className="flex items-center justify-between gap-4"
-                    >
-                      {/* 控件名：左侧，宽度自适应 */}
-                      <span className="flex-1 text-sm text-[color:var(--report-text-heading)]">
-                        {control.title}
-                      </span>
-                      {/* 下拉菜单：右侧，固定宽度 */}
-                      <Select
-                        value={controlSelections[control.id]}
-                        onValueChange={(value: string) => onControlChange(control.id, value)}
-                        disabled={isSubmitting}
-                      >
-                        <SelectTrigger
-                          className="shrink-0"
-                          style={{ width: SELECT_FIXED_WIDTH }}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent style={{ minWidth: SELECT_FIXED_WIDTH }}>
-                          {control.options.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div key={control.id}>
+                      <ControlRow
+                        control={control}
+                        selectedValue={controlSelections[control.id]}
+                        isSubmitting={isSubmitting}
+                        onControlChange={onControlChange}
+                      />
                     </div>
                   ))}
                 </div>
@@ -92,34 +112,13 @@ export default function AnalysisControlsPanel({
         ) : controls.length > 0 ? (
           <div className="space-y-3">
             {controls.map((control) => (
-              <div
-                key={control.id}
-                className="flex items-center justify-between gap-4"
-              >
-                {/* 控件名：左侧，宽度自适应 */}
-                <span className="flex-1 text-sm text-[color:var(--report-text-heading)]">
-                  {control.title}
-                </span>
-                {/* 下拉菜单：右侧，固定宽度 */}
-                <Select
-                  value={controlSelections[control.id]}
-                  onValueChange={(value: string) => onControlChange(control.id, value)}
-                  disabled={isSubmitting}
-                >
-                  <SelectTrigger
-                    className="shrink-0"
-                    style={{ width: SELECT_FIXED_WIDTH }}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent style={{ minWidth: SELECT_FIXED_WIDTH }}>
-                    {control.options.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div key={control.id}>
+                <ControlRow
+                  control={control}
+                  selectedValue={controlSelections[control.id]}
+                  isSubmitting={isSubmitting}
+                  onControlChange={onControlChange}
+                />
               </div>
             ))}
           </div>

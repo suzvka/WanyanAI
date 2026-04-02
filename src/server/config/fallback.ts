@@ -16,7 +16,7 @@ export function createFallbackPlatformConfig(): PlatformConfig {
     },
     appearance: {
       brand: {
-        name: 'AudienceAI',
+        name: 'WanyanAI',
         slogan: 'AI 驱动的文本诊断专家',
         fontFamily: 'var(--font-serif)',
       },

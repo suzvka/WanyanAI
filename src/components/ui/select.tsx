@@ -51,13 +51,18 @@ function SelectTrigger({
   )
 }
 
+interface SelectContentProps extends React.ComponentProps<typeof SelectPrimitive.Content> {
+  header?: React.ReactNode;
+}
+
 function SelectContent({
   className,
   children,
+  header,
   position = "item-aligned",
   align = "center",
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Content>) {
+}: SelectContentProps) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
@@ -72,6 +77,8 @@ function SelectContent({
         align={align}
         {...props}
       >
+        {/* Header 放在 Viewport 外部，不会被滚动影响 */}
+        {header}
         <SelectScrollUpButton />
         <SelectPrimitive.Viewport
           className={cn(
@@ -109,7 +116,17 @@ function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "focus:bg-accent focus:text-accent-foreground [&_svg:not([class*='text-'])]:text-muted-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 min-h-[44px] md:min-h-[36px] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        "relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none min-h-[44px] md:min-h-[36px]",
+        // 默认状态
+        "text-foreground",
+        // 悬停状态
+        "focus:bg-accent focus:text-accent-foreground",
+        // 选中状态 - 更强的视觉区分
+        "data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary data-[state=checked]:font-medium",
+        // 禁用状态
+        "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        // SVG 样式
+        "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
         className
       )}
       {...props}
@@ -119,7 +136,7 @@ function SelectItem({
         className="absolute right-2 flex size-3.5 items-center justify-center"
       >
         <SelectPrimitive.ItemIndicator>
-          <CheckIcon className="size-4" />
+          <CheckIcon className="size-4 text-primary" />
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText className="truncate">{children}</SelectPrimitive.ItemText>
@@ -148,12 +165,12 @@ function SelectScrollUpButton({
     <SelectPrimitive.ScrollUpButton
       data-slot="select-scroll-up-button"
       className={cn(
-        "flex cursor-default items-center justify-center py-1 absolute top-0 left-0 right-0 z-10 bg-popover border-b border-border",
+        "flex cursor-default items-center justify-center py-1 absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-popover to-transparent",
         className
       )}
       {...props}
     >
-      <ChevronUpIcon className="size-4" />
+      <ChevronUpIcon className="size-4 text-muted-foreground/60" />
     </SelectPrimitive.ScrollUpButton>
   )
 }
@@ -166,12 +183,12 @@ function SelectScrollDownButton({
     <SelectPrimitive.ScrollDownButton
       data-slot="select-scroll-down-button"
       className={cn(
-        "flex cursor-default items-center justify-center py-1 absolute bottom-0 left-0 right-0 z-10 bg-popover border-t border-border",
+        "flex cursor-default items-center justify-center py-1 absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-popover to-transparent",
         className
       )}
       {...props}
     >
-      <ChevronDownIcon className="size-4" />
+      <ChevronDownIcon className="size-4 text-muted-foreground/60" />
     </SelectPrimitive.ScrollDownButton>
   )
 }

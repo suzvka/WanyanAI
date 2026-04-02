@@ -50,20 +50,6 @@ class OutputModeRegistry {
   }
 
   /**
-   * 检查输出模式是否存在
-   */
-  has(id: string): boolean {
-    return this.registry.has(id);
-  }
-
-  /**
-   * 获取输出模式的提示词
-   */
-  getPrompt(id: string): string | undefined {
-    return this.registry.get(id)?.prompt;
-  }
-
-  /**
    * 获取所有已注册的模式 ID
    */
   getRegisteredIds(): string[] {
@@ -81,13 +67,6 @@ export const outputModeRegistry = new OutputModeRegistry();
  */
 export function getRegisteredOutputModes(): string[] {
   return outputModeRegistry.getRegisteredIds();
-}
-
-/**
- * 获取输出模式的提示词
- */
-export function getOutputModePrompt(id: string): string | undefined {
-  return outputModeRegistry.getPrompt(id);
 }
 
 /**

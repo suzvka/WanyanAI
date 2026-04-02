@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react';
 import { showError } from '@/lib/alert';
 import {
   AlertCircle,
@@ -10,15 +10,6 @@ import {
   Sparkles,
   Wrench,
 } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import BrandBackground from '@/components/ui/brand-background';
 import { Button } from '@/components/ui/button';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
@@ -43,7 +34,6 @@ import { ReportErrorBoundary } from '@/components/evaluate/ReportErrorBoundary';
 function AnalysisProgressState({
   phase,
   status,
-  message,
   canRetry,
   runningTitle,
   runningDescription,
@@ -53,7 +43,6 @@ function AnalysisProgressState({
 }: {
   phase: AnalysisPhase;
   status: AnalysisStatus;
-  message?: string;
   canRetry: boolean;
   runningTitle: string;
   runningDescription: string;
@@ -236,7 +225,6 @@ function EvaluateContent({
 }) {
   const { appearance, featureFlags } = usePlatformContext();
   const { site } = moduleConfig;
-  const { currentModelConfig } = useModelConfig();
   const {
     analysisState,
     report,
@@ -247,8 +235,6 @@ function EvaluateContent({
     progressSnapshot,
   } = usePageContext();
   const { setHasUnsavedContent } = useNavigationGuard();
-
-  const [isOpsConfigStaleDialogOpen, setIsOpsConfigStaleDialogOpen] = useState(false);
 
   // 检测是否首次加载，只在首次显示骨架屏
   const isFirstLoad = usePageFirstLoad();
@@ -413,7 +399,6 @@ function EvaluateContent({
             <AnalysisProgressState
               phase={analysisState.phase}
               status={analysisState.status}
-              message={analysisState.message}
               canRetry={analysisState.canRetry}
               runningTitle={site.progress.runningTitle}
               runningDescription={site.progress.runningDescription}
@@ -437,20 +422,6 @@ function EvaluateContent({
           </main>
         )}
       </AppShell>
-
-      <AlertDialog open={isOpsConfigStaleDialogOpen} onOpenChange={setIsOpsConfigStaleDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>页面配置已更新</AlertDialogTitle>
-            <AlertDialogDescription>
-              当前动态检查策略已发生变化。请先保存或复制当前输入内容，再手动刷新页面以加载最新配置。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setIsOpsConfigStaleDialogOpen(false)}>我知道了</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
@@ -459,7 +430,6 @@ interface EvaluateClientProps {
   platformConfig: PlatformConfig;
   moduleConfig: ModuleConfig;
   modules: ModuleConfig[];
-  initialEvaluationInput?: EvaluationInput;
 }
 
 export default function EvaluateClient({
@@ -491,7 +461,7 @@ function PageProviderWrapper({
   children,
 }: {
   moduleConfig: ModuleConfig;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const { currentModelConfig, setIsConfigDialogOpen } = useModelConfig();
 

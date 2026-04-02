@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Plus } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,11 +23,6 @@ type TextBlocksEditorProps = {
   title?: string;
   /** 副标题（可选，显示在主标题下方） */
   subtitle?: string;
-  /**
-   * 提示词（可选，对用户不可见）
-   * 仅用于生成用户文本元数据时在对应容器属性中增加一个字符串字段
-   */
-  prompt?: string;
   textBlocks: TextBlock[];
   enableFileUpload?: boolean;
   enableAnnotations?: boolean;
@@ -45,7 +39,6 @@ type TextBlocksEditorProps = {
 export default function TextBlocksEditor({
   title = '文本输入',
   subtitle,
-  prompt,
   textBlocks,
   enableFileUpload = true,
   enableAnnotations = true,
@@ -82,10 +75,6 @@ export default function TextBlocksEditor({
 
   // 计算是否可以添加更多块
   const canAddMoreBlocks = maxBlockCount === undefined || textBlocks.length < maxBlockCount;
-
-  // prompt 存储在组件中，供后续元数据生成使用
-  // 当前组件不直接使用，但保留参数以便外部访问
-  void prompt; // 显式标记为已使用
 
   return (
     <>
@@ -129,21 +118,7 @@ export default function TextBlocksEditor({
                 ) : (
                   canAddMoreBlocks && (
                     <div className="border-t-3 border-border/100 py-3 flex justify-center">
-                      <button
-                        type="button"
-                        onClick={addBlock}
-                        className={cn(
-                          'flex items-center justify-center gap-2 rounded-lg',
-                          'bg-muted/50 transition-all duration-200',
-                          'h-10 px-6',
-                          'text-muted-foreground hover:bg-muted hover:text-primary',
-                          'select-none',
-                        )}
-                        title="添加文本块"
-                      >
-                        <Plus className="h-5 w-5" />
-                        <span className="text-sm">添加文本块</span>
-                      </button>
+                      <AddBlockButton onClick={addBlock} />
                     </div>
                   )
                 )}
@@ -154,21 +129,7 @@ export default function TextBlocksEditor({
           {/* 当没有文本块时，显示新增按钮（仅在未达上限时显示） */}
           {textBlocks.length === 0 && canAddMoreBlocks && (
             <div className="flex justify-center py-8">
-              <button
-                type="button"
-                onClick={addBlock}
-                className={cn(
-                  'flex items-center justify-center gap-2 rounded-lg',
-                  'bg-muted/50 transition-all duration-200',
-                  'h-10 px-6',
-                  'text-muted-foreground hover:bg-muted hover:text-primary',
-                  'select-none',
-                )}
-                title="添加文本块"
-              >
-                <Plus className="h-5 w-5" />
-                <span className="text-sm">添加文本块</span>
-              </button>
+              <AddBlockButton onClick={addBlock} />
             </div>
           )}
         </div>
@@ -205,5 +166,25 @@ export default function TextBlocksEditor({
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+function AddBlockButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex items-center justify-center gap-2 rounded-lg',
+        'bg-muted/50 transition-all duration-200',
+        'h-10 px-6',
+        'text-muted-foreground hover:bg-muted hover:text-primary',
+        'select-none',
+      )}
+      title="添加文本块"
+    >
+      <Plus className="h-5 w-5" />
+      <span className="text-sm">添加文本块</span>
+    </button>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useMemo, useEffect, ReactNode } from 'react';
+import { toast } from 'sonner';
 import { useModelConfigController } from '@/features/model-config/hooks/useModelConfigController';
 import { modelConfigProvider } from '@/services/modelConfig/provider';
 import { 
@@ -65,6 +66,12 @@ export function ModelConfigProvider({ children }: ModelConfigProviderProps) {
 
   // 使用与自定义配置相同的验证逻辑获取内置模型列表
   const refreshBuiltInModels = async () => {
+    // 立即显示刷新动画
+    setBuiltInValidationStatus('validating');
+    
+    // 延迟1秒后执行实际刷新
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
     // 清除旧缓存，确保获取最新数据
     clearBuiltInModelsCache();
 
@@ -74,10 +81,11 @@ export function ModelConfigProvider({ children }: ModelConfigProviderProps) {
     if (!baseUrl || !apiKey) {
       setBuiltInValidationStatus('invalid');
       saveBuiltInModelsCache([], 'invalid', null);
+      toast.error('刷新失败', {
+        description: '缺少必要的配置信息',
+      });
       return;
     }
-
-    setBuiltInValidationStatus('validating');
 
     const result = await modelConfigProvider.validateAndFetchModels(baseUrl, apiKey);
 
@@ -96,10 +104,23 @@ export function ModelConfigProvider({ children }: ModelConfigProviderProps) {
 
       // 保存到缓存
       saveBuiltInModelsCache(result.models, 'valid', newSelectedModel);
+      
+      // 刷新成功提示
+      toast.success('刷新完成', {
+        description: `成功获取 ${result.models.length} 个模型`,
+      });
     } else {
       setBuiltInModels([]);
       setBuiltInValidationStatus('invalid');
       saveBuiltInModelsCache([], 'invalid', null);
+      
+      // 刷新失败提示
+      const errorMessage = typeof result.error === 'string' 
+        ? result.error 
+        : result.error?.message || '无法获取模型列表';
+      toast.error('刷新失败', {
+        description: errorMessage,
+      });
     }
   };
 

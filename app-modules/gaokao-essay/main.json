@@ -1,7 +1,7 @@
 {
   "id": "gaokao-essay",
   "name": "高考作文评分",
-  "description": "AI 驱动的高考作文评分与诊断",
+  "description": "高考作文评分与诊断",
   "route": "/evaluate/gaokao-essay",
   "containers": [
     { "type": "analysis-controls" },

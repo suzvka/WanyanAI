@@ -1,6 +1,6 @@
 {
   "id": "novel-evaluate",
-  "name": "小说评价报告",
+  "name": "小说点评",
   "description": "AI 驱动的小说文本深度诊断",
   "route": "/evaluate/novel-evaluate",
   "containers": [

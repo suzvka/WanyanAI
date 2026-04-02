@@ -54,35 +54,38 @@ export default function ModelSelector({
   return (
     <Select value={selectedModel || ''} onValueChange={handleSelect}>
       <SelectTrigger
-        className={cn('w-full min-w-0', className)}
+        className={cn('w-[180px]', className)}
         disabled={isDisabled}
       >
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent>
-        {/* 刷新按钮 */}
-        {onRefresh && (
-          <div className="border-b border-border p-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onRefresh();
-              }}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
-              {isRefreshing ? '正在刷新...' : '刷新模型列表'}
-            </Button>
-          </div>
-        )}
+      <SelectContent
+        header={
+          onRefresh ? (
+            <div className="bg-muted/50 border-b border-border p-2">
+              <div className="text-muted-foreground text-xs font-medium mb-1.5 px-1">操作</div>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full justify-start gap-2 text-xs"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onRefresh();
+                }}
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
+                {isRefreshing ? '正在刷新...' : '刷新模型列表'}
+              </Button>
+            </div>
+          ) : undefined
+        }
+      >
         {/* 模型列表 */}
         {models.map((model) => (
-          <SelectItem key={model.id} value={model.id}>
-            {model.name}
+          <SelectItem key={model.id} value={model.id} className="max-w-[280px]">
+            <span className="truncate">{model.name}</span>
           </SelectItem>
         ))}
         {models.length === 0 && !isRefreshing && (

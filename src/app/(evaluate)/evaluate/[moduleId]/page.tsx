@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 import EvaluateClient from '@/components/evaluate/EvaluateClient';
 import { getPlatformConfig } from '@/server/config';
 import { getModuleById, getAllModules } from '@/server/modules';
-import { createInitialEvaluationInputFromModule } from '@/config/defaults';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,14 +21,13 @@ export default async function EvaluatePage({ params }: EvaluatePageProps) {
     notFound();
   }
 
-  const initialEvaluationInput = createInitialEvaluationInputFromModule(moduleConfig);
+  const resolvedModuleConfig = moduleConfig as NonNullable<typeof moduleConfig>;
 
   return (
     <EvaluateClient
       platformConfig={platformConfig}
-      moduleConfig={moduleConfig}
+      moduleConfig={resolvedModuleConfig}
       modules={modules}
-      initialEvaluationInput={initialEvaluationInput}
     />
   );
 }

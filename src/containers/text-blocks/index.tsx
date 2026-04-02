@@ -25,7 +25,6 @@ export default function TextBlocksContainer({
     id,
     title,
     subtitle,
-    prompt,
     defaultExpanded = false,
     maxBlockCount,
   } = params;
@@ -45,7 +44,6 @@ export default function TextBlocksContainer({
     <TextBlocksEditor
       title={title || id}
       subtitle={subtitle}
-      prompt={prompt}
       textBlocks={textBlocks}
       enableFileUpload={featureFlags.enableFileUpload}
       enableAnnotations={featureFlags.enableAnnotations}

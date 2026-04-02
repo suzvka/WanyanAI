@@ -15,7 +15,6 @@ import {
   parseModelResponse,
   requestCompiledInstructions 
 } from '@/features/analysis-flow/lib';
-import { resolveBoundControlLabels } from '@/features/analysis-controls/lib/controlSelection';
 import { ProgressController, type ProgressSnapshot, type ProgressStage } from '@/features/analysis-progress';
 import { createAppError } from '@/types/errors';
 
