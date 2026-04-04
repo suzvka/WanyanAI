@@ -1,12 +1,12 @@
 import { outputModeRegistry } from './registry';
-import { reportJsonMode } from './report-json';
+import { literaryReviewMode } from './literary-review';
 import { gaokaoEssayMode } from './gaokao-essay';
 
 /**
  * 注册所有内置输出模式
  */
 export function registerBuiltInOutputModes(): void {
-  outputModeRegistry.register(reportJsonMode);
+  outputModeRegistry.register(literaryReviewMode);
   outputModeRegistry.register(gaokaoEssayMode);
 }
 
@@ -17,6 +17,6 @@ registerBuiltInOutputModes();
 export { outputModeRegistry, getRegisteredOutputModes, getOutputModePrompt, getOutputMode } from './registry';
 
 // 导出内置模式
-export { reportJsonMode } from './report-json';
+export { literaryReviewMode } from './literary-review';
 export { gaokaoEssayMode } from './gaokao-essay';
 export type { OutputModeDefinition } from './registry';

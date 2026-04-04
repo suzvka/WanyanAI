@@ -184,7 +184,7 @@ function AddBlockButton({ onClick }: { onClick: () => void }) {
       title="添加文本块"
     >
       <Plus className="h-5 w-5" />
-      <span className="text-sm">添加文本块</span>
+      
     </button>
   );
 }

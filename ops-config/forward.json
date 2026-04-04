@@ -1,32 +1,33 @@
 {
   "version": "1.0",
-  "rateLimit": {
-    "globalMaxCallsPerMinute": 1000,
-    "browserMaxCallsPerHour": 10
+  "challenge": {
+    "enabled": true,
+    "difficulty": 3,
+    "tokenExpireMinutes": 30,
+    "maxNonceAgeSeconds": 300
   },
   "models": [
     {
-      "id": "deepseek-chat",
-      "displayName": "DeepSeek",
+      "id": "DeepSeek",
+      "targetModel": "deepseek-chat",
       "minPermissionLevel": 1,
-      "maxCallsPerHour": 100,
+      "maxCallsPerHour": 1000,
       "targetBaseUrl": "https://api.deepseek.com/v1",
       "targetApiKey": "sk-6a08b5ace0924e86a305c663d680e0d2"
     },
     {
-      "id": "qwen3-235b-a22b-instruct-2507",
-      "displayName": "Qwen3",
+      "id": "Qwen3",
+      "targetModel": "qwen3-235b-a22b-instruct-2507",
       "minPermissionLevel": 1,
-      "maxCallsPerHour": 100,
+      "maxCallsPerHour": 1000,
       "targetBaseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
       "targetApiKey": "sk-86e434f06a40442c9a90afce8178f161"
-    }
-    ,
+    },
     {
-      "id": "qwen3.5-plus",
-      "displayName": "Qwen3.5",
+      "id": "Qwen3.5",
+      "targetModel": "qwen3.5-plus",
       "minPermissionLevel": 1,
-      "maxCallsPerHour": 100,
+      "maxCallsPerHour": 1000,
       "targetBaseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
       "targetApiKey": "sk-86e434f06a40442c9a90afce8178f161"
     }

@@ -5,6 +5,7 @@
  */
 
 import type { ReportRating } from '@/config/reportScoring';
+import type { AnalysisReportMetadata, ReportScoringContext } from '@/types/analysis';
 
 // === 报告数据类型 ===
 
@@ -87,23 +88,16 @@ export type GaokaoEssayData = {
 
 /** 渲染器接收的原始输入 */
 export type GaokaoEssayRawInput = {
+  /** 报告唯一 ID */
+  reportId: string;
+  /** 报告生成时间 */
+  createdAt: string;
   /** 模型返回的原始 JSON 数据 */
   rawJson: unknown;
   /** 分析元数据 */
-  metadata: {
-    /** 模型名称 */
-    model: string;
-    /** API 基础 URL */
-    baseUrl: string;
-    /** 提示词模板版本 */
-    templateVersion: string;
-    /** 评分策略版本 */
-    scoringPolicyVersion: string;
-    /** 结论策略版本 */
-    conclusionPolicyVersion: string;
-    /** 评价目标 */
-    evaluationGoal: string;
-  };
+  metadata: AnalysisReportMetadata;
+  /** 评分上下文快照 */
+  scoringContext: ReportScoringContext;
 };
 
 /**

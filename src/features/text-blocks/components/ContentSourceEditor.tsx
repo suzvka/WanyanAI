@@ -95,17 +95,22 @@ export default function ContentSourceEditor({
       return;
     }
 
-    const nextFile = await buildStoredFile(fileToUpload, titleForFileName);
-    if (nextFile.content.length > MAX_BLOCK_CONTENT_LENGTH) {
-      onAlert(`单个文件不能超过 ${MAX_BLOCK_CONTENT_LENGTH} 字符。`);
-      return;
-    }
+    try {
+      const nextFile = await buildStoredFile(fileToUpload, titleForFileName);
+      if (nextFile.content.length > MAX_BLOCK_CONTENT_LENGTH) {
+        onAlert(`单个文件不能超过 ${MAX_BLOCK_CONTENT_LENGTH} 字符。`);
+        return;
+      }
 
-    if (!canApplyFile(nextFile)) {
-      return;
-    }
+      if (!canApplyFile(nextFile)) {
+        return;
+      }
 
-    onFileChange(nextFile);
+      onFileChange(nextFile);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '文件读取失败，请重试。';
+      onAlert(errorMessage);
+    }
   };
 
   const handleFileInputChange = async (event: ChangeEvent<HTMLInputElement>) => {

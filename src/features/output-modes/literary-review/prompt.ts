@@ -1,10 +1,10 @@
 /**
- * report-json 输出模式的格式规定提示词
- * 
- * 要求 AI 生成符合 AnalysisReport 结构的 JSON
+ * 文学作品评审输出模式的格式规定提示词
+ *
+ * 要求 AI 生成符合文学作品评审结构的 JSON
  */
 
-export const REPORT_JSON_PROMPT = `#结构要求：
+export const LITERARY_REVIEW_PROMPT = `#结构要求：
 输出纯 JSON，对象中不得包含 Markdown 代码块、解释文字或任何额外前后缀。
 
 ### JSON Schema 约束
@@ -36,8 +36,8 @@ export const REPORT_JSON_PROMPT = `#结构要求：
 
 ###内容建议：
 - summary.title 可写成带副标题的赏析标题
-- summary.overview 先概括整体观感，再做全局赏析；它是“赏析角度”的总结
-- conclusion.rationale 是“评价角度”的总结
+- summary.overview 先概括整体观感，再做全局赏析；它是"赏析角度"的总结
+- conclusion.rationale 是"评价角度"的总结
 - 先抓核心亮点深入分析，再做客观评价
 - 优点与缺点可分别成段
 - 不强行平衡优缺点：可以全优、全劣，或优缺点并存

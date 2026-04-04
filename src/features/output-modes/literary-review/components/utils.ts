@@ -1,5 +1,5 @@
 /**
- * report-json 输出模式工具函数
+ * 文学作品评审输出模式工具函数
  */
 
 import type { ReportRating } from '@/config/reportScoring';

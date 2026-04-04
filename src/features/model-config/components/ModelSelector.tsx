@@ -51,6 +51,15 @@ export default function ModelSelector({
       ? (hasModels ? '请选择一个模型' : '正在加载模型列表...')
       : (selectedConfig ? '请选择一个模型' : '请先选择 API 配置'));
 
+  // 生成状态提示文本
+  const getStatusText = () => {
+    if (!useBuiltInMode) return null;
+    if (hasModels) return null;
+    if (isRefreshing) return null;
+
+    return '加载失败，请点击刷新按钮重试';
+  };
+
   return (
     <Select value={selectedModel || ''} onValueChange={handleSelect}>
       <SelectTrigger
@@ -63,7 +72,12 @@ export default function ModelSelector({
         header={
           onRefresh ? (
             <div className="bg-muted/50 border-b border-border p-2">
-              <div className="text-muted-foreground text-xs font-medium mb-1.5 px-1">操作</div>
+              <div className="flex items-center justify-between mb-1.5 px-1">
+                <div className="text-muted-foreground text-xs font-medium">操作</div>
+                {!hasModels && !isRefreshing && (
+                  <div className="text-destructive text-xs">{getStatusText()}</div>
+                )}
+              </div>
               <Button
                 variant="secondary"
                 size="sm"
@@ -89,8 +103,11 @@ export default function ModelSelector({
           </SelectItem>
         ))}
         {models.length === 0 && !isRefreshing && (
-          <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-            暂无可用模型
+          <div className="px-2 py-4 text-center">
+            <div className="text-sm text-muted-foreground mb-2">暂无可用模型</div>
+            {getStatusText() && (
+              <div className="text-xs text-destructive">{getStatusText()}</div>
+            )}
           </div>
         )}
       </SelectContent>

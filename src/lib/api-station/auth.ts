@@ -1,79 +1,146 @@
-import { logInfo, logError, LogContext } from './logger';
+import { logInfo, logError } from './logger';
+import { resolveUserPermissions } from './userPermissions';
+import { verifyProxyKey } from './proxyKey';
+import { getVisitorSessionFromRequest, hashVisitorId } from './visitorSession';
+import type { ProxyKeyPayload, ResolvedPermissionProfile, SubjectType } from '@/types/apiStationAuth';
 
-// 鉴权结果接口
 export interface AuthResult {
   success: boolean;
-  browserId?: string;
+  subjectType?: SubjectType;
+  subjectId?: string;
+  userRef?: string;
   permissionLevel?: number;
+  permissionProfile?: ResolvedPermissionProfile;
+  keyPayload?: ProxyKeyPayload;
+  proof?: string;
   error?: string;
   errorCode?: string;
 }
 
-// 鉴权上下文
-export interface AuthContext {
-  browserId: string | null;
+export interface ChallengeAuthParams {
+  token: string | null;
+  answer: string | null;
+  nonce: number | null;
 }
 
-/**
- * 验证浏览器 ID 格式（UUID v4）
- */
-function isValidBrowserId(browserId: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(browserId);
-}
+async function validateRequestBinding(
+  payload: ProxyKeyPayload,
+  request: Request | undefined,
+): Promise<{ success: true } | { success: false; error: string; errorCode: string }> {
+  if (payload.version !== 'v2' || payload.subjectType !== 'guest') {
+    return { success: true };
+  }
 
-/**
- * 鉴权浏览器访问
- * @param browserId - 浏览器 ID（从请求头 X-Browser-Id 获取）
- * @returns 鉴权结果
- */
-export function authenticateBrowser(browserId: string | null): AuthResult {
-  const context: AuthContext = { browserId };
-
-  // 1. 检查是否提供了浏览器 ID
-  if (!browserId) {
-    const error = 'Missing browser ID';
-    logError('[Auth] 鉴权失败: 浏览器 ID 缺失', null, { browserId: undefined });
+  if (!request) {
     return {
       success: false,
-      error,
-      errorCode: 'MISSING_BROWSER_ID'
+      error: 'Missing request context for session-bound proxy key',
+      errorCode: 'MISSING_REQUEST_CONTEXT',
     };
   }
 
-  // 2. 验证 UUID 格式
-  if (!isValidBrowserId(browserId)) {
-    const error = 'Invalid browser ID format';
-    logError('[Auth] 鉴权失败: 浏览器 ID 格式无效', null, { browserId });
+  const visitorSession = await getVisitorSessionFromRequest(request);
+  if (!visitorSession) {
     return {
       success: false,
-      error,
-      errorCode: 'INVALID_BROWSER_ID'
+      error: 'Missing visitor session',
+      errorCode: 'MISSING_VISITOR_SESSION',
     };
   }
 
-  // 3. 鉴权通过，返回游客权限（权限等级为 1）
-  logInfo('[Auth] 鉴权成功', {
-    browserId,
-    permissionLevel: 1
+  if (visitorSession.visitorId !== payload.subjectId) {
+    return {
+      success: false,
+      error: 'Visitor session mismatch',
+      errorCode: 'VISITOR_SESSION_MISMATCH',
+    };
+  }
+
+  if (visitorSession.sessionId !== payload.sessionId) {
+    return {
+      success: false,
+      error: 'Visitor session binding mismatch',
+      errorCode: 'VISITOR_SESSION_BINDING_MISMATCH',
+    };
+  }
+
+  const expectedVisitorIdHash = await hashVisitorId(visitorSession.visitorId);
+  if (payload.sessionBinding.visitorIdHash !== expectedVisitorIdHash) {
+    return {
+      success: false,
+      error: 'Visitor session hash mismatch',
+      errorCode: 'VISITOR_SESSION_HASH_MISMATCH',
+    };
+  }
+
+  return { success: true };
+}
+
+export async function authenticateProxyKey(key: string | null, request?: Request): Promise<AuthResult> {
+  if (!key) {
+    logError('[Auth] 鉴权失败: proxy key 缺失');
+    return {
+      success: false,
+      error: 'Missing proxy key',
+      errorCode: 'MISSING_PROXY_KEY',
+    };
+  }
+
+  const verification = await verifyProxyKey(key);
+  if (!verification.success) {
+    logError('[Auth] 鉴权失败: proxy key 无效', verification.error, {
+      errorCode: verification.errorCode,
+    });
+    return {
+      success: false,
+      error: verification.error,
+      errorCode: verification.errorCode,
+    };
+  }
+
+  const bindingResult = await validateRequestBinding(verification.payload!, request);
+  if (!bindingResult.success) {
+    logError('[Auth] 鉴权失败: proxy key 会话绑定无效', bindingResult.error, {
+      errorCode: bindingResult.errorCode,
+    });
+    return {
+      success: false,
+      error: bindingResult.error,
+      errorCode: bindingResult.errorCode,
+    };
+  }
+
+  const permissionProfile = await resolveUserPermissions({
+    subjectType: verification.subjectType!,
+    subjectId: verification.subjectId!,
+    userRef: verification.userRef ?? null,
+  });
+
+  const subjectPreview = `${verification.subjectId!.slice(0, 8)}...`;
+
+  logInfo('[Auth] Proxy key 鉴权成功', {
+    subjectType: verification.subjectType,
+    subjectPreview,
+    permissionLevel: permissionProfile.permissionLevel,
+    role: permissionProfile.role,
+    source: permissionProfile.source,
   });
 
   return {
     success: true,
-    browserId,
-    permissionLevel: 1 // 游客默认权限为 1
+    subjectType: verification.subjectType,
+    subjectId: verification.subjectId,
+    userRef: verification.userRef,
+    permissionLevel: permissionProfile.permissionLevel,
+    permissionProfile,
+    keyPayload: verification.payload,
+    proof: verification.proof,
   };
 }
 
-/**
- * 检查用户是否有权限使用指定模型
- * @param userPermissionLevel - 用户权限等级
- * @param modelPermissionLevel - 模型所需权限等级
- * @returns 是否有权限
- */
 export function checkModelPermission(
   userPermissionLevel: number,
-  modelPermissionLevel: number
+  modelPermissionLevel: number,
 ): boolean {
   return userPermissionLevel >= modelPermissionLevel;
 }

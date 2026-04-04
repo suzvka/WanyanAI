@@ -1,7 +1,9 @@
 'use client';
 
+import type { ComponentType, MouseEvent } from 'react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, Compass, Home, Sparkles } from 'lucide-react';
+import { BookOpen, Compass, History, Home, Sparkles } from 'lucide-react';
 import type { ModuleConfig } from '@/types/module';
 import {
   Sidebar,
@@ -19,7 +21,7 @@ import {
 import { useNavigationGuard } from '@/providers/NavigationGuardContext';
 
 // 图标映射表
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+const ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
   BookOpen,
   Compass,
   Home,
@@ -35,6 +37,7 @@ interface AppSidebarProps {
 export default function AppSidebar({ title, primaryColor, modules = [] }: AppSidebarProps) {
   const pathname = usePathname();
   const { requestNavigate } = useNavigationGuard();
+  const isHistoryActive = pathname === '/history' || pathname.startsWith('/history/');
 
   // 过滤并排序侧栏启用的模块
   const sidebarModules = modules
@@ -42,7 +45,7 @@ export default function AppSidebar({ title, primaryColor, modules = [] }: AppSid
     .sort((a, b) => a.manifest.sidebar.order - b.manifest.sidebar.order);
 
   // 处理导航点击
-  const handleNavigate = (href: string, e: React.MouseEvent) => {
+  const handleNavigate = (href: string, e: MouseEvent<HTMLAnchorElement>) => {
     if (!requestNavigate(href)) {
       e.preventDefault();
       e.stopPropagation();
@@ -74,10 +77,10 @@ export default function AppSidebar({ title, primaryColor, modules = [] }: AppSid
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/'}>
-                  <a href="/" onClick={(e) => handleNavigate('/', e)}>
+                  <Link href="/" onClick={(e: MouseEvent<HTMLAnchorElement>) => handleNavigate('/', e)}>
                     <Home />
                     <span>首页</span>
-                  </a>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -97,13 +100,13 @@ export default function AppSidebar({ title, primaryColor, modules = [] }: AppSid
                   return (
                     <SidebarMenuItem key={module.manifest.id}>
                       <SidebarMenuButton asChild isActive={isActive}>
-                        <a
+                        <Link
                           href={module.manifest.route}
-                          onClick={(e) => handleNavigate(module.manifest.route, e)}
+                          onClick={(e: MouseEvent<HTMLAnchorElement>) => handleNavigate(module.manifest.route, e)}
                         >
                           <IconComponent />
                           <span>{module.manifest.name}</span>
-                        </a>
+                        </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );
@@ -115,10 +118,20 @@ export default function AppSidebar({ title, primaryColor, modules = [] }: AppSid
       </SidebarContent>
       <SidebarSeparator />
       <SidebarFooter className="px-4 py-3 text-xs text-sidebar-foreground/70">
-        <div className="flex items-center gap-2">
+        <div className="mb-2 flex items-center gap-2">
           <Compass className="h-4 w-4" />
-          <span>后续一级导航将在此扩展</span>
+          <span>扩展</span>
         </div>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={isHistoryActive}>
+              <Link href="/history" onClick={(e: MouseEvent<HTMLAnchorElement>) => handleNavigate('/history', e)}>
+                <History />
+                <span>历史报告</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   );

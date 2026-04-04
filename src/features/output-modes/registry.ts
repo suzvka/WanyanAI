@@ -1,4 +1,6 @@
 import type { ComponentType } from 'react';
+import type { ReportScoringContext } from '@/types/analysis';
+import type { ModuleConfig } from '@/types/module';
 
 /**
  * 渲染器通用 Props
@@ -11,6 +13,11 @@ export type RendererProps<TData = unknown> = {
   onBackToEdit?: () => void;
   /** @deprecated 使用 onStartNew 或 onBackToEdit 替代 */
   onReset?: () => void;
+};
+
+export type BuildScoringContextParams = {
+  moduleConfig: ModuleConfig;
+  controlSelections: Record<string, string>;
 };
 
 /**
@@ -27,6 +34,8 @@ export type OutputModeDefinition<TData = unknown> = {
   Renderer: ComponentType<RendererProps<TData>>;
   /** 数据验证 */
   validate: (data: unknown) => data is TData;
+  /** 构建评分上下文 */
+  buildScoringContext: (params: BuildScoringContextParams) => ReportScoringContext;
 };
 
 /**
@@ -74,4 +83,11 @@ export function getRegisteredOutputModes(): string[] {
  */
 export function getOutputMode(id: string): OutputModeDefinition | undefined {
   return outputModeRegistry.get(id);
+}
+
+/**
+ * 获取输出模式提示词
+ */
+export function getOutputModePrompt(id: string): string | undefined {
+  return outputModeRegistry.get(id)?.prompt;
 }

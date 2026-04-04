@@ -53,7 +53,8 @@
 │   │   ├── model-config/           # 模型配置
 │   │   ├── output-modes/           # 输出模式（新增）
 │   │   │   ├── registry.ts         # 输出模式注册表
-│   │   │   └── report-json/        # 标准 JSON 报告模式
+│   │   │   ├── literary-review/    # 文学作品评审模式
+│   │   │   └── gaokao-essay/       # 高考作文评分模式
 │   │   └── text-blocks/            # 文本块编辑
 │   │
 │   ├── server/
@@ -103,7 +104,8 @@
 
 输出模式定义 AI 返回数据的格式和渲染器：
 
-- **report-json**：标准 JSON 报告格式，使用 `ReportView` 渲染
+- **literary-review**：文学作品评审报告格式
+- **gaokao-essay**：高考作文评分报告格式
 
 输出模式配置在 `main.json` 的 `outputMode` 字段中指定。
 
@@ -151,7 +153,7 @@
 2. 创建 `main.json`（必需）：
    - 定义模块 ID、名称、路由
    - 定义 `containers` 数组（必须包含 `analysis-controls`）
-   - 定义 `outputMode`（目前支持 `report-json`）
+   - 定义 `outputMode`（目前支持 `literary-review`、`gaokao-essay`）
 3. 创建 `site.json`（可选）：页面文案配置
 4. 创建 `analysis-controls.json`（可选）：分析控制配置
 5. 重启服务，模块自动加载到侧栏
@@ -173,7 +175,7 @@
       } 
     }
   ],
-  "outputMode": "report-json",
+  "outputMode": "literary-review",
   "sidebar": {
     "enabled": true,
     "icon": "BookOpen",

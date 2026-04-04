@@ -2,6 +2,12 @@ import type { OutputModeDefinition } from '../registry';
 import { GaokaoEssayRenderer } from './renderer';
 import { GAOKAO_ESSAY_PROMPT } from './prompt';
 import type { GaokaoEssayData, GaokaoEssayRawInput } from './types';
+import { GAOKAO_NEUTRAL_MULTIPLIER } from './scoring';
+import {
+  calculateMultipliers,
+  extractAllOptions,
+  getSelectedValues,
+} from './multiplierCalculator';
 
 /**
  * 验证数据是否为有效的 GaokaoEssayRawInput
@@ -14,8 +20,11 @@ function isGaokaoEssayRawInput(data: unknown): data is GaokaoEssayRawInput {
   const obj = data as Record<string, unknown>;
 
   return (
+    typeof obj.reportId === 'string' &&
+    typeof obj.createdAt === 'string' &&
     obj.rawJson !== undefined &&
     obj.metadata !== undefined &&
+    obj.scoringContext !== undefined &&
     typeof obj.metadata === 'object'
   );
 }
@@ -30,10 +39,19 @@ function isGaokaoEssayRawInput(data: unknown): data is GaokaoEssayRawInput {
  */
 export const gaokaoEssayMode: OutputModeDefinition<GaokaoEssayRawInput> = {
   id: 'gaokao-essay',
-  name: '高考作文评分报告',
+  name: '高考作文',
   prompt: GAOKAO_ESSAY_PROMPT,
   Renderer: GaokaoEssayRenderer,
   validate: isGaokaoEssayRawInput,
+  buildScoringContext: ({ moduleConfig, controlSelections }) => {
+    const allOptions = extractAllOptions(moduleConfig.analysisControls.groups);
+    const selectedValues = getSelectedValues(controlSelections);
+
+    return {
+      multipliers: calculateMultipliers(allOptions, selectedValues, GAOKAO_NEUTRAL_MULTIPLIER),
+      defaultMultiplier: GAOKAO_NEUTRAL_MULTIPLIER,
+    };
+  },
 };
 
 // === 公开 API ===

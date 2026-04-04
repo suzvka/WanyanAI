@@ -69,3 +69,18 @@ export function showInfo(message: string, duration?: number): void {
 export function showSuccess(message: string, duration?: number): void {
   showAlert(message, { type: 'success', duration });
 }
+
+/**
+ * 展示带操作的成功提示
+ */
+export function showSuccessWithAction(
+  message: string,
+  options?: {
+    duration?: number;
+  }
+): void {
+  showAlert(message, { 
+    type: 'success', 
+    duration: options?.duration,
+  });
+}

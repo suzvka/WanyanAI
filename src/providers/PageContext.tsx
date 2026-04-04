@@ -1,22 +1,14 @@
 'use client';
 
-import { createContext, useCallback, useContext, useMemo, useState, useRef, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { showError } from '@/lib/alert';
 import type { EvaluationInput } from '@/types/report';
 import type { AnalysisResult } from '@/types/analysis';
 import type { ModuleConfig } from '@/types/module';
 import type { AnalysisPhase, AnalysisStatus } from '@/types/appFlow';
 import type { ModelConfig } from '@/types/modelConfig';
-import { modelClient } from '@/services/model-client';
-import { PromptTemplateService } from '@/services/analysis/types';
-import { ApiAnalysisService } from '@/services/analysis/apiAnalysisService';
-import { 
-  buildAnalysisMessages, 
-  parseModelResponse,
-  requestCompiledInstructions 
-} from '@/features/analysis-flow/lib';
-import { ProgressController, type ProgressSnapshot, type ProgressStage } from '@/features/analysis-progress';
-import { createAppError } from '@/types/errors';
+import type { ProgressSnapshot } from '@/features/analysis-progress';
+import { useAnalysisTasks } from '@/providers/AnalysisTaskProvider';
 
 /**
  * 分析控制选择
@@ -42,61 +34,6 @@ export type AnalysisParams = {
   /** 其他自定义参数 */
   extraParams?: Record<string, unknown>;
 };
-
-/** 
- * 默认进度状态配置
- * 
- * 阶段命名与 AnalysisPhase 保持一致
- */
-const DEFAULT_PROGRESS_STAGES: ProgressStage[] = [
-  { 
-    name: 'prepare', 
-    label: '准备输入', 
-    events: [{ type: 'prepare', label: '任务开始' }], 
-    weight: 1 
-  },
-  { 
-    name: 'fetch-template', 
-    label: '获取模板', 
-    events: [{ type: 'fetch-template', label: '同步分析配置' }], 
-    weight: 1 
-  },
-  { 
-    name: 'build-prompt', 
-    label: '构建提示词', 
-    events: [{ type: 'build-prompt', label: '拼接请求参数' }], 
-    weight: 1 
-  },
-  {
-    name: 'request-model',
-    label: 'AI分析中...',
-    events: [
-      { type: 'request-model', weight: 1, label: '上传请求' },
-      { type: 'first-token', weight: 1, label: '开始接收响应' },
-      { type: 'think-start', weight: 1, label: '正在思索...' },
-      { type: 'content-start', weight: 6, label: '正在起草报告...' },
-    ],
-    weight: 8,
-  },
-  { 
-    name: 'extract-json', 
-    label: '提取数据', 
-    events: [{ type: 'extract-json', label: '解析响应内容' }], 
-    weight: 1 
-  },
-  { 
-    name: 'repair-json', 
-    label: '修复数据', 
-    events: [{ type: 'repair-json', label: '修复格式异常' }], 
-    weight: 2 
-  },
-  { 
-    name: 'normalize', 
-    label: '生成报告', 
-    events: [{ type: 'normalize', label: '提交报告' }], 
-    weight: 1 
-  },
-];
 
 /**
  * PageContext 值类型
@@ -124,6 +61,8 @@ export type PageContextValue = {
   retryAnalysis: () => Promise<AnalysisResult | null>;
   /** 重置分析状态 */
   resetAnalysis: () => void;
+  /** 后台模式：返回输入页面但保持任务运行 */
+  setBackgroundMode: () => void;
 
   // === 进度快照 ===
   /** 进度快照（供进度条渲染使用） */
@@ -153,15 +92,14 @@ export type PageProviderProps = {
   onRequireModelConfig?: () => void;
 };
 
-// 提示词模板服务实例
-const templateService: PromptTemplateService = new ApiAnalysisService();
-
 export function PageProvider({
   children,
   moduleConfig,
   currentModelConfig,
   onRequireModelConfig,
 }: PageProviderProps) {
+  const { createTask, getTask, subscribeTask, retryTask, canRetryTask } = useAnalysisTasks();
+
   // 分析控制选择
   const [controlSelections, setControlSelections] = useState<ControlSelections>(() => {
     const initial: ControlSelections = {};
@@ -186,8 +124,8 @@ export function PageProvider({
   // 分析报告（原始数据）
   const [report, setReport] = useState<AnalysisResult>(null);
 
-  // 保存最后一次分析参数，用于重试
-  const [lastAnalysisParams, setLastAnalysisParams] = useState<AnalysisParams | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [lastTaskId, setLastTaskId] = useState<string | null>(null);
 
   // 进度快照状态
   const [progressSnapshot, setProgressSnapshot] = useState<ProgressSnapshot>({
@@ -197,196 +135,165 @@ export function PageProvider({
     status: 'idle',
   });
 
-  // ProgressController 实例
-  const progressControllerRef = useRef<ProgressController | null>(null);
-  if (!progressControllerRef.current) {
-    progressControllerRef.current = new ProgressController();
-  }
-  const progressController = progressControllerRef.current;
-
   // 更新单个控制项选择
   const updateControlSelection = useCallback((controlId: string, value: string) => {
-    setControlSelections(prev => ({
+    setControlSelections((prev: ControlSelections) => ({
       ...prev,
       [controlId]: value,
     }));
   }, []);
 
+  useEffect(() => {
+    if (!activeTaskId) {
+      return;
+    }
+
+    return subscribeTask(activeTaskId, (record) => {
+      if (!record) {
+        return;
+      }
+
+      setProgressSnapshot(record.progressSnapshot);
+
+      if (record.status === 'completed' && record.report) {
+        setReport(record.report);
+        setAnalysisState({
+          phase: 'normalize',
+          status: 'idle',
+          canRetry: false,
+        });
+        return;
+      }
+
+      if (record.status === 'failed') {
+        setReport(null);
+        setAnalysisState({
+          phase: record.taskMeta.phase,
+          status: 'failed',
+          message: record.taskMeta.errorMessage || record.taskMeta.message || '分析失败',
+          canRetry: canRetryTask(record.id),
+        });
+        return;
+      }
+
+      setReport(null);
+      setAnalysisState({
+        phase: record.taskMeta.phase,
+        status: 'running',
+        message: record.taskMeta.message,
+        canRetry: false,
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTaskId]);
+
   // 开始分析
   const startAnalysis = useCallback(async (params: AnalysisParams): Promise<AnalysisResult | null> => {
-    // 检查模型配置
     if (!currentModelConfig) {
       onRequireModelConfig?.();
       return null;
     }
 
-    // 保存参数用于重试
-    setLastAnalysisParams(params);
-
-    // 重置进度控制器并注册状态
-    progressController.reset();
-    progressController.registerStages(DEFAULT_PROGRESS_STAGES);
-
-    // 订阅进度变化
-    const unsubscribe = progressController.subscribe((snapshot) => {
-      setProgressSnapshot(snapshot);
-    });
-
-    // 重置状态
-    setAnalysisState({
-      phase: 'prepare',
-      status: 'running',
-      canRetry: false,
-    });
-    setReport(null);
-
     try {
-      // 解析序列化的输入数据
       const input = JSON.parse(params.textContent) as EvaluationInput;
 
-      // 阶段 1: 获取动态指令
-      progressController.handleEvent({ type: 'workflow-stage', stage: 'fetch-template', timestamp: Date.now() });
-      setAnalysisState(prev => ({
-        ...prev,
-        phase: 'fetch-template',
-        message: '正在同步当前分析配置',
-      }));
-
-      const compiledInstructions = await requestCompiledInstructions({
+      const taskId = await createTask({
+        moduleConfig,
+        modelConfig: currentModelConfig,
         controlSelections,
-        configVersion: moduleConfig.manifest.id,
-      });
-
-      // 阶段 2: 获取提示词模板
-      const template = await templateService.getTemplate({
-        evaluationGoal: input.evaluationGoal,
-        outputMode: moduleConfig.manifest.outputMode,
-      });
-
-      // 阶段 3: 构建请求消息
-      progressController.handleEvent({ type: 'workflow-stage', stage: 'build-prompt', timestamp: Date.now() });
-      setAnalysisState(prev => ({
-        ...prev,
-        phase: 'build-prompt',
-        message: '正在构建请求',
-      }));
-
-      const { messages, maxTokens } = buildAnalysisMessages({
+        params,
         input,
-        template,
-        instructionText: compiledInstructions.instructionText,
-        containers: moduleConfig.manifest.containers,
       });
 
-      // 阶段 4: 调用模型
-      progressController.handleEvent({ type: 'workflow-stage', stage: 'request-model', timestamp: Date.now() });
-      setAnalysisState(prev => ({
-        ...prev,
-        phase: 'request-model',
-        message: '模型正在生成分析结果',
-      }));
+      if (!taskId) {
+        return null;
+      }
 
-      const result = await modelClient.call({
-        baseUrl: currentModelConfig.baseUrl,
-        apiKey: currentModelConfig.apiKey,
-        model: currentModelConfig.selectedModel,
-        messages,
-        temperature: template.recommendedParameters.temperature,
-        maxTokens,
-        events: progressController.createEventHandlers(),
-      });
+      const record = getTask(taskId);
+      setActiveTaskId(taskId);
+      setLastTaskId(taskId);
+      setReport(null);
 
-      // 阶段 5: 解析响应
-      progressController.handleEvent({ type: 'workflow-stage', stage: 'extract-json', timestamp: Date.now() });
-      setAnalysisState(prev => ({
-        ...prev,
-        phase: 'extract-json',
-        message: '正在解析响应',
-      }));
-
-      const parsed = parseModelResponse(result.content);
-      
-      if (!parsed.success) {
-        throw createAppError({
-          code: 'provider_response_invalid',
-          message: '模型返回的内容无法解析为有效的 JSON 格式，请重试。',
-          retryable: true,
+      if (record) {
+        setProgressSnapshot(record.progressSnapshot);
+        setAnalysisState({
+          phase: record.taskMeta.phase,
+          status: 'running',
+          message: record.taskMeta.message,
+          canRetry: false,
         });
       }
 
-      // 取消订阅
-      unsubscribe();
-
-      // 构建结果（包含元数据）
-      const analysisResult = {
-        rawJson: parsed.data,
-        metadata: {
-          model: currentModelConfig.selectedModel,
-          baseUrl: currentModelConfig.baseUrl,
-          templateVersion: template.version,
-          scoringPolicyVersion: template.policyMeta.scoringPolicyVersion,
-          conclusionPolicyVersion: template.policyMeta.conclusionPolicyVersion,
-          evaluationGoal: input.evaluationGoal,
-        },
-      };
-
-      // 成功完成
-      progressController.handleEvent({ type: 'workflow-stage', stage: 'normalize', timestamp: Date.now() });
-      setReport(analysisResult);
-      setAnalysisState({
-        phase: 'normalize',
-        status: 'idle',
-        canRetry: false,
-      });
-
-      return analysisResult;
+      return null;
     } catch (error) {
-      // 取消订阅
-      unsubscribe();
-      
       const errorMessage = error instanceof Error ? error.message : '分析失败';
-      
-      // 设置错误状态到进度控制器
-      progressController.setError(errorMessage);
-      
-      // 弹出错误提示
       showError(errorMessage, 6000);
-      
-      setAnalysisState(prev => ({
-        ...prev,
+      setAnalysisState({
+        phase: 'prepare',
         status: 'failed',
         message: errorMessage,
         canRetry: true,
-      }));
+      });
       return null;
     }
-  }, [currentModelConfig, controlSelections, moduleConfig, onRequireModelConfig, progressController]);
+  }, [controlSelections, createTask, currentModelConfig, getTask, moduleConfig, onRequireModelConfig]);
 
   // 重试分析
   const retryAnalysis = useCallback(async (): Promise<AnalysisResult | null> => {
-    if (!lastAnalysisParams) {
+    const taskId = activeTaskId ?? lastTaskId;
+    if (!taskId) {
       return null;
     }
-    return startAnalysis(lastAnalysisParams);
-  }, [lastAnalysisParams, startAnalysis]);
+
+    const nextTaskId = await retryTask(taskId);
+    if (!nextTaskId) {
+      return null;
+    }
+
+    const record = getTask(nextTaskId);
+    setActiveTaskId(nextTaskId);
+    setLastTaskId(nextTaskId);
+    setReport(null);
+
+    if (record) {
+      setProgressSnapshot(record.progressSnapshot);
+      setAnalysisState({
+        phase: record.taskMeta.phase,
+        status: 'running',
+        message: record.taskMeta.message,
+        canRetry: false,
+      });
+    }
+
+    return null;
+  }, [activeTaskId, getTask, lastTaskId, retryTask]);
 
   // 重置分析状态
   const resetAnalysis = useCallback(() => {
+    setActiveTaskId(null);
+    setLastTaskId(null);
     setAnalysisState({
       phase: 'prepare',
       status: 'idle',
       canRetry: false,
     });
     setReport(null);
-    setLastAnalysisParams(null);
-    progressController.reset();
     setProgressSnapshot({
       progress: 0,
       currentStage: null,
       currentLabel: '',
       status: 'idle',
     });
-  }, [progressController]);
+  }, []);
+
+  // 后台模式：返回输入页面，但保持任务运行
+  const setBackgroundMode = useCallback(() => {
+    setAnalysisState({
+      phase: 'prepare',
+      status: 'idle',
+      canRetry: false,
+    });
+  }, []);
 
   const value = useMemo<PageContextValue>(() => ({
     moduleConfig,
@@ -398,6 +305,7 @@ export function PageProvider({
     startAnalysis,
     retryAnalysis,
     resetAnalysis,
+    setBackgroundMode,
     progressSnapshot,
     currentModelConfig,
     hasModelConfig: Boolean(currentModelConfig),
@@ -410,6 +318,7 @@ export function PageProvider({
     startAnalysis,
     retryAnalysis,
     resetAnalysis,
+    setBackgroundMode,
     progressSnapshot,
     currentModelConfig,
   ]);

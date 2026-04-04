@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { showError } from '@/lib/alert';
 import {
   AlertCircle,
@@ -22,7 +23,7 @@ import type { ContainerDataPayload, TextBlocksContainerData } from '@/types/cont
 import AppShell from '@/components/layout/AppShell';
 import { PlatformProvider, usePlatformContext } from '@/providers/PlatformContext';
 import { PageProvider, usePageContext } from '@/providers/PageContext';
-import { ModelConfigProvider, useModelConfig } from '@/providers/ModelConfigProvider';
+import { useModelConfig } from '@/providers/ModelConfigProvider';
 import { NavigationGuardProvider, useNavigationGuard } from '@/providers/NavigationGuardContext';
 import { renderContainer } from '@/containers';
 import { getOutputMode } from '@/features/output-modes';
@@ -40,6 +41,7 @@ function AnalysisProgressState({
   progressSnapshot,
   onRetry,
   onBack,
+  onBackground,
 }: {
   phase: AnalysisPhase;
   status: AnalysisStatus;
@@ -49,6 +51,7 @@ function AnalysisProgressState({
   progressSnapshot: ProgressSnapshot;
   onRetry: () => void;
   onBack: () => void;
+  onBackground: () => void;
 }) {
   // 完全依赖 ProgressController 的进度快照
   const progressPercent = progressSnapshot.progress;
@@ -109,6 +112,12 @@ function AnalysisProgressState({
         </div>
         <p className="text-sm text-[color:var(--report-text-subtle)]">{currentDescription}</p>
       </div>
+
+      {status !== 'failed' && progressSnapshot.status !== 'error' && (
+        <Button variant="outline" onClick={onBackground}>
+          后台进行
+        </Button>
+      )}
 
       {/* 失败状态按钮 */}
       {(status === 'failed' || progressSnapshot.status === 'error') && (
@@ -228,16 +237,31 @@ function EvaluateContent({
   const {
     analysisState,
     report,
-    controlSelections,
     startAnalysis,
     retryAnalysis,
     resetAnalysis,
+    setBackgroundMode,
     progressSnapshot,
   } = usePageContext();
   const { setHasUnsavedContent } = useNavigationGuard();
+  const pathname = usePathname();
 
   // 检测是否首次加载，只在首次显示骨架屏
   const isFirstLoad = usePageFirstLoad();
+
+  // 页面过渡状态
+  const [isPageVisible, setIsPageVisible] = useState(false);
+
+  // 路由变化时触发页面过渡动画
+  useEffect(() => {
+    // 使用 setTimeout 延迟状态更新
+    const hideTimer = setTimeout(() => setIsPageVisible(false), 0);
+    const showTimer = setTimeout(() => setIsPageVisible(true), 50);
+    return () => {
+      clearTimeout(hideTimer);
+      clearTimeout(showTimer);
+    };
+  }, [pathname]);
 
   // === 容器数据状态（通用数据通道）===
   // 按容器 ID 分组存储各类型容器的数据
@@ -264,7 +288,7 @@ function EvaluateContent({
 
   // 通用数据更新函数
   const updateContainerData = useCallback((containerId: string, data: ContainerDataPayload) => {
-    setContainersData(prev => ({
+    setContainersData((prev: Record<string, ContainerDataPayload>) => ({
       ...prev,
       [containerId]: data,
     }));
@@ -281,6 +305,13 @@ function EvaluateContent({
     setContainersData(initial);
     resetAnalysis();
   }, [moduleConfig.manifest.containers, resetAnalysis]);
+
+  // 后台进行：只返回输入页面，不重置任务状态
+  const handleBackground = useCallback(() => {
+    // 不调用 resetAnalysis()，让任务继续在后台运行
+    // 只切换 UI 状态，让用户可以输入新内容
+    setBackgroundMode();
+  }, [setBackgroundMode]);
 
   // 序列化为 EvaluationInput
   const toEvaluationInput = useCallback((): EvaluationInput => {
@@ -395,7 +426,15 @@ function EvaluateContent({
             />
           </ReportErrorBoundary>
         ) : analysisState.status !== 'idle' && analysisState.status !== 'failed' ? (
-          <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+          <main 
+            className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8"
+            style={{
+              opacity: isPageVisible ? 1 : 0,
+              transform: isPageVisible ? 'translateY(0)' : 'translateY(16px)',
+              transition: `opacity var(--motion-duration-slow) var(--motion-ease-emphasized),
+                           transform var(--motion-duration-slow) var(--motion-ease-emphasized)`,
+            }}
+          >
             <AnalysisProgressState
               phase={analysisState.phase}
               status={analysisState.status}
@@ -405,10 +444,19 @@ function EvaluateContent({
               progressSnapshot={progressSnapshot}
               onRetry={retryAnalysis}
               onBack={resetAnalysis}
+              onBackground={handleBackground}
             />
           </main>
         ) : (
-          <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+          <main 
+            className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8"
+            style={{
+              opacity: isPageVisible ? 1 : 0,
+              transform: isPageVisible ? 'translateY(0)' : 'translateY(16px)',
+              transition: `opacity var(--motion-duration-slow) var(--motion-ease-emphasized),
+                           transform var(--motion-duration-slow) var(--motion-ease-emphasized)`,
+            }}
+          >
             <div className="space-y-6">
               {/* 动态渲染容器列表 */}
               {containerElements}
@@ -440,14 +488,12 @@ export default function EvaluateClient({
   return (
     <PlatformProvider platformConfig={platformConfig}>
       <NavigationGuardProvider>
-        <ModelConfigProvider>
-          <PageProviderWrapper moduleConfig={moduleConfig}>
-            <EvaluateContent
-              moduleConfig={moduleConfig}
-              modules={modules}
-            />
-          </PageProviderWrapper>
-        </ModelConfigProvider>
+        <PageProviderWrapper moduleConfig={moduleConfig}>
+          <EvaluateContent
+            moduleConfig={moduleConfig}
+            modules={modules}
+          />
+        </PageProviderWrapper>
       </NavigationGuardProvider>
     </PlatformProvider>
   );

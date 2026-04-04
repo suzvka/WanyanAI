@@ -1,4 +1,4 @@
-# AudienceAI
+# WanyanAI
 
 这是一个基于 [Next.js 16](https://nextjs.org) + [shadcn/ui](https://ui.shadcn.com) 的模块化文本评估应用。项目使用 `pnpm` 管理依赖，并通过 `src/server.ts` 启动自定义 Node.js Server 承载 Next.js。
 
@@ -336,6 +336,24 @@ export default function ClientComponent() {
 - 服务端将所选项对应的 `promptText` 按顺序拼接成最终动态指令
 
 `ops-config/prompt-blocks/` 目录当前为预留目录，运行时尚未直接使用该目录组装提示词。
+
+### 8. 站内代理鉴权说明
+
+站内代理当前保持与普通 OpenAI-compatible 调用一致的表面形态：
+
+- 调用方仍传入 `baseUrl`、`key`、`model`
+- Bearer `key` 使用动态代理凭证，格式为 `proof.userRef`
+- 未登录时，客户端会生成浏览器级 `userRef` 并拼接到 `key` 后缀
+- 该 `userRef` 仅作为权限查询索引，不单独承担验证功能
+- 在账户系统接入前，服务端默认按**游客权限**处理站内代理请求
+
+当前协议已移除对 `X-Browser-Id` 的依赖。
+
+站内代理中的 challenge 现已降级为**纯辅助防刷语义**：
+
+- 不参与主身份鉴权
+- 主鉴权仍由 Bearer `key` 完成
+- 仅当请求显式携带 challenge 参数时，服务端才执行额外校验
 
 ## 常见开发场景
 

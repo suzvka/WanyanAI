@@ -645,3 +645,128 @@ body {
 .toaster [data-sonner-toast][data-type="error"] [data-icon] {
   color: var(--destructive) !important;
 }
+
+/* Sonner Toast 垂直布局样式 */
+.toaster [data-sonner-toast].toast-vertical-layout {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0 !important;
+}
+
+/* 信息行：图标和文本水平排列 */
+.toaster [data-sonner-toast].toast-vertical-layout [data-content] {
+  display: flex;
+  align-items: flex-start;
+}
+
+/* 按钮行：单独一行，固定高度，右对齐 */
+.toaster [data-sonner-toast].toast-vertical-layout [data-action] {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 24px;
+  margin-top: 8px;
+  padding-right: 4px;
+  margin-left: 0 !important;
+  width: auto !important;
+  background: transparent !important;
+}
+
+/* 按钮内部样式：文本居中 */
+.toaster [data-sonner-toast].toast-vertical-layout [data-action] button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: auto;
+  line-height: 1;
+}
+
+/* ========================================
+   Page Transitions - 页面过渡动画
+   ======================================== */
+
+/* View Transitions API 样式 */
+::view-transition-old(root) {
+  animation: 120ms ease-out both fade-out,
+             120ms ease-out both slide-out;
+}
+
+::view-transition-new(root) {
+  animation: 220ms ease-out 60ms both fade-in,
+             220ms ease-out 60ms both slide-in;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slide-in {
+  from { transform: translateY(12px); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slide-out {
+  from { transform: translateY(0); }
+  to { transform: translateY(-8px); }
+}
+
+/* 页面过渡包装器 */
+.page-transition-wrapper {
+  min-height: 0;
+}
+
+/* 交错动画样式 - 子元素依次出现 */
+.staggered-content .staggered-item {
+  opacity: 0;
+  animation: stagger-fade-in var(--motion-duration-standard) var(--motion-ease-emphasized) forwards;
+}
+
+@keyframes stagger-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 页面淡入动画类 */
+.page-fade-in {
+  animation: page-enter var(--motion-duration-slow) var(--motion-ease-emphasized) both;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 尊重用户减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .page-transition-wrapper,
+  .staggered-content .staggered-item,
+  .page-fade-in {
+    transition: none !important;
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}

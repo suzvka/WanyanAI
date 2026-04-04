@@ -6,13 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { reportRatingDisplayLabels } from '@/config/reportScoring';
-import type { ReportJsonData, ReportSubscore, ReportSection, ReportSectionGroup } from '../types';
+import type { LiteraryReviewData, LiteraryReviewSubscore, LiteraryReviewSection, LiteraryReviewSectionGroup } from '../types';
 import { formatNumber, getScoreColor, getGradeColor } from './utils';
 import { SubscoreRadarChart } from './SubscoreRadarChart';
 import { GradeProgressBar } from './GradeProgressBar';
 
-interface ReportJsonViewProps {
-  report: ReportJsonData;
+interface LiteraryReviewViewProps {
+  report: LiteraryReviewData;
   /** 开始新分析（清空所有数据，从新工作区开始） */
   onStartNew?: () => void;
   /** 返回编辑（保持当前数据，回到编辑页面） */
@@ -35,7 +35,7 @@ function ReportInfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SubscoreCard({ subscore }: { subscore: ReportSubscore }) {
+function SubscoreCard({ subscore }: { subscore: LiteraryReviewSubscore }) {
   return (
     <div className="space-y-3">
       {/* 标题与评级 - 紧密相邻 */}
@@ -59,7 +59,7 @@ function SubscoreCard({ subscore }: { subscore: ReportSubscore }) {
   );
 }
 
-export function ReportJsonView({ report, onStartNew, onBackToEdit }: ReportJsonViewProps) {
+export function LiteraryReviewView({ report, onStartNew, onBackToEdit }: LiteraryReviewViewProps) {
   const sections = report.sections ?? [];
   const groups = report.groups ?? [];
   const subscores = report.dashboard.subscores ?? [];
@@ -164,7 +164,7 @@ export function ReportJsonView({ report, onStartNew, onBackToEdit }: ReportJsonV
           {/* 分组内容 */}
           {groups.length > 0 ? (
             <div className="space-y-6">
-              {groups.map((group: ReportSectionGroup) => (
+              {groups.map((group: LiteraryReviewSectionGroup) => (
                 <Card key={group.id}>
                   <CardContent className="pb-6 px-6">
                     <h2 className="text-xl font-semibold text-[color:var(--report-text-heading)] mb-5">
@@ -208,7 +208,7 @@ export function ReportJsonView({ report, onStartNew, onBackToEdit }: ReportJsonV
             </div>
           ) : (
             <div className="space-y-6">
-              {sections.map((section: ReportSection) => {
+              {sections.map((section: LiteraryReviewSection) => {
                 const paragraphs = splitParagraphs(section.body);
 
                 return (

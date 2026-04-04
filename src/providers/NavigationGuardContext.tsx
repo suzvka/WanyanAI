@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertTriangle } from 'lucide-react';
 import {
   AlertDialog,
@@ -47,9 +48,19 @@ interface NavigationGuardProviderProps {
  * 提供全局的导航拦截功能，当有未保存内容时弹出确认对话框。
  */
 export function NavigationGuardProvider({ children }: NavigationGuardProviderProps) {
+  const router = useRouter();
   const [hasUnsavedContent, setHasUnsavedContent] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const navigateToTarget = useCallback((target: string) => {
+    if (target.startsWith('/')) {
+      router.push(target);
+      return;
+    }
+
+    window.location.href = target;
+  }, [router]);
 
   // 请求导航
   const requestNavigate = useCallback((target: string): boolean => {
@@ -69,10 +80,9 @@ export function NavigationGuardProvider({ children }: NavigationGuardProviderPro
     setHasUnsavedContent(false); // 清除未保存状态
 
     if (target) {
-      // 使用 window.location 进行导航（因为这是离开当前页面的操作）
-      window.location.href = target;
+      navigateToTarget(target);
     }
-  }, [pendingNavigation]);
+  }, [navigateToTarget, pendingNavigation]);
 
   // 取消导航
   const cancelNavigation = useCallback(() => {
@@ -110,7 +120,7 @@ interface NavigationGuardDialogProps {
  */
 function NavigationGuardDialog({ isOpen, onConfirm, onCancel }: NavigationGuardDialogProps) {
   return (
-    <AlertDialog open={isOpen} onOpenChange={(open) => !open && onCancel()}>
+    <AlertDialog open={isOpen} onOpenChange={(open: boolean) => !open && onCancel()}>
       <AlertDialogContent className="border-2 border-[color:var(--destructive)]">
         <AlertDialogHeader>
           <div className="flex items-center gap-3">

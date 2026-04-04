@@ -4,11 +4,13 @@
  */
 
 import type { ModelInfo, ApiConfigValidationStatus } from '@/types/modelConfig';
+import { looksLikeProxyKey } from './proxyKey';
 
-const BROWSER_ID_KEY = 'browser_id';
+const USER_REF_KEY = 'built_in_user_ref';
+const BUILT_IN_PROXY_KEY = 'built_in_proxy_key';
+const BUILT_IN_PROXY_KEY_EXPIRES = 'built_in_proxy_key_expires';
 const BUILT_IN_CACHE_KEY = 'built_in_models_cache';
 
-// 内置模式缓存结构
 interface BuiltInModelsCache {
   models: ModelInfo[];
   validationStatus: ApiConfigValidationStatus;
@@ -16,38 +18,29 @@ interface BuiltInModelsCache {
   cachedAt: string;
 }
 
-/**
- * 生成新的浏览器 ID（UUID v4 格式）
- */
-function generateBrowserId(): string {
+interface BuiltInProxyKeyInfo {
+  key: string;
+  expiresAt: number;
+}
+
+function generateUserRef(): string {
   return crypto.randomUUID();
 }
 
-/**
- * 获取内置 API 的认证密钥
- * 
- * 当前实现：返回浏览器 ID（保底默认）
- * 未来扩展：可结合账号系统返回用户 token
- */
-export function getBuiltInApiKey(): string {
+export function getBuiltInUserRef(): string {
   if (typeof window === 'undefined') {
     return '';
   }
 
-  let browserId = localStorage.getItem(BROWSER_ID_KEY);
-  
-  if (!browserId) {
-    browserId = generateBrowserId();
-    localStorage.setItem(BROWSER_ID_KEY, browserId);
+  let userRef = localStorage.getItem(USER_REF_KEY);
+  if (!userRef) {
+    userRef = generateUserRef();
+    localStorage.setItem(USER_REF_KEY, userRef);
   }
 
-  return browserId;
+  return userRef;
 }
 
-/**
- * 获取内置 API 的基础 URL
- * 指向当前服务器的 /api/v1 端点
- */
 export function getBuiltInBaseUrl(): string {
   if (typeof window === 'undefined') {
     return '';
@@ -55,15 +48,86 @@ export function getBuiltInBaseUrl(): string {
   return `${window.location.origin}/api/v1`;
 }
 
-/**
- * 内置配置的固定名称
- */
 export const BUILT_IN_CONFIG_NAME = '站内模型服务';
 
-/**
- * 获取内置模式的缓存
- * 返回模型列表、验证状态和选中的模型
- */
+export function getBuiltInApiKey(): string {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  try {
+    const key = localStorage.getItem(BUILT_IN_PROXY_KEY);
+    const expiresAtStr = localStorage.getItem(BUILT_IN_PROXY_KEY_EXPIRES);
+
+    if (!key || !expiresAtStr) {
+      return '';
+    }
+
+    const expiresAt = parseInt(expiresAtStr, 10);
+    if (Date.now() >= expiresAt) {
+      clearBuiltInApiKey();
+      return '';
+    }
+
+    if (!looksLikeProxyKey(key)) {
+      clearBuiltInApiKey();
+      return '';
+    }
+
+    return key;
+  } catch {
+    clearBuiltInApiKey();
+    return '';
+  }
+}
+
+export function clearBuiltInApiKey(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  localStorage.removeItem(BUILT_IN_PROXY_KEY);
+  localStorage.removeItem(BUILT_IN_PROXY_KEY_EXPIRES);
+}
+
+function saveBuiltInApiKey(info: BuiltInProxyKeyInfo) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  localStorage.setItem(BUILT_IN_PROXY_KEY, info.key);
+  localStorage.setItem(BUILT_IN_PROXY_KEY_EXPIRES, info.expiresAt.toString());
+}
+
+export async function refreshBuiltInApiKey(): Promise<BuiltInProxyKeyInfo> {
+  const userRefHint = getBuiltInUserRef();
+  const response = await fetch(`${getBuiltInBaseUrl()}/key`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userRef: userRefHint }),
+  });
+
+  const payload = await response.json().catch(() => null) as {
+    key?: string;
+    expiresAt?: number;
+    error?: { message?: string };
+  } | null;
+
+  if (!response.ok || !payload?.key || typeof payload.expiresAt !== 'number') {
+    throw new Error(payload?.error?.message || '站内代理 Key 获取失败');
+  }
+
+  const keyInfo = {
+    key: payload.key,
+    expiresAt: payload.expiresAt,
+  };
+  saveBuiltInApiKey(keyInfo);
+  return keyInfo;
+}
+
 export function getBuiltInModelsCache(): BuiltInModelsCache | null {
   if (typeof window === 'undefined') {
     return null;
@@ -80,12 +144,6 @@ export function getBuiltInModelsCache(): BuiltInModelsCache | null {
   }
 }
 
-/**
- * 保存内置模式的缓存
- * @param models 模型列表
- * @param validationStatus 验证状态
- * @param selectedModel 选中的模型 ID
- */
 export function saveBuiltInModelsCache(
   models: ModelInfo[],
   validationStatus: ApiConfigValidationStatus,
@@ -105,9 +163,6 @@ export function saveBuiltInModelsCache(
   localStorage.setItem(BUILT_IN_CACHE_KEY, JSON.stringify(cache));
 }
 
-/**
- * 清除内置模式的缓存
- */
 export function clearBuiltInModelsCache(): void {
   if (typeof window === 'undefined') {
     return;

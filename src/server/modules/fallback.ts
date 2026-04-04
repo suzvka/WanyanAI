@@ -23,7 +23,7 @@ export function createFallbackModuleConfig(): ModuleConfig {
           } 
         },
       ],
-      outputMode: 'report-json',
+      outputMode: 'literary-review',
       sidebar: {
         enabled: true,
         icon: 'BookOpen',

@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
-import type { ReportSubscore } from '../types';
+import type { LiteraryReviewSubscore } from '../types';
 import { reportBaseScore } from '@/config/reportScoring';
 
 interface SubscoreRadarChartProps {
-  subscores: ReportSubscore[];
+  subscores: LiteraryReviewSubscore[];
   className?: string;
 }
 

@@ -56,6 +56,7 @@ export const modelConfigProvider: ModelConfigProvider = {
             Authorization: `Bearer ${cleanApiKey}`,
             'Content-Type': 'application/json',
           },
+          credentials: 'same-origin', // 携带 cookies 以验证 session binding
           signal: controller.signal,
         });
       } catch (fetchError) {
@@ -144,6 +145,7 @@ export const modelConfigProvider: ModelConfigProvider = {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'same-origin', // 携带 cookies 以验证 session binding
         body: JSON.stringify(body),
       });
 

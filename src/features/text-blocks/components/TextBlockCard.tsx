@@ -53,7 +53,7 @@ export default function TextBlockCard({
           <Input
             id={`title-${block.id}`}
             value={block.title}
-            placeholder={`文本块 ${index + 1}`}
+            placeholder={`段落标题 #${index + 1}`}
             className="h-9 w-auto min-w-[120px] max-w-[240px] px-3 text-base font-semibold"
             onChange={(event: ChangeEvent<HTMLInputElement>) => onTitleChange(event.target.value)}
           />

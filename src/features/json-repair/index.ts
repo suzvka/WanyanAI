@@ -33,5 +33,5 @@ export type {
 // 导出服务
 export { jsonRepairService } from './service';
 
-// 导出提示词（从 report-json 模块重新导出，方便使用）
-export { REPORT_JSON_PROMPT } from '@/features/output-modes/report-json/prompt';
+// 导出提示词（从 literary-review 模块重新导出，方便使用）
+export { LITERARY_REVIEW_PROMPT } from '@/features/output-modes/literary-review/prompt';

@@ -14,6 +14,38 @@ export interface LogContext {
   [key: string]: any;
 }
 
+const SENSITIVE_KEY_PATTERN = /authorization|api[_-]?key|proxy[_-]?key|proof|token|secret|password|prompt|message|content|response|expected|received|modifiedData|userRef/i;
+
+function sanitizeValue(key: string, value: unknown): unknown {
+  if (value == null) {
+    return value;
+  }
+
+  if (SENSITIVE_KEY_PATTERN.test(key)) {
+    return '[REDACTED]';
+  }
+
+  if (Array.isArray(value)) {
+    return `[array:${value.length}]`;
+  }
+
+  if (typeof value === 'object') {
+    return sanitizeContext(value as LogContext);
+  }
+
+  if (typeof value === 'string' && value.length > 160) {
+    return `${value.slice(0, 32)}...[TRUNCATED:${value.length}]`;
+  }
+
+  return value;
+}
+
+function sanitizeContext(context: LogContext): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(context).map(([key, value]) => [key, sanitizeValue(key, value)]),
+  );
+}
+
 // 日志格式化
 function formatLog(
   level: LogLevel,
@@ -21,7 +53,7 @@ function formatLog(
   context?: LogContext
 ): string {
   const timestamp = new Date().toISOString();
-  const contextStr = context ? ` ${JSON.stringify(context)}` : '';
+  const contextStr = context ? ` ${JSON.stringify(sanitizeContext(context))}` : '';
   return `[${timestamp}] [${level}] ${message}${contextStr}`;
 }
 

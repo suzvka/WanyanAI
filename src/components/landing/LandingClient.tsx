@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { ArrowRight, BookOpen } from 'lucide-react';
 import BrandBackground from '@/components/ui/brand-background';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,9 +26,32 @@ interface LandingClientProps {
 export default function LandingClient({ platformConfig, modules }: LandingClientProps) {
   const { appearance } = platformConfig;
   const { brand } = appearance;
+  const pathname = usePathname();
 
   // 检测是否首次加载，只在首次显示骨架屏
   const isFirstLoad = usePageFirstLoad();
+
+  // 页面过渡状态
+  const [isPageVisible, setIsPageVisible] = useState(false);
+
+  // 路由变化时触发页面过渡动画
+  useEffect(() => {
+    // 使用 setTimeout 延迟状态更新
+    const hideTimer = setTimeout(() => setIsPageVisible(false), 0);
+    const showTimer = setTimeout(() => setIsPageVisible(true), 50);
+    return () => {
+      clearTimeout(hideTimer);
+      clearTimeout(showTimer);
+    };
+  }, [pathname]);
+
+  // 首次加载动画
+  useEffect(() => {
+    if (!isFirstLoad) {
+      const timer = setTimeout(() => setIsPageVisible(true), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isFirstLoad]);
 
   // 过滤并排序侧栏启用的模块
   const sidebarModules = modules
@@ -48,7 +73,15 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
           primaryColor={appearance.theme.primary}
           modules={modules}
         >
-        <main className="mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+        <main 
+          className="mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8"
+          style={{
+            opacity: isPageVisible ? 1 : 0,
+            transform: isPageVisible ? 'translateY(0)' : 'translateY(16px)',
+            transition: `opacity var(--motion-duration-slow) var(--motion-ease-emphasized),
+                         transform var(--motion-duration-slow) var(--motion-ease-emphasized)`,
+          }}
+        >
           {/* 品牌区域 */}
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold tracking-tight text-foreground mb-4">
@@ -63,12 +96,22 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
 
           {/* 模块入口区域 */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
-            {sidebarModules.map((module) => {
+            {sidebarModules.map((module, index) => {
               const IconComponent = ICON_MAP[module.manifest.sidebar.icon] || BookOpen;
 
               return (
                 <Link key={module.manifest.id} href={module.manifest.route}>
-                  <Card className="h-full cursor-pointer transition-all hover:shadow-lg hover:border-primary/50 group">
+                  <Card 
+                    className="h-full cursor-pointer transition-all hover:shadow-lg hover:border-primary/50 group"
+                    style={{
+                      opacity: isPageVisible ? 1 : 0,
+                      transform: isPageVisible ? 'translateY(0)' : 'translateY(12px)',
+                      transition: `opacity var(--motion-duration-standard) var(--motion-ease-emphasized) ${100 + index * 60}ms,
+                                   transform var(--motion-duration-standard) var(--motion-ease-emphasized) ${100 + index * 60}ms,
+                                   box-shadow 200ms ease,
+                                   border-color 200ms ease`,
+                    }}
+                  >
                     <CardHeader>
                       <div className="flex items-center gap-3">
                         <div

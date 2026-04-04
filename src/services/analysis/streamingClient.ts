@@ -1,6 +1,6 @@
 import type { AnalysisEvent, AnalysisEventHandlers, ThinkPatternConfig } from '@/types/streamEvents';
 import type { ModelAnalysisRequest, RawModelResponse } from '@/types/analysis';
-import { createAppError } from '@/types/errors';
+import { AppError, createAppError } from '@/types/errors';
 
 type SSEMessage = {
   id?: string;
@@ -152,7 +152,11 @@ export class StreamingClient {
       }
 
       return response;
-    } catch {
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+
       throw createAppError({
         code: 'network_error',
         message: '远程分析请求失败，请检查网络、跨域配置或模型服务地址',

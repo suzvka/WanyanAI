@@ -1,21 +1,22 @@
 /**
- * report-json 输出模式的数据类型
- * 
- * 定义 report-json 特有的数据结构，不依赖通用类型
+ * 文学作品评审输出模式的数据类型
+ *
+ * 定义文学作品评审特有的数据结构，不依赖通用类型
  */
 
 import type { ReportRating } from '@/config/reportScoring';
+import type { AnalysisReportMetadata, ReportScoringContext } from '@/types/analysis';
 
 // === 报告数据类型 ===
 
 /** 报告摘要 */
-export type ReportSummary = {
+export type LiteraryReviewSummary = {
   title: string;
   overview: string;
 };
 
 /** 报告子维度 */
-export type ReportSubscore = {
+export type LiteraryReviewSubscore = {
   id: string;
   label: string;
   grade: ReportRating;
@@ -24,19 +25,19 @@ export type ReportSubscore = {
 };
 
 /** 报告仪表盘 */
-export type ReportDashboard = {
+export type LiteraryReviewDashboard = {
   totalScore: number;
   grade: ReportRating;
-  subscores: ReportSubscore[];
+  subscores: LiteraryReviewSubscore[];
 };
 
 /** 报告结论 */
-export type ReportConclusion = {
+export type LiteraryReviewConclusion = {
   rationale: string;
 };
 
 /** 报告章节 */
-export type ReportSection = {
+export type LiteraryReviewSection = {
   id: string;
   title: string;
   body: string;
@@ -45,14 +46,14 @@ export type ReportSection = {
 };
 
 /** 报告章节组 */
-export type ReportSectionGroup = {
+export type LiteraryReviewSectionGroup = {
   id: string;
   title: string;
-  sections: ReportSection[];
+  sections: LiteraryReviewSection[];
 };
 
 /** 报告元数据 */
-export type ReportMeta = {
+export type LiteraryReviewMeta = {
   frameworkVersion: string;
   scoringPolicyVersion: string;
   conclusionPolicyVersion: string;
@@ -61,53 +62,46 @@ export type ReportMeta = {
 };
 
 /** 报告诊断信息 */
-export type ReportDiagnostics = {
+export type LiteraryReviewDiagnostics = {
   normalizationMode: 'paragraph-sections';
   sectionCount: number;
 };
 
-/** report-json 数据格式 */
-export type ReportJsonData = {
+/** 文学作品评审数据格式 */
+export type LiteraryReviewData = {
   schemaVersion: string;
   reportId: string;
   reportVersion: string;
   generatedAt: string;
-  summary: ReportSummary;
-  dashboard: ReportDashboard;
-  conclusion: ReportConclusion;
-  meta: ReportMeta;
-  groups: ReportSectionGroup[];
-  sections: ReportSection[];
-  diagnostics: ReportDiagnostics;
+  summary: LiteraryReviewSummary;
+  dashboard: LiteraryReviewDashboard;
+  conclusion: LiteraryReviewConclusion;
+  meta: LiteraryReviewMeta;
+  groups: LiteraryReviewSectionGroup[];
+  sections: LiteraryReviewSection[];
+  diagnostics: LiteraryReviewDiagnostics;
 };
 
 // === 原始输入类型 ===
 
 /** 渲染器接收的原始输入 */
-export type ReportJsonRawInput = {
+export type LiteraryReviewRawInput = {
+  /** 报告唯一 ID */
+  reportId: string;
+  /** 报告生成时间 */
+  createdAt: string;
   /** 模型返回的原始 JSON 数据 */
   rawJson: unknown;
   /** 分析元数据 */
-  metadata: {
-    /** 模型名称 */
-    model: string;
-    /** API 基础 URL */
-    baseUrl: string;
-    /** 提示词模板版本 */
-    templateVersion: string;
-    /** 评分策略版本 */
-    scoringPolicyVersion: string;
-    /** 结论策略版本 */
-    conclusionPolicyVersion: string;
-    /** 评价目标 */
-    evaluationGoal: string;
-  };
+  metadata: AnalysisReportMetadata;
+  /** 评分上下文快照 */
+  scoringContext: ReportScoringContext;
 };
 
 /**
- * 验证数据是否为有效的 ReportJsonData
+ * 验证数据是否为有效的 LiteraryReviewData
  */
-export function isReportJsonData(data: unknown): data is ReportJsonData {
+export function isLiteraryReviewData(data: unknown): data is LiteraryReviewData {
   if (!data || typeof data !== 'object') {
     return false;
   }

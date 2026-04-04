@@ -1,19 +1,17 @@
 'use client';
 
 import { useMemo } from 'react';
-import { usePageContext } from '@/providers/PageContext';
-import type { SubscoreMultipliers } from './scoring';
 import type { SubscoreDefinition } from './subscores';
-import type { ReportJsonData, ReportJsonRawInput } from './types';
+import type { LiteraryReviewData, LiteraryReviewRawInput } from './types';
 import { scoring } from './scoring';
 import { defaultSubscoreDefinitions } from './subscores';
 import {
-  calculateMultipliers,
-  extractAllOptions,
-  getSelectedValues,
-} from './multiplierCalculator';
-import { modelMinimalReportSchema } from './validate';
-import { ReportJsonView } from './components/ReportJsonView';
+  modelMinimalReportSchema,
+  type ModelMinimalSection,
+  type ModelMinimalSectionGroup,
+  type ModelMinimalSubscore,
+} from './validate';
+import { LiteraryReviewView } from './components/LiteraryReviewView';
 import type { RendererProps } from '../registry';
 import { createAppError } from '@/types/errors';
 import { evaluationGoalLabels } from '@/config/evaluationDimensions';
@@ -38,37 +36,29 @@ function getProviderHost(baseUrl: string): string {
 }
 
 /**
- * report-json 渲染器组件
+ * 文学作品评审渲染器组件
  *
  * 完全自治的输出模式渲染器：
- * 1. 接收原始 JSON 数据 + 元数据
+ * 1. 接收原始 JSON 数据 + 元数据 + 评分上下文
  * 2. 内部验证数据结构
- * 3. 内部标准化为 ReportJsonData
- * 4. 内部计算 multipliers
- * 5. 内部计算评分
- * 6. 内部渲染完整的报告视图
+ * 3. 内部标准化为 LiteraryReviewData
+ * 4. 内部计算评分
+ * 5. 内部渲染完整的报告视图
  */
-export function ReportJsonRenderer({
+export function LiteraryReviewRenderer({
   data,
   subscoreDefinitions,
   defaultMultiplier,
   onStartNew,
   onBackToEdit,
-}: RendererProps<ReportJsonRawInput> & {
+}: RendererProps<LiteraryReviewRawInput> & {
   /** 自定义子维度定义（默认使用6个标准维度） */
   subscoreDefinitions?: SubscoreDefinition[];
   /** 默认乘子（默认4） */
   defaultMultiplier?: number;
 }) {
-  // 从 PageContext 获取需要的数据
-  const { moduleConfig, controlSelections } = usePageContext();
-
-  // 内部计算 multipliers
-  const multipliers = useMemo(() => {
-    const allOptions = extractAllOptions(moduleConfig.analysisControls.groups);
-    const selectedValues = getSelectedValues(controlSelections);
-    return calculateMultipliers(allOptions, selectedValues, defaultMultiplier);
-  }, [moduleConfig.analysisControls.groups, controlSelections, defaultMultiplier]);
+  const effectiveDefaultMultiplier = defaultMultiplier ?? data.scoringContext.defaultMultiplier;
+  const multipliers = data.scoringContext.multipliers;
 
   // 验证 + 标准化 + 评分
   const scoredReport = useMemo(() => {
@@ -96,13 +86,13 @@ export function ReportJsonRenderer({
       });
     }
 
-    // 2. 标准化为 ReportJsonData
+    // 2. 标准化为 LiteraryReviewData
     const { metadata } = data;
-    const normalizedReport: ReportJsonData = {
+    const normalizedReport: LiteraryReviewData = {
       schemaVersion: 'report_schema_v5_0_ratings',
-      reportId: `report-${Date.now()}`,
+      reportId: data.reportId,
       reportVersion: metadata.templateVersion,
-      generatedAt: new Date().toISOString(),
+      generatedAt: data.createdAt,
       summary: {
         title: parsed.data.summary.title || `${getGoalLabel(metadata.evaluationGoal)}概览`,
         overview: parsed.data.summary.overview,
@@ -110,7 +100,7 @@ export function ReportJsonRenderer({
       dashboard: {
         totalScore: 0,
         grade: 'D',
-        subscores: parsed.data.subscores.map((subscore) => ({
+        subscores: parsed.data.subscores.map((subscore: ModelMinimalSubscore) => ({
           id: subscore.id,
           label: definitions.find(d => d.id === subscore.id)?.label ?? subscore.id,
           grade: subscore.grade,
@@ -128,10 +118,10 @@ export function ReportJsonRenderer({
         provider: getProviderHost(metadata.baseUrl),
         model: metadata.model,
       },
-      groups: parsed.data.groups?.map((group, groupIndex) => ({
+      groups: parsed.data.groups?.map((group: ModelMinimalSectionGroup, groupIndex: number) => ({
         id: group.id?.trim() || `group-${groupIndex + 1}`,
         title: group.title,
-        sections: group.sections.map((section, sectionIndex) => ({
+        sections: group.sections.map((section: ModelMinimalSection, sectionIndex: number) => ({
           id: `section-${group.id || groupIndex + 1}-${sectionIndex + 1}`,
           title: section.title,
           body: section.body,
@@ -142,13 +132,13 @@ export function ReportJsonRenderer({
       sections: [],
       diagnostics: {
         normalizationMode: 'paragraph-sections',
-        sectionCount: parsed.data.groups?.reduce((acc, g) => acc + g.sections.length, 0) ?? 0,
+        sectionCount: parsed.data.groups?.reduce((acc: number, g: ModelMinimalSectionGroup) => acc + g.sections.length, 0) ?? 0,
       },
     };
 
     // 兼容旧格式：如果没有 groups，使用 sections
     if (normalizedReport.groups.length === 0 && parsed.data.sections) {
-      normalizedReport.sections = parsed.data.sections.map((section, index) => ({
+      normalizedReport.sections = parsed.data.sections.map((section: ModelMinimalSection, index: number) => ({
         id: `section-root-${index + 1}`,
         title: section.title,
         body: section.body,
@@ -173,7 +163,7 @@ export function ReportJsonRenderer({
       rationales,
       definitions,
       multipliers,
-      defaultMultiplier,
+        defaultMultiplier: effectiveDefaultMultiplier,
     });
 
     // 5. 合并计算结果到报告数据
@@ -186,10 +176,10 @@ export function ReportJsonRenderer({
         subscores: scoreResult.subscores,
       },
     };
-  }, [data, subscoreDefinitions, multipliers, defaultMultiplier]);
+  }, [data, subscoreDefinitions, multipliers, effectiveDefaultMultiplier]);
 
   return (
-    <ReportJsonView
+    <LiteraryReviewView
       report={scoredReport}
       onStartNew={onStartNew}
       onBackToEdit={onBackToEdit}

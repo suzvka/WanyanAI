@@ -85,9 +85,33 @@ export type AnalysisRepairAttempt = {
   reason?: string;
 };
 
+export type ReportScoringContext = {
+  multipliers: Record<string, number>;
+  defaultMultiplier: number;
+};
+
+export type AnalysisReportMetadata = {
+  model: string;
+  baseUrl: string;
+  templateVersion: string;
+  scoringPolicyVersion: string;
+  conclusionPolicyVersion: string;
+  evaluationGoal: string;
+};
+
+export type PersistedAnalysisReport = {
+  reportId: string;
+  moduleId: string;
+  outputMode: string;
+  createdAt: string;
+  rawJson: unknown;
+  metadata: AnalysisReportMetadata;
+  scoringContext: ReportScoringContext;
+};
+
 /**
  * 分析结果类型
  * 
- * 使用 unknown 类型，由各输出模式自行解释
+ * 统一后的报告快照，由各输出模式基于同一输入契约解释
  */
-export type AnalysisResult = unknown;
+export type AnalysisResult = PersistedAnalysisReport | null;
