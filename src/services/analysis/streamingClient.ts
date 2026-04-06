@@ -1,6 +1,7 @@
 import type { AnalysisEvent, AnalysisEventHandlers, ThinkPatternConfig } from '@/types/streamEvents';
+import { requestResponse } from '@/lib/client-request';
 import type { ModelAnalysisRequest, RawModelResponse } from '@/types/analysis';
-import { AppError, createAppError } from '@/types/errors';
+import { createAppError } from '@/types/errors';
 
 type SSEMessage = {
   id?: string;
@@ -128,41 +129,20 @@ export class StreamingClient {
    * 发起一次性请求（非流式）
    */
   private async initiateRequest(endpoint: string): Promise<Response> {
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.config.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...this.config.payload,
-          stream: false,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await this.tryParseErrorResponse(response);
-        throw createAppError({
-          code: 'provider_request_failed',
-          message: errorData?.error?.message ?? `远程分析请求失败：HTTP ${response.status}`,
-          status: response.status,
-          retryable: response.status >= 500,
-        });
-      }
-
-      return response;
-    } catch (error) {
-      if (error instanceof AppError) {
-        throw error;
-      }
-
-      throw createAppError({
-        code: 'network_error',
-        message: '远程分析请求失败，请检查网络、跨域配置或模型服务地址',
-        retryable: true,
-      });
-    }
+    return requestResponse(endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.config.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...this.config.payload,
+        stream: false,
+      }),
+      errorCode: 'provider_request_failed',
+      errorMessage: '远程分析请求失败',
+      networkErrorMessage: '远程分析请求失败，请检查网络、跨域配置或模型服务地址',
+    });
   }
 
   /**
@@ -224,19 +204,6 @@ export class StreamingClient {
       case 'content-start':
         this.eventHandlers.onContentStart?.(event);
         break;
-    }
-  }
-
-  /**
-   * 尝试解析错误响应
-   */
-  private async tryParseErrorResponse(response: Response): Promise<{ error?: { message?: string } } | null> {
-    try {
-      const text = await response.text();
-      if (!text.trim()) return null;
-      return JSON.parse(text);
-    } catch {
-      return null;
     }
   }
 

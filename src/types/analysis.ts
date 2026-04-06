@@ -7,7 +7,8 @@ export type ProviderProfile = (typeof providerProfileValues)[number];
 export type PromptTemplateSlotKey =
   | 'textBlocksPlainText'
   | 'textBlocksMetadata'
-  | 'dynamicInstructionText';
+  | 'dynamicInstructionText'
+  | 'mcpToolText';
 
 export type PromptTemplateSlotDefinition = {
   key: PromptTemplateSlotKey;

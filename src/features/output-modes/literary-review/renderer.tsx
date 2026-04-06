@@ -8,11 +8,10 @@ import { defaultSubscoreDefinitions } from './subscores';
 import {
   modelMinimalReportSchema,
   type ModelMinimalSection,
-  type ModelMinimalSectionGroup,
   type ModelMinimalSubscore,
 } from './validate';
 import { LiteraryReviewView } from './components/LiteraryReviewView';
-import type { RendererProps } from '../registry';
+import type { RendererProps } from '@/features/output-modes/renderer';
 import { createAppError } from '@/types/errors';
 import { evaluationGoalLabels } from '@/config/evaluationDimensions';
 import type { ReportRating } from '@/config/reportScoring';
@@ -118,35 +117,16 @@ export function LiteraryReviewRenderer({
         provider: getProviderHost(metadata.baseUrl),
         model: metadata.model,
       },
-      groups: parsed.data.groups?.map((group: ModelMinimalSectionGroup, groupIndex: number) => ({
-        id: group.id?.trim() || `group-${groupIndex + 1}`,
-        title: group.title,
-        sections: group.sections.map((section: ModelMinimalSection, sectionIndex: number) => ({
-          id: `section-${group.id || groupIndex + 1}-${sectionIndex + 1}`,
-          title: section.title,
-          body: section.body,
-          groupId: group.id?.trim() || `group-${groupIndex + 1}`,
-          groupTitle: group.title,
-        })),
-      })) ?? [],
-      sections: [],
+      sections: parsed.data.sections.map((section: ModelMinimalSection) => ({
+        sectionTitle: section.sectionTitle,
+        paragraphTitle: section.paragraphTitle,
+        body: section.body,
+      })),
       diagnostics: {
         normalizationMode: 'paragraph-sections',
-        sectionCount: parsed.data.groups?.reduce((acc: number, g: ModelMinimalSectionGroup) => acc + g.sections.length, 0) ?? 0,
+        sectionCount: parsed.data.sections.length,
       },
     };
-
-    // 兼容旧格式：如果没有 groups，使用 sections
-    if (normalizedReport.groups.length === 0 && parsed.data.sections) {
-      normalizedReport.sections = parsed.data.sections.map((section: ModelMinimalSection, index: number) => ({
-        id: `section-root-${index + 1}`,
-        title: section.title,
-        body: section.body,
-      }));
-      normalizedReport.diagnostics.sectionCount = normalizedReport.sections.length;
-    } else {
-      normalizedReport.sections = normalizedReport.groups.flatMap(g => g.sections);
-    }
 
     // 3. 提取 grades 和 rationales
     const grades: Record<string, ReportRating> = {};

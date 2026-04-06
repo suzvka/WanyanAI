@@ -1,5 +1,13 @@
-import { getChallengeConfig, type ChallengeConfig } from './forwardConfig';
+import { getChallengeConfig } from './forwardConfig';
 import { logInfo, logError } from './logger';
+
+// Challenge 配置接口
+interface ChallengeConfig {
+  enabled: boolean;
+  difficulty: number;
+  tokenExpireMinutes: number;
+  maxNonceAgeSeconds: number;
+}
 
 const DEFAULT_CHALLENGE_SECRET = 'wanyanai-challenge-secret-dev-only';
 const encoder = new TextEncoder();

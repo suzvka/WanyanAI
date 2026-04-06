@@ -42,14 +42,6 @@ export async function getModuleById(id: string): Promise<ModuleConfig | undefine
 }
 
 /**
- * 根据路由获取模块配置
- */
-export async function getModuleByRoute(route: string): Promise<ModuleConfig | undefined> {
-  const registry = await getModuleRegistry();
-  return registry.getModuleByRoute(route);
-}
-
-/**
  * 获取所有模块列表
  */
 export async function getAllModules(): Promise<ModuleConfig[]> {

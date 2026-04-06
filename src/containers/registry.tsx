@@ -104,13 +104,6 @@ class ContainerRegistry {
 export const containerRegistry = new ContainerRegistry();
 
 /**
- * 获取已注册的容器类型列表
- */
-export function getRegisteredContainerTypes(): string[] {
-  return containerRegistry.getRegisteredTypes();
-}
-
-/**
  * 渲染容器组件
  *
  * @param config - 容器配置

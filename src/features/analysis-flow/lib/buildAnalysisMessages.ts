@@ -27,6 +27,8 @@ export type BuildAnalysisMessagesConfig = {
   template: PromptTemplateResource;
   /** 动态指令文本 */
   instructionText?: string;
+  /** MCP 工具提示词 */
+  mcpToolText?: string;
   /** 容器配置列表 */
   containers?: ContainerConfig[];
 };
@@ -51,9 +53,17 @@ export type BuildAnalysisMessagesResult = {
 export function buildAnalysisMessages(
   config: BuildAnalysisMessagesConfig
 ): BuildAnalysisMessagesResult {
-  const { input, template, instructionText } = config;
+  const { input, template, instructionText, mcpToolText } = config;
 
-  const slotValues = createSlotValues(input, instructionText);
+  const slotValues = createSlotValues(input, instructionText, mcpToolText);
+
+  console.log('[buildAnalysisMessages] Slot values:', {
+    textBlocksMetadataLength: slotValues.textBlocksMetadata.length,
+    textBlocksPlainTextLength: slotValues.textBlocksPlainText.length,
+    dynamicInstructionTextLength: slotValues.dynamicInstructionText.length,
+    mcpToolTextLength: slotValues.mcpToolText.length,
+  });
+
   const messages = buildMessages(template, slotValues);
   const maxTokens = calculateGenerationMaxTokens(
     template.recommendedParameters.maxTokens ?? 8192,
@@ -73,6 +83,7 @@ export function buildAnalysisMessages(
 function createSlotValues(
   input: EvaluationInput,
   instructionText?: string,
+  mcpToolText?: string,
 ): PromptSlotValues {
   const metadata = renderTextBlockMetadataForModel(input);
   
@@ -80,6 +91,7 @@ function createSlotValues(
     textBlocksMetadata: metadata,
     textBlocksPlainText: renderTextBlocksForModel(input),
     dynamicInstructionText: instructionText?.trim() || '',
+    mcpToolText: mcpToolText?.trim() || '',
   };
 }
 
@@ -106,10 +118,10 @@ function buildMessages(
  * 填充提示词模板
  */
 function fillPromptTemplate(
-  template: string, 
+  template: string,
   slotValues: PromptSlotValues
 ): string {
-  return template.replace(promptSlotPattern, (_, rawKey: string) => {
+  const result = template.replace(promptSlotPattern, (_, rawKey: string) => {
     const key = rawKey.trim() as PromptTemplateSlotKey;
     const value = slotValues[key];
 
@@ -119,6 +131,13 @@ function fillPromptTemplate(
 
     return value;
   });
+
+  // 添加调试日志
+  if (result.includes('language_expression') || result.includes('structural_logic')) {
+    console.log('[buildAnalysisMessages] Template contains subscore definitions');
+  }
+
+  return result;
 }
 
 /**

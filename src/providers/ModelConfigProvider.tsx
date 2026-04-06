@@ -10,6 +10,7 @@ import {
     getBuiltInModelsCache,
     saveBuiltInModelsCache,
     clearBuiltInModelsCache,
+    clearBuiltInApiKey,
     refreshBuiltInApiKey,
 } from '@/lib/api-station/builtInConfig';
 import type { ApiConfigRecord, ApiConfigValidationStatus, ModelConfig, ModelInfo } from '@/types/modelConfig';

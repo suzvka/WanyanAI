@@ -26,7 +26,22 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // outputFileTracingRoot: path.resolve(__dirname, '../../'),  // Uncomment and add 'import path from "path"' if needed
   /* config options here */
-  allowedDevOrigins: ['*.dev.coze.site'],
+  allowedDevOrigins: [
+    '9a8651b5-91e5-46ea-abe1-6d990ef7260b.dev.coze.site',
+    'vefaas-gwozwlfx-1fpxkvrzba-d7915k030ki0a103ler0-sandbox.sandbox-dev.coze-coding.bytedance.net',
+    '.dev.coze.site',
+    '.sandbox-dev.coze-coding.bytedance.net',
+  ],
+  experimental: {
+    serverActions: {
+      allowedOrigins: [
+        '9a8651b5-91e5-46ea-abe1-6d990ef7260b.dev.coze.site',
+        'vefaas-gwozwlfx-1fpxkvrzba-d7915k030ki0a103ler0-sandbox.sandbox-dev.coze-coding.bytedance.net',
+        '.dev.coze.site',
+        '.sandbox-dev.coze-coding.bytedance.net',
+      ],
+    },
+  },
   async headers() {
     return [
       {

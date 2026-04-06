@@ -1,59 +1,47 @@
-import type { OutputModeDefinition } from '../registry';
-import { LiteraryReviewRenderer } from './renderer';
-import { LITERARY_REVIEW_PROMPT } from './prompt';
-import type { LiteraryReviewData, LiteraryReviewRawInput } from './types';
-import { reportNeutralMultiplier } from '@/config/reportScoring';
-import {
+/**
+ * 文学作品评审模块 - 统一入口
+ *
+ * 模块自治架构：
+ * - 所有模块代码都在 features/output-modes/literary-review/ 目录下
+ * - 服务端逻辑：module.ts（包含 OutputModeModule 定义）
+ * - 客户端渲染：renderer.tsx
+ * - MCP 工具：mcp-tools.ts
+ * - 提示词：prompt.ts
+ */
+
+// ============================================================================
+// 客户端导出
+// ============================================================================
+
+// 导出渲染器（客户端使用）
+export { LiteraryReviewRenderer } from './renderer';
+
+// 导出类型
+export type {
+  LiteraryReviewData,
+  LiteraryReviewRawInput,
+} from './types';
+
+// ============================================================================
+// 服务端导出（通过 module.ts）
+// ============================================================================
+
+// 导出提示词（用于调试和预览）
+export { LITERARY_REVIEW_PROMPT } from './prompt';
+
+// 导出子维度定义（共享）
+export { defaultSubscoreDefinitions, defaultSubscoreIds } from './subscores';
+export type { SubscoreDefinition, DefaultSubscoreId } from './subscores';
+
+// 导出验证函数
+export { validate as validateLiteraryReview, modelMinimalReportSchema } from './validate';
+
+// 导出乘数计算器
+export {
   calculateMultipliers,
   extractAllOptions,
   getSelectedValues,
 } from './multiplierCalculator';
 
-/**
- * 验证数据是否为有效的 LiteraryReviewRawInput
- */
-function isLiteraryReviewRawInput(data: unknown): data is LiteraryReviewRawInput {
-  if (!data || typeof data !== 'object') {
-    return false;
-  }
-
-  const obj = data as Record<string, unknown>;
-
-  return (
-    typeof obj.reportId === 'string' &&
-    typeof obj.createdAt === 'string' &&
-    obj.rawJson !== undefined &&
-    obj.metadata !== undefined &&
-    obj.scoringContext !== undefined &&
-    typeof obj.metadata === 'object'
-  );
-}
-
-/**
- * 文学作品评审输出模式定义
- *
- * 完全自治的输出模式：
- * - 接收原始 JSON 数据 + 元数据
- * - 内部完成验证、标准化、评分、渲染
- */
-export const literaryReviewMode: OutputModeDefinition<LiteraryReviewRawInput> = {
-  id: 'literary-review',
-  name: '文学作品',
-  prompt: LITERARY_REVIEW_PROMPT,
-  Renderer: LiteraryReviewRenderer,
-  validate: isLiteraryReviewRawInput,
-  buildScoringContext: ({ moduleConfig, controlSelections }) => {
-    const allOptions = extractAllOptions(moduleConfig.analysisControls.groups);
-    const selectedValues = getSelectedValues(controlSelections);
-
-    return {
-      multipliers: calculateMultipliers(allOptions, selectedValues, reportNeutralMultiplier),
-      defaultMultiplier: reportNeutralMultiplier,
-    };
-  },
-};
-
-// === 公开 API ===
-
-// 导出渲染器
-export { LiteraryReviewRenderer } from './renderer';
+// 导出评分计算
+export { calcSubscore, deriveGrade, calcTotal, getMaxScore } from './scoring';

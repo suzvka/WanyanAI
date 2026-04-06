@@ -79,26 +79,6 @@ export function calculateMultipliers(
 }
 
 /**
- * 获取完整的乘子映射（包含所有维度）
- * 
- * @param multipliers - 已计算的乘子映射（仅包含有变化的维度）
- * @param defaultMultiplier - 默认乘子（默认 1-中性值）
- * @param dimensionIds - 所有维度 ID 列表
- * @returns 完整的乘子映射
- */
-export function getFullMultipliers(
-  multipliers: SubscoreMultipliers,
-  defaultMultiplier: number = reportNeutralMultiplier,
-  dimensionIds: string[] = defaultSubscoreIds,
-): SubscoreMultipliers {
-  const full: SubscoreMultipliers = {};
-  for (const dim of dimensionIds) {
-    full[dim] = multipliers[dim] ?? defaultMultiplier;
-  }
-  return full;
-}
-
-/**
  * 从模块配置中提取所有选项
  * 
  * @param groups - 控制组配置

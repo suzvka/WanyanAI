@@ -16,29 +16,34 @@ interface AlertOptions {
   type?: AlertType;
   /** 持续时间（毫秒），默认 4000 */
   duration?: number;
+  /** 通知唯一标识，用于去重 */
+  id?: string | number;
+  /** 辅助说明 */
+  description?: string;
 }
 
 /**
  * 展示错误提示
  */
 export function showAlert(message: string, options?: AlertOptions): void {
-  const { type = 'error', duration = 4000 } = options || {};
+  const { type = 'error', duration = 4000, id, description } = options || {};
+  const toastOptions = { duration, id, description };
 
   switch (type) {
     case 'error':
-      toast.error(message, { duration });
+      toast.error(message, toastOptions);
       break;
     case 'warning':
-      toast.warning(message, { duration });
+      toast.warning(message, toastOptions);
       break;
     case 'info':
-      toast.info(message, { duration });
+      toast.info(message, toastOptions);
       break;
     case 'success':
-      toast.success(message, { duration });
+      toast.success(message, toastOptions);
       break;
     default:
-      toast.error(message, { duration });
+      toast.error(message, toastOptions);
   }
 }
 

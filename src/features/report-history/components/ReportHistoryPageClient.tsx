@@ -32,12 +32,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { getOutputMode } from '@/features/output-modes';
+import { getOutputModeRenderer } from '@/features/output-modes';
 import { reportHistoryStore } from '@/features/report-history/store';
 import type { CachedReportRecord, ReportHistoryQuery } from '@/features/report-history/types';
 import type { ModuleConfig } from '@/types/module';
 import type { PlatformConfig } from '@/types/platform';
 import HistoryAppShell from './HistoryAppShell';
+
+// 输出模式名称映射
+const OUTPUT_MODE_NAMES: Record<string, string> = {
+  'literary-review': '文学作品',
+  'gaokao-essay': '高考作文',
+};
 
 const statusBadgeVariant: Record<CachedReportRecord['status'], 'secondary' | 'outline' | 'destructive'> = {
   queued: 'secondary',
@@ -225,7 +231,7 @@ export default function ReportHistoryPageClient({
           ) : (
             <div className="space-y-4">
               {records.map((record: CachedReportRecord, index: number) => {
-                const outputModeName = getOutputMode(record.outputMode)?.name ?? record.outputMode;
+                const outputModeName = OUTPUT_MODE_NAMES[record.outputMode] ?? record.outputMode;
                 const moduleName = modules.find((module) => module.manifest.id === record.moduleId)?.manifest.name ?? record.moduleId;
                 const progress = record.progressSnapshot.progress;
                 const helperText =

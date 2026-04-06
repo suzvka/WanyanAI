@@ -1,5 +1,9 @@
+import { requestJson } from '@/lib/client-request';
 import { createAppError } from '@/types/errors';
-import { readCompileInstructionsResponse } from './readCompileInstructionsResponse';
+import type {
+  CompileInstructionsErrorResponse,
+  CompileInstructionsSuccessResponse,
+} from '@/types/instructions';
 
 type RequestCompiledInstructionsPayload = {
   controlSelections: Record<string, string>;
@@ -7,38 +11,15 @@ type RequestCompiledInstructionsPayload = {
 };
 
 export async function requestCompiledInstructions(payload: RequestCompiledInstructionsPayload) {
-  let response: Response;
-
-  try {
-    response = await fetch('/api/instructions/compile', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    throw createAppError({
-      code: 'network_error',
-      message: '动态指令请求失败，请检查网络连接后重试。',
-      retryable: true,
-    });
-  }
-
-  const data = await readCompileInstructionsResponse(response);
-
-  if (!response.ok) {
-    throw createAppError(
-      data && 'error' in data
-        ? data.error
-        : {
-            code: 'unknown_error',
-            message: '动态指令请求失败。',
-            status: response.status,
-            retryable: response.status >= 500,
-          },
-    );
-  }
+  const data = await requestJson<CompileInstructionsSuccessResponse | CompileInstructionsErrorResponse>('/api/instructions/compile', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+    errorMessage: '动态指令请求失败。',
+    networkErrorMessage: '动态指令请求失败，请检查网络连接后重试。',
+  });
 
   if (!data || !('instructionText' in data)) {
     throw createAppError({

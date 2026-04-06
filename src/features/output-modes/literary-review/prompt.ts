@@ -1,44 +1,49 @@
 /**
  * 文学作品评审输出模式的格式规定提示词
  *
- * 要求 AI 生成符合文学作品评审结构的 JSON
+ * 提示词微调位置：
+ * - 修改工具调用顺序说明
+ * - 修改子维度描述
+ * - 修改评级标准
+ * - 修改调用示例
  */
 
-export const LITERARY_REVIEW_PROMPT = `#结构要求：
-输出纯 JSON，对象中不得包含 Markdown 代码块、解释文字或任何额外前后缀。
+export const LITERARY_REVIEW_PROMPT = `#文学评审报告生成
+# 文学评审报告生成
 
-### JSON Schema 约束
-{
-  "summary": { "title": "string (可选, 带副标题的赏析标题)", "overview": "string (整体观感与全局赏析)" },
-  "subscores": [
-    { "id": "string", "grade": "S|A|B|C|D", "rationale": "string (1-2句, 评级需与理由匹配)" }
-  ],
-  "conclusion": { "rationale": "string (评价视角总结，严禁重复 summary.overview)" },
-  "groups": [
-    { "id": "string", "title": "string (简洁聚类)", "sections": [{ "title": "string", "body": "string" }] }
-  ]
-}
+你必须在**单次响应**内完成以下全部工具调用，**不得中断**，并严格按顺序执行：
+
+1. collect_summary ×1
+2. collect_subscore ×6（6个子维度各一次，不得遗漏）
+3. collect_conclusion ×1
+4. collect_section ×0~N（可选，每次一个段落；同章节自动分组）
+5. finalize_report ×1（必须作为最后一步）
 
 ###子维度释义：
-- language_expression：语言表现力——词汇精准度、修辞独创性、节奏感，语言是否被艺术化使用
-- structural_logic：结构逻辑——组织、衔接、论证，形式是否自洽有机
-- human_depth：人文深度——思想深刻性、情感细腻度、视角独特性，是否触及存在核心问题
-- aesthetic_tension：审美张力——冲突、留白、关联反应，是否具有足够能量密度
-- cohesive_integrity：内涵凝聚力——繁简取舍、写法与想法统一，内容与形式是否契合
-- empathic_effectiveness：共情效能——情感唤起力、审美愉悦持久度、思想启发性，是否有效传递审美经验
+- language_expression 语言表现力：词汇精准度、修辞独创性、节奏感——语言是否被艺术化使用？
+- structural_logic 结构逻辑：组织、衔接、论证——形式是否自洽有机？
+- human_depth 人文深度：思想深刻性、情感细腻度、视角独特性——是否触及存在核心问题？
+- aesthetic_tension 审美张力：冲突、留白、关联反应——是否具有足够能量密度？
+- cohesive_integrity 内涵凝聚力：叙事与体裁相称、写法与想法统一——内容与形式是否契合？
+- empathic_effectiveness 共情效能：情感唤起力、审美愉悦持久度、思想启发性——是否有效传递审美经验？
 
-###评级标准：
-- S：神来之笔
-- A：非常优秀、行业一流、无可挑剔
+## 评级标准
+- S：神来之笔、现象级
+- A：非常优秀、行业一流
 - B：中上游、优于平均水平
-- C：中规中矩、合格、普通无亮点
+- C：中规中矩、合格
 - D：不合格、极差
 
-###内容建议：
-- summary.title 可写成带副标题的赏析标题
-- summary.overview 先概括整体观感，再做全局赏析；它是"赏析角度"的总结
-- conclusion.rationale 是"评价角度"的总结
-- 先抓核心亮点深入分析，再做客观评价
-- 优点与缺点可分别成段
-- 不强行平衡优缺点：可以全优、全劣，或优缺点并存
-- 保持中立、客观、可解释`;
+## 内容要求
+- 先抓核心亮点，再做客观评价
+- 优缺点可分别成段
+- 不强行平衡：可全优、全劣，或优缺点并存
+- 保持中立、客观、可解释
+
+## 强制约束
+- 不得跳步，不得漏掉任一子维度
+- 若工具报错，按错误信息修正后继续，直到完成
+- 若后续消息指出某些字段缺失、非法或数量不对，必须优先修正这些字段，并重新完整提交整份报告
+- 修正时不要只提交局部补丁；未报错且合理的字段尽量保持不变
+- 必须以 finalize_report 结束工作流
+`;

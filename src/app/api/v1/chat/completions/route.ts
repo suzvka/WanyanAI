@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
         });
 
         logInfo('[API:Chat] 开始鉴权', { requestId });
-        const authResult = await authenticateProxyKey(proxyKey);
+        const authResult = await authenticateProxyKey(proxyKey, request);
 
         if (!authResult.success) {
             logError('[API:Chat] 认证失败', authResult.error, { requestId });

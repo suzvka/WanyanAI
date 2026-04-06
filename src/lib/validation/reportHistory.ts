@@ -34,7 +34,7 @@ export const progressSnapshotSchema = z.object({
 });
 
 export const analysisTaskMetaSchema = z.object({
-  phase: z.enum(['prepare', 'fetch-template', 'build-prompt', 'request-model', 'extract-json', 'repair-json', 'normalize']),
+  phase: z.enum(['prepare', 'fetch-template', 'build-prompt', 'request-model', 'parse-mcp', 'invoke-tool', 'extract-json', 'repair-json', 'normalize']),
   message: z.string().optional(),
   model: z.string().trim().min(1, '模型名称不能为空'),
   baseUrl: z.string().trim().min(1, 'Base URL 不能为空'),

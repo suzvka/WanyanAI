@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { showError } from '@/lib/alert';
+import { reportBusinessError } from '@/lib/client-errors/report';
 import type { EvaluationInput } from '@/types/report';
 import type { AnalysisResult } from '@/types/analysis';
 import type { ModuleConfig } from '@/types/module';
@@ -227,7 +227,7 @@ export function PageProvider({
       return null;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '分析失败';
-      showError(errorMessage, 6000);
+      reportBusinessError(error, errorMessage);
       setAnalysisState({
         phase: 'prepare',
         status: 'failed',

@@ -3,6 +3,7 @@
  * 提供站内模型服务的配置信息
  */
 
+import { requestJson } from '@/lib/client-request';
 import type { ModelInfo, ApiConfigValidationStatus } from '@/types/modelConfig';
 import { looksLikeProxyKey } from './proxyKey';
 
@@ -101,22 +102,22 @@ function saveBuiltInApiKey(info: BuiltInProxyKeyInfo) {
 
 export async function refreshBuiltInApiKey(): Promise<BuiltInProxyKeyInfo> {
   const userRefHint = getBuiltInUserRef();
-  const response = await fetch(`${getBuiltInBaseUrl()}/key`, {
+  const payload = await requestJson<{
+    key?: string;
+    expiresAt?: number;
+    error?: { message?: string };
+  }>(`${getBuiltInBaseUrl()}/key`, {
     method: 'POST',
     credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ userRef: userRefHint }),
+    errorMessage: '站内代理 Key 获取失败',
+    networkErrorMessage: '站内代理 Key 获取失败，请检查网络连接后重试',
   });
 
-  const payload = await response.json().catch(() => null) as {
-    key?: string;
-    expiresAt?: number;
-    error?: { message?: string };
-  } | null;
-
-  if (!response.ok || !payload?.key || typeof payload.expiresAt !== 'number') {
+  if (!payload?.key || typeof payload.expiresAt !== 'number') {
     throw new Error(payload?.error?.message || '站内代理 Key 获取失败');
   }
 

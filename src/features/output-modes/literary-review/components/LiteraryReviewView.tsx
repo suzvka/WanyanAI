@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { reportRatingDisplayLabels } from '@/config/reportScoring';
-import type { LiteraryReviewData, LiteraryReviewSubscore, LiteraryReviewSection, LiteraryReviewSectionGroup } from '../types';
+import type { LiteraryReviewData, LiteraryReviewSubscore, LiteraryReviewSection } from '../types';
 import { formatNumber, getScoreColor, getGradeColor } from './utils';
 import { SubscoreRadarChart } from './SubscoreRadarChart';
 import { GradeProgressBar } from './GradeProgressBar';
@@ -61,7 +61,6 @@ function SubscoreCard({ subscore }: { subscore: LiteraryReviewSubscore }) {
 
 export function LiteraryReviewView({ report, onStartNew, onBackToEdit }: LiteraryReviewViewProps) {
   const sections = report.sections ?? [];
-  const groups = report.groups ?? [];
   const subscores = report.dashboard.subscores ?? [];
 
   const handleDownload = () => {
@@ -161,72 +160,43 @@ export function LiteraryReviewView({ report, onStartNew, onBackToEdit }: Literar
             </CardContent>
           </Card>
 
-          {/* 分组内容 */}
-          {groups.length > 0 ? (
-            <div className="space-y-6">
-              {groups.map((group: LiteraryReviewSectionGroup) => (
-                <Card key={group.id}>
-                  <CardContent className="pb-6 px-6">
-                    <h2 className="text-xl font-semibold text-[color:var(--report-text-heading)] mb-5">
-                      {group.title}
-                    </h2>
-                    <div className="space-y-6">
-                      {group.sections.map((section, sectionIndex) => {
-                        const paragraphs = splitParagraphs(section.body);
-
-                        return (
-                          <div key={section.id}>
-                            {sectionIndex > 0 && (
-                              <div className="border-t border-[color:var(--report-border)] mb-5" />
-                            )}
-                            <div className="space-y-3">
-                              <div className="flex items-center gap-2">
-                                <div className="h-2 w-2 rounded-full bg-[color:var(--report-accent-dot)]" />
-                                <h3 className="text-base font-semibold text-[color:var(--report-text-heading)]">{section.title}</h3>
-                              </div>
-                              {paragraphs.length > 0 ? (
-                                paragraphs.map((paragraph, paragraphIndex) => (
-                                  <p key={`${section.id}-${paragraphIndex}`} className="text-sm leading-7 text-[color:var(--report-text-subtle)]">
-                                    {paragraph}
-                                  </p>
-                                ))
-                              ) : (
-                                <p className="whitespace-pre-line text-sm leading-7 text-[color:var(--report-text-subtle)]">{section.body}</p>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : sections.length === 0 ? (
+          {/* 章节内容（按 sectionTitle 分组） */}
+          {sections.length === 0 ? (
             <div className="rounded-lg border border-[color:var(--report-border)] bg-background p-6 text-sm text-[color:var(--report-text-subtle)]">
               暂无可展示的报告正文。
             </div>
           ) : (
             <div className="space-y-6">
-              {sections.map((section: LiteraryReviewSection) => {
-                const paragraphs = splitParagraphs(section.body);
+              {Array.from(new Map(
+                sections.map((s) => [s.sectionTitle, null])
+              ).keys()).map((sectionTitle) => {
+                const sectionParagraphs = sections.filter((s) => s.sectionTitle === sectionTitle);
 
                 return (
-                  <Card key={section.id}>
+                  <Card key={sectionTitle}>
                     <CardContent className="pt-5 pb-6 px-6">
                       <h2 className="text-xl font-semibold text-[color:var(--report-text-heading)] mb-5">
-                        {section.title}
+                        {sectionTitle}
                       </h2>
-                      <div className="space-y-4">
-                        {paragraphs.length > 0 ? (
-                          paragraphs.map((paragraph, paragraphIndex) => (
-                            <p key={`${section.id}-${paragraphIndex}`} className="text-sm leading-7 text-[color:var(--report-text-subtle)]">
-                              {paragraph}
-                            </p>
-                          ))
-                        ) : (
-                          <p className="whitespace-pre-line text-sm leading-7 text-[color:var(--report-text-subtle)]">{section.body}</p>
-                        )}
+                      <div className="space-y-6">
+                        {sectionParagraphs.map((paragraph, index) => (
+                          <div key={`${paragraph.paragraphTitle}-${index}`}>
+                            {index > 0 && (
+                              <div className="border-t border-[color:var(--report-border)] mb-5" />
+                            )}
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2">
+                                <div className="h-2 w-2 rounded-full bg-[color:var(--report-accent-dot)]" />
+                                <h3 className="text-base font-semibold text-[color:var(--report-text-heading)]">
+                                  {paragraph.paragraphTitle}
+                                </h3>
+                              </div>
+                              <p className="text-sm leading-7 text-[color:var(--report-text-subtle)]">
+                                {paragraph.body}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>

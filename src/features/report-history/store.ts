@@ -17,6 +17,10 @@ const emptyState: ReportHistoryStoreState = {
 };
 
 function persistState(state: ReportHistoryStoreState) {
+  console.log('[report-history] persistState called:', {
+    recordCount: Object.keys(state.recordsById).length,
+    orderLength: state.order.length,
+  });
   localStorage.setItem(REPORT_HISTORY_STORAGE_KEY, JSON.stringify(state));
 
   if (typeof window !== 'undefined') {
@@ -139,17 +143,26 @@ export const reportHistoryStore = {
     try {
       const stored = localStorage.getItem(REPORT_HISTORY_STORAGE_KEY);
       if (!stored) {
+        console.log('[report-history] getState: No stored data found');
         return emptyState;
       }
 
+      console.log('[report-history] getState: Parsing stored data');
       const parsed = validateReportHistoryStoreState(JSON.parse(stored));
       if (!parsed.success) {
+        console.error('[report-history] getState: Validation failed, removing storage', parsed.error);
         localStorage.removeItem(REPORT_HISTORY_STORAGE_KEY);
         return emptyState;
       }
 
-      return normalizeState(parsed.data);
-    } catch {
+      const normalized = normalizeState(parsed.data);
+      console.log('[report-history] getState: Returning state with', {
+        recordCount: Object.keys(normalized.recordsById).length,
+        orderLength: normalized.order.length,
+      });
+      return normalized;
+    } catch (error) {
+      console.error('[report-history] getState: Error', error);
       return emptyState;
     }
   },
@@ -187,6 +200,12 @@ export const reportHistoryStore = {
       throw new Error('历史任务仅支持在浏览器环境中创建');
     }
 
+    console.log('[report-history] createTaskRecord called:', {
+      id: input.id,
+      title: input.title,
+      moduleId: input.moduleId,
+    });
+
     const title = input.title.trim() || '未命名任务';
     const record: CachedReportRecord = {
       id: input.id,
@@ -221,6 +240,13 @@ export const reportHistoryStore = {
       order: [record.id, ...currentState.order.filter((id) => id !== record.id)],
     }));
 
+    console.log('[report-history] Task record created:', {
+      id: record.id,
+      title: record.title,
+      status: record.status,
+      totalRecords: Object.keys(currentState.recordsById).length + 1,
+    });
+
     return record;
   },
 
@@ -229,9 +255,21 @@ export const reportHistoryStore = {
       throw new Error('历史任务仅支持在浏览器环境中更新');
     }
 
+    console.log('[report-history] updateTaskRecord called:', { reportId, updates });
     const currentState = this.getState();
     const currentRecord = currentState.recordsById[reportId];
+
+    console.log('[report-history] Current state:', {
+      reportId,
+      recordExists: !!currentRecord,
+      allRecordIds: Object.keys(currentState.recordsById),
+    });
+
     if (!currentRecord) {
+      console.error('[report-history] Record not found:', {
+        reportId,
+        allRecordIds: Object.keys(currentState.recordsById),
+      });
       throw new Error('未找到对应的历史任务');
     }
 
@@ -256,15 +294,19 @@ export const reportHistoryStore = {
       order: currentState.order,
     });
 
+    console.log('[report-history] Record updated:', { reportId, newStatus: nextRecord.status });
     return nextRecord;
   },
 
   completeTask(reportId: string, report: PersistedAnalysisReport): CachedReportRecord {
+    console.log('[report-history] completeTask called:', { reportId });
     const parsed = validatePersistedAnalysisReport(report);
     if (!parsed.success) {
+      console.error('[report-history] Report validation failed:', parsed.error);
       throw new Error(parsed.error);
     }
 
+    console.log('[report-history] Report validated, calling updateTaskRecord');
     return this.updateTaskRecord(reportId, {
       title: getReportTitle(parsed.data),
       status: 'completed',
@@ -287,11 +329,32 @@ export const reportHistoryStore = {
   },
 
   failTask(reportId: string, errorMessage: string): CachedReportRecord {
-    const currentRecord = this.getRecord(reportId);
-    if (!currentRecord) {
+    console.log('[report-history] failTask called:', { reportId, errorMessage });
+    const currentState = this.getState();
+
+    console.log('[report-history] Current state:', {
+      reportId,
+      recordExists: !!currentState.recordsById[reportId],
+      allRecordIds: Object.keys(currentState.recordsById),
+    });
+
+    if (!currentState.recordsById[reportId]) {
+      console.error('[report-history] Record not found in failTask:', {
+        reportId,
+        allRecordIds: Object.keys(currentState.recordsById),
+        order: currentState.order,
+      });
+
+      // 尝试从 localStorage 直接读取原始数据
+      const rawState = localStorage.getItem(REPORT_HISTORY_STORAGE_KEY);
+      console.log('[report-history] Raw localStorage data:', rawState);
+
       throw new Error('未找到对应的历史任务');
     }
 
+    const currentRecord = currentState.recordsById[reportId];
+
+    console.log('[report-history] Calling updateTaskRecord to fail task');
     return this.updateTaskRecord(reportId, {
       status: 'failed',
       progressSnapshot: {

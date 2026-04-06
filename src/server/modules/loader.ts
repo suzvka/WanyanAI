@@ -5,7 +5,7 @@ import path from 'node:path';
 import { validateModuleManifest, validateModuleContainers } from './schemas';
 import { createFallbackModuleConfig } from './fallback';
 import { validateSiteConfig, validateAnalysisControls, normalizeAnalysisControls } from '@/server/config/schemas';
-import { getRegisteredOutputModes } from '@/features/output-modes';
+import { getServerOutputModeIds } from '@/server/output-modes';
 import type { ModuleConfig, ModuleRegistry } from '@/types/module';
 
 /**
@@ -90,7 +90,7 @@ async function loadModule(moduleDir: string): Promise<ModuleConfig | null> {
   const validationErrors = validateModuleContainers(
     manifest,
     BUILTIN_CONTAINER_TYPES,
-    getRegisteredOutputModes(),
+    getServerOutputModeIds(),
   );
 
   if (validationErrors.length > 0) {

@@ -2,6 +2,7 @@ export type AppErrorCode =
   | 'invalid_input'
   | 'config_invalid'
   | 'invalid_control_selection'
+  | 'validation_failed'
   | 'ops_config_stale'
   | 'template_fetch_failed'
   | 'template_response_invalid'

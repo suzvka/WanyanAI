@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -11,6 +11,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { AlertCircle, RefreshCw } from 'lucide-react';
+import { reportReactError } from '@/lib/client-errors/report';
 import { toAppErrorPayload } from '@/types/errors';
 
 /**
@@ -19,7 +20,7 @@ import { toAppErrorPayload } from '@/types/errors';
 type GlobalErrorBoundaryProps = {
   children: ReactNode;
   /** 自定义错误回调 */
-  onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
   /** 自定义降级 UI */
   fallback?: ReactNode;
 };
@@ -31,6 +32,14 @@ type GlobalErrorBoundaryState = {
   hasError: boolean;
   error: { message: string; retryable: boolean } | null;
 };
+
+function shouldLogDebugError(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+}
 
 /**
  * 全局错误边界
@@ -72,12 +81,17 @@ export class GlobalErrorBoundary extends Component<
     };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    reportReactError(error, {
+      source: 'react',
+      detail: errorInfo.componentStack,
+    });
+
     // 调用自定义错误回调
     this.props.onError?.(error, errorInfo);
 
     // 开发环境输出详细信息
-    if (process.env.NODE_ENV === 'development') {
+    if (shouldLogDebugError()) {
       console.error('[GlobalErrorBoundary] Caught error:', error);
       console.error('[GlobalErrorBoundary] Component stack:', errorInfo.componentStack);
     }

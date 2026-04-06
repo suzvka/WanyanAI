@@ -36,20 +36,14 @@ export type LiteraryReviewConclusion = {
   rationale: string;
 };
 
-/** 报告章节 */
+/** 报告段落（扁平结构，按 sectionTitle 分组渲染） */
 export type LiteraryReviewSection = {
-  id: string;
-  title: string;
+  /** 章节标题（如"创作背景"、"主题分析"） */
+  sectionTitle: string;
+  /** 段落标题（如"历史背景"、"核心主题"） */
+  paragraphTitle: string;
+  /** 段落内容 */
   body: string;
-  groupId?: string;
-  groupTitle?: string;
-};
-
-/** 报告章节组 */
-export type LiteraryReviewSectionGroup = {
-  id: string;
-  title: string;
-  sections: LiteraryReviewSection[];
 };
 
 /** 报告元数据 */
@@ -77,7 +71,6 @@ export type LiteraryReviewData = {
   dashboard: LiteraryReviewDashboard;
   conclusion: LiteraryReviewConclusion;
   meta: LiteraryReviewMeta;
-  groups: LiteraryReviewSectionGroup[];
   sections: LiteraryReviewSection[];
   diagnostics: LiteraryReviewDiagnostics;
 };

@@ -11,6 +11,8 @@ export type ProgressEventType =
   | 'request-model'
   | 'extract-json'
   | 'repair-json'
+  | 'parse-mcp'
+  | 'invoke-tool'
   | 'normalize'
   | 'complete'
   // 流式响应事件

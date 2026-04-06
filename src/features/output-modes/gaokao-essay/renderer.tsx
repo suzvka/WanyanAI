@@ -12,7 +12,7 @@ import {
   type ModelMinimalSubscore,
 } from './validate';
 import { GaokaoEssayView } from './components/GaokaoEssayView';
-import type { RendererProps } from '../registry';
+import type { RendererProps } from '@/features/output-modes/renderer';
 import { createAppError } from '@/types/errors';
 import { evaluationGoalLabels } from '@/config/evaluationDimensions';
 

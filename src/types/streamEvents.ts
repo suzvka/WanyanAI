@@ -18,6 +18,8 @@ export type WorkflowStage =
   | 'request-model'   // 请求模型生成
   | 'extract-json'    // 提取 JSON 数据
   | 'repair-json'     // 修复 JSON 格式
+  | 'parse-mcp'       // 解析 MCP 工具调用
+  | 'invoke-tool'     // 调用 MCP 工具
   | 'normalize';      // 标准化报告
 
 /** 工作流阶段事件 */

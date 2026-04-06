@@ -76,6 +76,8 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
     progressController.registerStages(DEFAULT_PROGRESS_STAGES);
     runningTasksRef.current.set(schedulerKey, nextTaskId);
 
+    console.log('[AnalysisTaskProvider] Starting task execution:', { taskId: nextTaskId });
+
     reportHistoryStore.updateTaskRecord(nextTaskId, {
       status: 'running',
       progressSnapshot: progressController.getSnapshot(),
@@ -108,6 +110,7 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
 
     void runAnalysisTask(runtimeTask, progressController)
       .then((report) => {
+        console.log('[AnalysisTaskProvider] Task completed successfully:', { taskId: nextTaskId });
         const completedRecord = reportHistoryStore.completeTask(nextTaskId, report);
         showSuccessWithAction(`分析已完成：${completedRecord.title}`, {
           duration: 5000,
@@ -115,11 +118,13 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
         runtimeTasksRef.current.delete(nextTaskId);
       })
       .catch((error) => {
+        console.error('[AnalysisTaskProvider] Task failed:', { taskId: nextTaskId, error });
         const message = error instanceof Error ? error.message : '分析失败';
         progressController.setError(message);
         reportHistoryStore.failTask(nextTaskId, message);
       })
       .finally(() => {
+        console.log('[AnalysisTaskProvider] Task cleanup:', { taskId: nextTaskId });
         unsubscribe();
         runningTasksRef.current.delete(schedulerKey);
         notifyTaskListeners(nextTaskId);
@@ -131,6 +136,14 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
     const taskId = generateTaskId();
     const createdAt = new Date().toISOString();
     const schedulerKey = createSchedulerKey(input.modelConfig);
+
+    console.log('[AnalysisTaskProvider] Creating task:', {
+      taskId,
+      schedulerKey,
+      moduleId: input.moduleConfig.manifest.id,
+      model: input.modelConfig.selectedModel,
+    });
+
     const runtimeTask: RuntimeAnalysisTask = {
       id: taskId,
       schedulerKey,
@@ -143,6 +156,8 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
     };
 
     runtimeTasksRef.current.set(taskId, runtimeTask);
+
+    console.log('[AnalysisTaskProvider] Creating task record in store');
     reportHistoryStore.createTaskRecord({
       id: taskId,
       title: buildTaskTitle(input),
@@ -159,6 +174,8 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
     schedulerQueuesRef.current.set(schedulerKey, queue);
     notifyTaskListeners(taskId);
     processQueue(schedulerKey);
+
+    console.log('[AnalysisTaskProvider] Task created and queued:', { taskId, queueLength: queue.length });
     return taskId;
   }, [notifyTaskListeners, processQueue]);
 

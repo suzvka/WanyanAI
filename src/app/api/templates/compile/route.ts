@@ -20,11 +20,19 @@ export async function POST(request: Request) {
       return NextResponse.json(response, { status: 400 });
     }
 
+    console.log('[api/templates/compile] Request:', parsed.data);
     const template = await getPromptTemplate(parsed.data.evaluationGoal, parsed.data.outputMode);
+    console.log('[api/templates/compile] Template received:', {
+      templateId: template.templateId,
+      outputMode: parsed.data.outputMode,
+      systemPromptLength: template.systemPromptTemplate.length,
+      systemPromptContainsLanguageExpression: template.systemPromptTemplate.includes('language_expression'),
+    });
     const response: PromptTemplateSuccessResponse = { template };
 
     return NextResponse.json(response);
   } catch (error) {
+    console.error('[api/templates/compile] Error:', error);
     const response: PromptTemplateErrorResponse = {
       error: toAppErrorPayload(error, {
         code: 'template_fetch_failed',

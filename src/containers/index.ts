@@ -40,7 +40,7 @@ export function registerBuiltInContainers(): void {
 registerBuiltInContainers();
 
 // 导出注册表和渲染函数
-export { containerRegistry, renderContainer, getRegisteredContainerTypes } from './registry';
+export { containerRegistry, renderContainer } from './registry';
 
 // 导出容器类型
 export type { ContainerRenderer, ContainerComponentProps, ContainerSharedProps } from './registry';

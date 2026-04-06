@@ -26,7 +26,7 @@ import { PageProvider, usePageContext } from '@/providers/PageContext';
 import { useModelConfig } from '@/providers/ModelConfigProvider';
 import { NavigationGuardProvider, useNavigationGuard } from '@/providers/NavigationGuardContext';
 import { renderContainer } from '@/containers';
-import { getOutputMode } from '@/features/output-modes';
+import { getOutputModeRenderer } from '@/features/output-modes';
 import { validateEvaluationInput } from '@/lib/validation/evaluationInput';
 import { useHasUnsavedContent } from '@/hooks/useHasUnsavedContent';
 import type { ProgressSnapshot } from '@/features/analysis-progress';
@@ -371,9 +371,12 @@ function EvaluateContent({
     startAnalysis({ textContent });
   }, [toEvaluationInput, featureFlags, startAnalysis]);
 
-  // 获取输出模式渲染器
-  const outputMode = getOutputMode(moduleConfig.manifest.outputMode);
-  const OutputRenderer = outputMode?.Renderer;
+  // 获取输出模式渲染器（使用 useMemo 确保引用稳定）
+  // eslint-disable-next-line react-hooks/static-components
+  const OutputRenderer = useMemo(
+    () => getOutputModeRenderer(moduleConfig.manifest.outputMode),
+    [moduleConfig.manifest.outputMode]
+  );
 
   // 渲染容器列表
   const containerElements = useMemo(() => {

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ReportErrorBoundary } from '@/components/evaluate/ReportErrorBoundary';
-import { getOutputMode } from '@/features/output-modes';
+import { getOutputModeRenderer } from '@/features/output-modes';
 import { reportHistoryStore } from '@/features/report-history/store';
 import type { CachedReportRecord } from '@/features/report-history/types';
 import type { ModuleConfig } from '@/types/module';
@@ -75,11 +75,12 @@ export default function ReportHistoryDetailPageClient({
       return null;
     }
 
-    return getOutputMode(record.outputMode) ?? null;
+    // eslint-disable-next-line react-hooks/static-components
+    return getOutputModeRenderer(record.outputMode) ?? null;
   }, [record]);
 
-  const canRender = Boolean(record && record.report && outputMode && outputMode.validate(record.report));
-  const OutputRenderer = outputMode?.Renderer;
+  const OutputRenderer = outputMode;
+  const canRender = Boolean(record && record.report && outputMode);
 
   return (
     <HistoryAppShell platformConfig={platformConfig} modules={modules}>

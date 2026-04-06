@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -11,6 +11,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { AlertCircle, RefreshCw, ArrowLeft } from 'lucide-react';
+import { reportReactError } from '@/lib/client-errors/report';
 
 /**
  * 报告渲染错误信息
@@ -27,7 +28,7 @@ export type ReportErrorInfo = {
 export type ReportErrorBoundaryProps = {
   children: ReactNode;
   /** 发生错误时的回调 */
-  onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
   /** 返回编辑页面的回调 */
   onBackToEdit: () => void;
   /** 重试生成报告的回调 */
@@ -105,7 +106,12 @@ export class ReportErrorBoundary extends Component<
     };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    reportReactError(error, {
+      source: 'react-report',
+      detail: errorInfo.componentStack,
+    });
+
     // 调用外部错误处理回调（可用于日志记录）
     this.props.onError?.(error, errorInfo);
   }
@@ -179,7 +185,7 @@ export function ReportErrorBoundaryWrapper({
   children: ReactNode;
   onBackToEdit: () => void;
   onRetry?: () => void;
-  onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
 }) {
   return (
     <ReportErrorBoundary

@@ -6,6 +6,7 @@ import {
   ModelInfo,
   ModelListResponse,
 } from '@/types/modelConfig';
+import { requestJson, requestResponse } from '@/lib/client-request';
 import { validateModelConnectionInput } from '@/lib/validation/modelConfig';
 import { toAppErrorPayload } from '@/types/errors';
 
@@ -48,57 +49,31 @@ export const modelConfigProvider: ModelConfigProvider = {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), VALIDATION_TIMEOUT_MS);
 
-      let response: Response;
-      try {
-        response = await fetch(`${cleanBaseUrl}/models`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${cleanApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          credentials: 'same-origin', // 携带 cookies 以验证 session binding
-          signal: controller.signal,
-        });
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        // 检查是否为超时错误
-        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-          return {
-            success: false,
-            error: {
+      const data = await (async () => {
+        try {
+          return await requestJson<ModelListResponse>(`${cleanBaseUrl}/models`, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${cleanApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            credentials: 'same-origin',
+            signal: controller.signal,
+            errorCode: 'provider_request_failed',
+            errorMessage: '验证失败，请检查 URL 和 API Key',
+            networkErrorMessage: '验证失败，请检查 URL 和 API Key',
+            reportMessage: '模型配置验证失败',
+            abortErrorPayload: {
               code: 'provider_request_timeout',
               message: '验证超时，请检查网络连接或稍后重试',
               retryable: true,
             },
-          };
+          });
+        } finally {
+          clearTimeout(timeoutId);
         }
-        throw fetchError;
-      }
+      })();
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        let errorMsg = `HTTP ${response.status}`;
-
-        try {
-          const errorData = (await response.json()) as { error?: { message?: string } };
-          errorMsg = errorData.error?.message || errorMsg;
-        } catch {
-          // 忽略响应体解析错误
-        }
-
-        return {
-          success: false,
-          error: {
-            code: 'provider_request_failed',
-            message: `验证失败：${errorMsg}`,
-            retryable: response.status >= 500,
-            status: response.status,
-          },
-        };
-      }
-
-      const data = (await response.json()) as ModelListResponse;
       const models = normalizeModels(data);
 
       if (!models) {
@@ -139,36 +114,19 @@ export const modelConfigProvider: ModelConfigProvider = {
     try {
       const cleanBaseUrl = normalizeBaseUrl(baseUrl);
 
-      const response = await fetch(`${cleanBaseUrl}/chat/completions`, {
+      const response = await requestResponse(`${cleanBaseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        credentials: 'same-origin', // 携带 cookies 以验证 session binding
+        credentials: 'same-origin',
         body: JSON.stringify(body),
+        errorCode: 'provider_request_failed',
+        errorMessage: '请求失败，请检查网络连接',
+        networkErrorMessage: '请求失败，请检查网络连接',
+        reportMessage: '模型服务请求失败',
       });
-
-      if (!response.ok) {
-        let errorMsg = `HTTP ${response.status}`;
-
-        try {
-          const errorData = (await response.json()) as { error?: { message?: string } };
-          errorMsg = errorData.error?.message || errorMsg;
-        } catch {
-          // 忽略响应体解析错误
-        }
-
-        return {
-          success: false,
-          error: {
-            code: 'provider_request_failed',
-            message: `请求失败：${errorMsg}`,
-            retryable: response.status >= 500,
-            status: response.status,
-          },
-        };
-      }
 
       // 返回原始响应（支持流式和非流式）
       return {

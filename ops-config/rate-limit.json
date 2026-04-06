@@ -8,8 +8,8 @@
         "maxCallsPerHour": 1000
       },
       "perUser": {
-        "maxCallsPerMinute": 5,
-        "maxCallsPerHour": 50
+        "maxCallsPerMinute": 10,
+        "maxCallsPerHour": 100
       }
     },
     {
@@ -19,8 +19,8 @@
         "maxCallsPerHour": 5000
       },
       "perUser": {
-        "maxCallsPerMinute": 20,
-        "maxCallsPerHour": 200
+        "maxCallsPerMinute": 100,
+        "maxCallsPerHour": 1000
       }
     },
     {
@@ -30,8 +30,8 @@
         "maxCallsPerHour": 20000
       },
       "perUser": {
-        "maxCallsPerMinute": 60,
-        "maxCallsPerHour": 500
+        "maxCallsPerMinute": 100,
+        "maxCallsPerHour": 1000
       }
     }
   ],

@@ -1,5 +1,6 @@
 import type { ModelAnalysisMessage } from '@/types/analysis';
 import type { AnalysisEventHandlers } from '@/types/streamEvents';
+import type { McpToolDefinition } from '@/mcp/types';
 
 /**
  * ModelClient 配置选项
@@ -19,6 +20,8 @@ export type ModelClientOptions = {
   maxTokens?: number;
   /** 事件回调处理器 */
   events?: AnalysisEventHandlers;
+  /** MCP 工具定义（来自输出模式模块） */
+  mcpToolDefinitions?: McpToolDefinition[];
 };
 
 /**
@@ -29,6 +32,8 @@ export type ModelClientResult = {
   content: string;
   /** 结束原因 */
   finishReason?: string;
+  /** 捕获的工具调用（如果有） */
+  toolCall?: { name: string; params: Record<string, any> } | null;
 };
 
 /**

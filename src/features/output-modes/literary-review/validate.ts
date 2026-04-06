@@ -36,16 +36,9 @@ export const modelMinimalConclusionSchema = z
 
 export const modelMinimalSectionSchema = z
   .object({
-    title: z.string().trim().min(1),
+    sectionTitle: z.string().trim().min(1),
+    paragraphTitle: z.string().trim().min(1),
     body: z.string().trim().min(1),
-  })
-  .strict();
-
-export const modelMinimalSectionGroupSchema = z
-  .object({
-    id: z.string().trim().min(1).optional(),
-    title: z.string().trim().min(1),
-    sections: z.array(modelMinimalSectionSchema).min(1),
   })
   .strict();
 
@@ -54,9 +47,7 @@ const modelMinimalReportBaseSchema = z
     summary: modelMinimalSummarySchema,
     subscores: z.array(modelMinimalSubscoreSchema),
     conclusion: modelMinimalConclusionSchema,
-    groups: z.array(modelMinimalSectionGroupSchema).min(1).optional(),
-    // sections 已迁移到 groups 中，保留为可选以兼容旧格式
-    sections: z.array(modelMinimalSectionSchema).min(1).optional(),
+    sections: z.array(modelMinimalSectionSchema).min(1),
   })
   .strict();
 
@@ -66,24 +57,11 @@ type ModelMinimalReportSchemaInput = z.infer<typeof modelMinimalReportBaseSchema
  * 模型输出报告验证 Schema
  * 
  * 验证规则：
- * - 必须包含 summary、subscores、conclusion
+ * - 必须包含 summary、subscores、conclusion、sections
  * - subscores 必须包含所有 6 个维度，且无重复
- * - groups 或 sections 至少存在一个
  */
 export const modelMinimalReportSchema = modelMinimalReportBaseSchema.superRefine(
   (report: ModelMinimalReportSchemaInput, ctx: z.RefinementCtx) => {
-    // 验证 groups 或 sections 至少存在一个
-    const hasGroups = report.groups && report.groups.length > 0;
-    const hasSections = report.sections && report.sections.length > 0;
-    
-    if (!hasGroups && !hasSections) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: '必须包含 groups 或 sections 字段',
-        path: ['groups'],
-      });
-    }
-
     // 验证子维度
     const seen = new Set<string>();
 
@@ -132,11 +110,8 @@ export type ModelMinimalSubscore = z.infer<typeof modelMinimalSubscoreSchema>;
 /** 模型输出的结论 */
 export type ModelMinimalConclusion = z.infer<typeof modelMinimalConclusionSchema>;
 
-/** 模型输出的章节 */
+/** 模型输出的段落 */
 export type ModelMinimalSection = z.infer<typeof modelMinimalSectionSchema>;
-
-/** 模型输出的章节组 */
-export type ModelMinimalSectionGroup = z.infer<typeof modelMinimalSectionGroupSchema>;
 
 /** 模型输出的完整报告 */
 export type ModelMinimalReport = z.infer<typeof modelMinimalReportBaseSchema>;
