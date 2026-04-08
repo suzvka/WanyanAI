@@ -12,6 +12,7 @@ __pycache__/
 *.egg-info/
 /.env
 .env
+.next
 
 # JS/TS bundlers & build outputs
 .next
@@ -89,3 +90,4 @@ logs/
 *.xlsx
 *.csv
 /.vs
+/keys
