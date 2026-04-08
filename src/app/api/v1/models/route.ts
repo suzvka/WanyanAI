@@ -52,7 +52,7 @@ export async function GET(request: Request) {
       permissionLevel,
     });
 
-    const availableModels = getAvailableModels(permissionLevel);
+    const availableModels = await getAvailableModels(permissionLevel);
 
     logInfo('[API:Models] 返回模型列表', {
       requestId,

@@ -11,7 +11,7 @@ export interface LogContext {
   browserId?: string;
   modelId?: string;
   requestId?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 const SENSITIVE_KEY_PATTERN = /authorization|api[_-]?key|proxy[_-]?key|proof|token|secret|password|prompt|message|content|response|expected|received|modifiedData|userRef/i;
@@ -70,8 +70,10 @@ export function logWarn(message: string, context?: LogContext) {
   console.warn(formatLog(LogLevel.WARN, message, context));
 }
 
-export function logError(message: string, error?: any, context?: LogContext) {
-  const errorStr = error ? ` Error: ${error.message || error}` : '';
+export function logError(message: string, error?: unknown, context?: LogContext) {
+  const errorStr = error
+    ? ` Error: ${error instanceof Error ? error.message : String(error)}`
+    : '';
   console.error(formatLog(LogLevel.ERROR, message + errorStr, context));
 }
 

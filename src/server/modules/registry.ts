@@ -1,21 +1,21 @@
 import 'server-only';
 
-import { loadModuleRegistry } from './loader';
-import type { ModuleRegistry, ModuleConfig } from '@/types/module';
+import { loadPageModuleRegistry } from './loader';
+import type { PageModuleRegistry, PageModuleConfig, PageModulePublicMeta } from '@/types/module';
 
-let cachedRegistry: ModuleRegistry | null = null;
+let cachedRegistry: PageModuleRegistry | null = null;
 
 /**
  * 获取缓存的模块注册表
  */
-export function getCachedModuleRegistry(): ModuleRegistry | null {
+function getCachedModuleRegistry(): PageModuleRegistry | null {
   return cachedRegistry;
 }
 
 /**
  * 设置缓存的模块注册表
  */
-export function setCachedModuleRegistry(registry: ModuleRegistry): ModuleRegistry {
+function setCachedPageModuleRegistry(registry: PageModuleRegistry): PageModuleRegistry {
   cachedRegistry = registry;
   return registry;
 }
@@ -23,28 +23,36 @@ export function setCachedModuleRegistry(registry: ModuleRegistry): ModuleRegistr
 /**
  * 获取模块注册表（带缓存）
  */
-export async function getModuleRegistry(): Promise<ModuleRegistry> {
+export async function getPageModuleRegistry(): Promise<PageModuleRegistry> {
   const cached = getCachedModuleRegistry();
   if (cached) {
     return cached;
   }
 
-  const registry = await loadModuleRegistry();
-  return setCachedModuleRegistry(registry);
+  const registry = await loadPageModuleRegistry();
+  return setCachedPageModuleRegistry(registry);
 }
 
 /**
- * 根据 ID 获取模块配置
+ * 根据 slug 获取页面模块配置
  */
-export async function getModuleById(id: string): Promise<ModuleConfig | undefined> {
-  const registry = await getModuleRegistry();
-  return registry.getModuleById(id);
+export async function getPageModuleBySlug(slug: string): Promise<PageModuleConfig | undefined> {
+  const registry = await getPageModuleRegistry();
+  return registry.getModuleBySlug(slug);
 }
 
 /**
- * 获取所有模块列表
+ * 获取所有完整页面模块列表
  */
-export async function getAllModules(): Promise<ModuleConfig[]> {
-  const registry = await getModuleRegistry();
+export async function getAllPageModules(): Promise<PageModuleConfig[]> {
+  const registry = await getPageModuleRegistry();
   return registry.modules;
+}
+
+/**
+ * 获取页面模块公开入口列表
+ */
+export async function getPageModulePublicEntries(): Promise<PageModulePublicMeta[]> {
+  const registry = await getPageModuleRegistry();
+  return registry.publicEntries;
 }

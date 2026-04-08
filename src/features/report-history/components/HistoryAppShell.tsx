@@ -4,12 +4,12 @@ import type { ReactNode } from 'react';
 import BrandBackground from '@/components/ui/brand-background';
 import AppShell from '@/components/layout/AppShell';
 import { NavigationGuardProvider } from '@/providers/NavigationGuardContext';
-import type { ModuleConfig } from '@/types/module';
+import type { PageModulePublicMeta } from '@/types/module';
 import type { PlatformConfig } from '@/types/platform';
 
 interface HistoryAppShellProps {
   platformConfig: PlatformConfig;
-  modules: ModuleConfig[];
+  modules: PageModulePublicMeta[];
   children: ReactNode;
 }
 

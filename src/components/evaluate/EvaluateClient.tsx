@@ -17,7 +17,7 @@ import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { usePageFirstLoad } from '@/hooks/usePageFirstLoad';
 import type { AnalysisPhase, AnalysisStatus } from '@/types/appFlow';
 import type { PlatformConfig } from '@/types/platform';
-import type { ModuleConfig, ContainerConfig } from '@/types/module';
+import type { PageModuleConfig, ContainerConfig, PageModulePublicMeta } from '@/types/module';
 import type { EvaluationInput, TextBlock } from '@/types/report';
 import type { ContainerDataPayload, TextBlocksContainerData } from '@/types/container-data';
 import AppShell from '@/components/layout/AppShell';
@@ -26,7 +26,7 @@ import { PageProvider, usePageContext } from '@/providers/PageContext';
 import { useModelConfig } from '@/providers/ModelConfigProvider';
 import { NavigationGuardProvider, useNavigationGuard } from '@/providers/NavigationGuardContext';
 import { renderContainer } from '@/containers';
-import { getOutputModeRenderer } from '@/features/output-modes';
+import { renderOutputMode } from '@/features/output-modes';
 import { validateEvaluationInput } from '@/lib/validation/evaluationInput';
 import { useHasUnsavedContent } from '@/hooks/useHasUnsavedContent';
 import type { ProgressSnapshot } from '@/features/analysis-progress';
@@ -229,8 +229,8 @@ function EvaluateContent({
   moduleConfig,
   modules,
 }: {
-  moduleConfig: ModuleConfig;
-  modules: ModuleConfig[];
+  moduleConfig: PageModuleConfig;
+  modules: PageModulePublicMeta[];
 }) {
   const { appearance, featureFlags } = usePlatformContext();
   const { site } = moduleConfig;
@@ -371,13 +371,6 @@ function EvaluateContent({
     startAnalysis({ textContent });
   }, [toEvaluationInput, featureFlags, startAnalysis]);
 
-  // 获取输出模式渲染器（使用 useMemo 确保引用稳定）
-  // eslint-disable-next-line react-hooks/static-components
-  const OutputRenderer = useMemo(
-    () => getOutputModeRenderer(moduleConfig.manifest.outputMode),
-    [moduleConfig.manifest.outputMode]
-  );
-
   // 渲染容器列表
   const containerElements = useMemo(() => {
     const containers = moduleConfig.manifest.containers;
@@ -417,16 +410,16 @@ function EvaluateContent({
         primaryColor={appearance.theme.primary}
         modules={modules}
       >
-        {shouldShowReport && OutputRenderer ? (
+        {shouldShowReport ? (
           <ReportErrorBoundary
             onBackToEdit={resetAnalysis}
             onRetry={retryAnalysis}
           >
-            <OutputRenderer
-              data={report}
-              onStartNew={clearAllContainerData}
-              onBackToEdit={resetAnalysis}
-            />
+            {renderOutputMode(moduleConfig.manifest.outputMode, {
+              data: report,
+              onStartNew: clearAllContainerData,
+              onBackToEdit: resetAnalysis,
+            })}
           </ReportErrorBoundary>
         ) : analysisState.status !== 'idle' && analysisState.status !== 'failed' ? (
           <main 
@@ -479,8 +472,8 @@ function EvaluateContent({
 
 interface EvaluateClientProps {
   platformConfig: PlatformConfig;
-  moduleConfig: ModuleConfig;
-  modules: ModuleConfig[];
+  moduleConfig: PageModuleConfig;
+  modules: PageModulePublicMeta[];
 }
 
 export default function EvaluateClient({
@@ -509,7 +502,7 @@ function PageProviderWrapper({
   moduleConfig,
   children,
 }: {
-  moduleConfig: ModuleConfig;
+  moduleConfig: PageModuleConfig;
   children: ReactNode;
 }) {
   const { currentModelConfig, setIsConfigDialogOpen } = useModelConfig();

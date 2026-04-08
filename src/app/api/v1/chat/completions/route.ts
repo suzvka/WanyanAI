@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const modelConfig = getModelConfig(model);
+        const modelConfig = await getModelConfig(model);
 
         if (!modelConfig) {
             logError('[API:Chat] 模型不存在', null, { requestId, model });
@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const forwardMapping = getForwardMapping(model);
+        const forwardMapping = await getForwardMapping(model);
 
         if (!forwardMapping) {
             logError('[API:Chat] 模型未配置转发', null, { requestId, model });

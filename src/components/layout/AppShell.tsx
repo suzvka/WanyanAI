@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { CircleHelp, Settings2, UserRound } from 'lucide-react';
-import type { ModuleConfig } from '@/types/module';
+import type { PageModulePublicMeta } from '@/types/module';
 import AppSidebar from '@/components/layout/AppSidebar';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ import { useModelConfig } from '@/providers/ModelConfigProvider';
 interface AppShellProps {
   siteTitle: string;
   primaryColor?: string;
-  modules?: ModuleConfig[];
+  modules?: PageModulePublicMeta[];
   children: ReactNode;
 }
 

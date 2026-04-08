@@ -38,31 +38,33 @@ export type TextBlocksContainerParams = {
   maxBlockCount?: number;
 };
 
+export type PageModuleEntry = {
+  /** 是否暴露为功能页面入口 */
+  enabled: boolean;
+  /** 排序权重（仅服务端使用） */
+  order: number;
+  /** 图标名称（仅内部配置使用） */
+  icon?: string;
+};
+
 /**
- * 模块注册配置（main.json）
+ * 页面模块注册配置（main.json）
  */
-export type ModuleManifest = {
-  /** 模块唯一标识 */
-  id: string;
-  /** 显示名称 */
-  name: string;
-  /** 简短描述 */
+export type PageModuleManifest = {
+  /** 页面 slug（公开标识） */
+  slug: string;
+  /** 页面标题（公开字段） */
+  title: string;
+  /** 页面描述（公开字段） */
   description?: string;
-  /** 路由路径 */
+  /** 路由路径（内部配置） */
   route: string;
   /** 页面容器配置（按顺序渲染） */
   containers: ContainerConfig[];
   /** 输出模式标识 */
   outputMode: string;
-  /** 侧栏配置 */
-  sidebar: {
-    /** 是否在侧栏显示 */
-    enabled: boolean;
-    /** 图标名称（Lucide icon） */
-    icon: string;
-    /** 排序权重 */
-    order: number;
-  };
+  /** 页面入口配置（内部配置） */
+  entry: PageModuleEntry;
   /**
    * @deprecated 已废弃，由 containers 替代
    * 功能配置
@@ -75,13 +77,13 @@ export type ModuleManifest = {
 };
 
 /**
- * 模块完整配置
+ * 页面模块完整配置
  */
-export type ModuleConfig = {
+export type PageModuleConfig = {
   /** 配置来源 */
-  source: 'published' | 'fallback';
+  source: 'published';
   /** 模块注册信息 */
-  manifest: ModuleManifest;
+  manifest: PageModuleManifest;
   /** 页面文案配置 */
   site: SiteConfig;
   /** 分析控制配置 */
@@ -89,15 +91,27 @@ export type ModuleConfig = {
 };
 
 /**
- * 模块注册表
+ * 页面模块对外公开元数据
  */
-export type ModuleRegistry = {
-  /** 所有模块列表 */
-  modules: ModuleConfig[];
-  /** 根据 ID 获取模块 */
-  getModuleById: (id: string) => ModuleConfig | undefined;
-  /** 根据路由获取模块 */
-  getModuleByRoute: (route: string) => ModuleConfig | undefined;
+export type PageModulePublicMeta = {
+  /** 页面 slug（公开字段） */
+  slug: string;
+  /** 页面标题（公开字段） */
+  title: string;
+  /** 页面描述（公开字段） */
+  description?: string;
+};
+
+/**
+ * 页面模块注册表
+ */
+export type PageModuleRegistry = {
+  /** 所有完整页面模块列表 */
+  modules: PageModuleConfig[];
+  /** 对外公开入口列表 */
+  publicEntries: PageModulePublicMeta[];
+  /** 根据 slug 获取模块 */
+  getModuleBySlug: (slug: string) => PageModuleConfig | undefined;
 };
 
 /**

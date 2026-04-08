@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getErrorMessage, outputModeValidationError } from '../_shared';
 import { validateOutputModeData } from '@/server/output-modes';
 
 export async function POST(request: NextRequest) {
@@ -10,19 +11,13 @@ export async function POST(request: NextRequest) {
     };
 
     if (!outputModeId || data === undefined) {
-      return NextResponse.json(
-        { success: false, errors: [{ path: '', message: 'Missing required parameters' }] },
-        { status: 400 }
-      );
+      return outputModeValidationError('Missing required parameters', 400);
     }
 
     const result = await validateOutputModeData(outputModeId, data);
     return NextResponse.json(result);
   } catch (error) {
     console.error('[API] validate error:', error);
-    return NextResponse.json(
-      { success: false, errors: [{ path: '', message: error instanceof Error ? error.message : 'Unknown error' }] },
-      { status: 500 }
-    );
+    return outputModeValidationError(getErrorMessage(error), 500);
   }
 }

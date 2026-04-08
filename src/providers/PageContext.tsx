@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { reportBusinessError } from '@/lib/client-errors/report';
 import type { EvaluationInput } from '@/types/report';
 import type { AnalysisResult } from '@/types/analysis';
-import type { ModuleConfig } from '@/types/module';
+import type { PageModuleConfig } from '@/types/module';
 import type { AnalysisPhase, AnalysisStatus } from '@/types/appFlow';
 import type { ModelConfig } from '@/types/modelConfig';
 import type { ProgressSnapshot } from '@/features/analysis-progress';
@@ -40,7 +40,7 @@ export type AnalysisParams = {
  */
 export type PageContextValue = {
   /** 当前模块配置 */
-  moduleConfig: ModuleConfig;
+  moduleConfig: PageModuleConfig;
 
   // === 分析控制 ===
   /** 当前选择的分析控制项 */
@@ -87,7 +87,7 @@ export function usePageContext(): PageContextValue {
 
 export type PageProviderProps = {
   children: ReactNode;
-  moduleConfig: ModuleConfig;
+  moduleConfig: PageModuleConfig;
   currentModelConfig: ModelConfig | null;
   onRequireModelConfig?: () => void;
 };

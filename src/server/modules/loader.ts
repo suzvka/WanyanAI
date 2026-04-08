@@ -2,18 +2,50 @@ import 'server-only';
 
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { validateModuleManifest, validateModuleContainers } from './schemas';
-import { createFallbackModuleConfig } from './fallback';
-import { validateSiteConfig, validateAnalysisControls, normalizeAnalysisControls } from '@/server/config/schemas';
+import { validatePageModuleManifest, validatePageModuleContainers } from './schemas';
+import { validateAnalysisControls, validateSiteConfig } from '@/server/config/schemas';
+import type { SiteConfig, AnalysisControlsConfig } from '@/server/config/types';
+import { getBuiltInContainerTypes } from '@/containers/manifest';
 import { getServerOutputModeIds } from '@/server/output-modes';
-import type { ModuleConfig, ModuleRegistry } from '@/types/module';
-
-/**
- * 内置容器类型列表（服务端固定）
- */
-const BUILTIN_CONTAINER_TYPES = ['analysis-controls', 'text-blocks'];
+import type { PageModuleConfig, PageModuleRegistry } from '@/types/module';
 
 const modulesDir = path.join(process.cwd(), 'app-modules');
+
+const DEFAULT_SITE_CONFIG: SiteConfig = {
+  home: {
+    title: '功能页面',
+    subtitle: '',
+  },
+  inputPanel: {
+    title: '输入内容',
+    description: '',
+  },
+  settingsPanel: {
+    title: '分析设置',
+    description: '',
+  },
+  progress: {
+    runningTitle: '正在准备分析请求...',
+    runningDescription: '',
+  },
+};
+
+const DEFAULT_ANALYSIS_CONTROLS: AnalysisControlsConfig = {
+  groups: [
+    {
+      id: 'default',
+      title: '默认分组',
+      enabled: true,
+      controls: [],
+    },
+  ],
+  controls: [],
+};
+
+type ModuleDirectoryCheck = {
+  moduleDir: string;
+  isModule: boolean;
+};
 
 /**
  * 检查目录是否包含 main.json
@@ -31,34 +63,34 @@ async function isModuleDirectory(dirPath: string): Promise<boolean> {
 /**
  * 扫描并加载所有模块（并行加载）
  */
-async function scanModules(): Promise<ModuleConfig[]> {
+async function scanModules(): Promise<PageModuleConfig[]> {
   try {
     const entries = await readdir(modulesDir, { withFileTypes: true });
 
     // 第一步：并行检查所有目录是否为模块目录
     const dirChecks = await Promise.all(
       entries
-        .filter((entry) => entry.isDirectory())
-        .map(async (entry) => {
+        .filter((entry: { isDirectory: () => boolean }) => entry.isDirectory())
+        .map(async (entry: { name: string }) => {
           const moduleDir = path.join(modulesDir, entry.name);
           const isModule = await isModuleDirectory(moduleDir);
-          return { entry, moduleDir, isModule };
+          return { moduleDir, isModule } as ModuleDirectoryCheck;
         }),
     );
 
     // 过滤出真正的模块目录
     const moduleDirs = dirChecks
-      .filter((check) => check.isModule)
-      .map((check) => check.moduleDir);
+      .filter((check: ModuleDirectoryCheck) => check.isModule)
+      .map((check: ModuleDirectoryCheck) => check.moduleDir);
 
     // 第二步：并行加载所有模块
     const results = await Promise.allSettled(
-      moduleDirs.map((moduleDir) => loadModule(moduleDir)),
+      moduleDirs.map((moduleDir: string) => loadModule(moduleDir)),
     );
 
     // 收集成功加载的模块
-    const modules: ModuleConfig[] = [];
-    results.forEach((result) => {
+    const modules: PageModuleConfig[] = [];
+    results.forEach((result: PromiseSettledResult<PageModuleConfig | null>) => {
       if (result.status === 'fulfilled' && result.value) {
         modules.push(result.value);
       }
@@ -67,7 +99,7 @@ async function scanModules(): Promise<ModuleConfig[]> {
     return modules;
   } catch (error) {
     // app-modules 目录不存在，返回空列表
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if ((error as { code?: string }).code === 'ENOENT') {
       return [];
     }
     throw error;
@@ -77,19 +109,19 @@ async function scanModules(): Promise<ModuleConfig[]> {
 /**
  * 加载单个模块配置
  */
-async function loadModule(moduleDir: string): Promise<ModuleConfig | null> {
+async function loadModule(moduleDir: string): Promise<PageModuleConfig | null> {
   const [mainRaw, siteRaw, analysisControlsRaw] = await Promise.all([
     readFile(path.join(moduleDir, 'main.json'), 'utf-8'),
     readFile(path.join(moduleDir, 'site.json'), 'utf-8').catch(() => null),
     readFile(path.join(moduleDir, 'analysis-controls.json'), 'utf-8').catch(() => null),
   ]);
 
-  const manifest = validateModuleManifest(JSON.parse(mainRaw));
+  const manifest = validatePageModuleManifest(JSON.parse(mainRaw));
 
   // 验证容器配置完整性（动态获取已注册的输出模式列表）
-  const validationErrors = validateModuleContainers(
+  const validationErrors = validatePageModuleContainers(
     manifest,
-    BUILTIN_CONTAINER_TYPES,
+    getBuiltInContainerTypes(),
     getServerOutputModeIds(),
   );
 
@@ -97,15 +129,14 @@ async function loadModule(moduleDir: string): Promise<ModuleConfig | null> {
     return null;
   }
 
-  let site = createFallbackModuleConfig().site;
+  let site = DEFAULT_SITE_CONFIG;
   if (siteRaw) {
     site = validateSiteConfig(JSON.parse(siteRaw));
   }
 
-  let analysisControls = createFallbackModuleConfig().analysisControls;
+  let analysisControls = DEFAULT_ANALYSIS_CONTROLS;
   if (analysisControlsRaw) {
-    const parsed = JSON.parse(analysisControlsRaw);
-    analysisControls = normalizeAnalysisControls(parsed);
+    analysisControls = validateAnalysisControls(JSON.parse(analysisControlsRaw));
   }
 
   return {
@@ -119,22 +150,20 @@ async function loadModule(moduleDir: string): Promise<ModuleConfig | null> {
 /**
  * 创建模块注册表
  */
-export async function loadModuleRegistry(): Promise<ModuleRegistry> {
+export async function loadPageModuleRegistry(): Promise<PageModuleRegistry> {
   const modules = await scanModules();
-
-  // 如果没有找到任何模块，返回 fallback
-  if (modules.length === 0) {
-    const fallback = createFallbackModuleConfig();
-    return {
-      modules: [fallback],
-      getModuleById: (id: string) => (id === fallback.manifest.id ? fallback : undefined),
-      getModuleByRoute: (route: string) => (route === fallback.manifest.route ? fallback : undefined),
-    };
-  }
+  const publicEntries = modules
+    .filter((module) => module.manifest.entry.enabled)
+    .sort((a, b) => a.manifest.entry.order - b.manifest.entry.order)
+    .map((module) => ({
+      slug: module.manifest.slug,
+      title: module.manifest.title,
+      description: module.manifest.description,
+    }));
 
   return {
     modules,
-    getModuleById: (id: string) => modules.find((m) => m.manifest.id === id),
-    getModuleByRoute: (route: string) => modules.find((m) => m.manifest.route === route),
+    publicEntries,
+    getModuleBySlug: (slug: string) => modules.find((m) => m.manifest.slug === slug),
   };
 }

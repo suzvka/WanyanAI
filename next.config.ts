@@ -3,7 +3,7 @@ import type { NextConfig } from 'next';
 const securityHeaders = [
   {
     key: 'Content-Security-Policy',
-    value: "base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'",
+    value: "base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none';",
   },
   {
     key: 'Referrer-Policy',
@@ -26,6 +26,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // outputFileTracingRoot: path.resolve(__dirname, '../../'),  // Uncomment and add 'import path from "path"' if needed
   /* config options here */
+  optimizeFonts: false,
   allowedDevOrigins: [
     '9a8651b5-91e5-46ea-abe1-6d990ef7260b.dev.coze.site',
     'vefaas-gwozwlfx-1fpxkvrzba-d7915k030ki0a103ler0-sandbox.sandbox-dev.coze-coding.bytedance.net',

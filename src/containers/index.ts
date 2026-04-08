@@ -1,29 +1,36 @@
 'use client';
 
 import { containerRegistry } from './registry';
+import { getBuiltInContainerManifest } from './manifest';
 import TextBlocksContainer from './text-blocks';
 import AnalysisControlsContainer from './analysis-controls';
 import type { TextBlocksContainerParams } from '@/types/module';
 import type { TextBlocksContainerData } from '@/types/container-data';
 
+const builtInContainerManifest = getBuiltInContainerManifest();
+
+function getBuiltInContainerManifestItem(type: string) {
+  return builtInContainerManifest.find((item) => item.type === type);
+}
+
 /**
  * 注册所有内置容器
  */
 export function registerBuiltInContainers(): void {
+  const analysisControlsManifest = getBuiltInContainerManifestItem('analysis-controls');
+  const textBlocksManifest = getBuiltInContainerManifestItem('text-blocks');
+
   // 注册 analysis-controls 容器（无数据类型）
   containerRegistry.register({
-    type: 'analysis-controls',
+    type: analysisControlsManifest?.type || 'analysis-controls',
     component: AnalysisControlsContainer,
   });
 
   // 注册 text-blocks 容器（带参数类型和数据类型）
   containerRegistry.register<TextBlocksContainerParams, TextBlocksContainerData>({
-    type: 'text-blocks',
+    type: textBlocksManifest?.type || 'text-blocks',
     component: TextBlocksContainer,
-    defaultParams: {
-      defaultExpanded: false,
-      initialBlockCount: 0,
-    },
+    defaultParams: textBlocksManifest?.defaultParams as Partial<TextBlocksContainerParams> | undefined,
   });
 
   // 新增容器类型在此注册

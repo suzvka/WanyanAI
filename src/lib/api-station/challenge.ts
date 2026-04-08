@@ -109,10 +109,11 @@ async function sha256Hex(input: string): Promise<string> {
 export async function issueChallengeToken(
   proof: string,
   userRef: string,
-  config: ChallengeConfig = getChallengeConfig(),
+  config?: ChallengeConfig,
 ): Promise<TokenIssueResult> {
+  const finalConfig = config || await getChallengeConfig();
   const now = Date.now();
-  const expiresAt = now + config.tokenExpireMinutes * 60 * 1000;
+  const expiresAt = now + finalConfig.tokenExpireMinutes * 60 * 1000;
 
   const payload: ChallengeTokenPayload = {
     proofHash: await sha256Hex(proof),
@@ -188,11 +189,12 @@ async function computeChallengeAnswer(token: string, nonce: number): Promise<str
 
 export async function verifyChallengeIfPresent(
   request: ChallengeRequest,
-  config: ChallengeConfig = getChallengeConfig(),
+  config?: ChallengeConfig,
 ): Promise<ChallengeResult> {
+  const finalConfig = config || await getChallengeConfig();
   const { token, answer, nonce, proof, userRef } = request;
 
-  if (!config.enabled) {
+  if (!finalConfig.enabled) {
     return {
       success: true,
       skipped: true,
@@ -248,7 +250,7 @@ export async function verifyChallengeIfPresent(
   }
 
   const nonceKey = `${payload.userRef}:${payload.proofHash}:${nonce}`;
-  const nonceExpiresAt = Date.now() + config.maxNonceAgeSeconds * 1000;
+  const nonceExpiresAt = Date.now() + finalConfig.maxNonceAgeSeconds * 1000;
 
   if (nonceCache.has(nonceKey)) {
     logError('[Challenge] Nonce 已被使用', null, { userRefPreview: `${payload.userRef.slice(0, 8)}...`, nonce });

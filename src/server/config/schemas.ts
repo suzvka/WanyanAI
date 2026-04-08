@@ -1,20 +1,27 @@
 import { z } from 'zod';
-import type { AnalysisControlsConfig, AnalysisControlsInput, SiteConfig } from './types';
+import type {
+  AnalysisControlGroupInput,
+  AnalysisControlInput,
+  AnalysisControlOptionInput,
+  AnalysisControlsConfig,
+  AnalysisControlsInput,
+  SiteConfig,
+} from './types';
 import type { PlatformConfig } from '@/types/platform';
 
 const configTextSchema = z.string();
 
 const analysisControlOptionSchema = z.object({
-  value: z.string().trim().min(1),
+  value: z.string().trim().min(1).optional(),
   label: configTextSchema,
-  promptText: configTextSchema,
-  enabled: z.boolean(),
-});
+  promptText: configTextSchema.optional(),
+  enabled: z.boolean().optional(),
+}).passthrough();
 
 const analysisControlSchema = z.object({
   id: z.string().trim().min(1),
   title: configTextSchema,
-  enabled: z.boolean(),
+  enabled: z.boolean().optional(),
   options: z.array(analysisControlOptionSchema),
 });
 
@@ -22,7 +29,7 @@ const analysisControlGroupSchema = z.object({
   id: z.string().trim().min(1),
   title: configTextSchema,
   description: z.string().optional(),
-  enabled: z.boolean(),
+  enabled: z.boolean().optional(),
   controls: z.array(analysisControlSchema),
 });
 
@@ -31,57 +38,56 @@ const analysisControlsSchemaBase = z.object({
   controls: z.array(analysisControlSchema).optional(),
 });
 
-type AnalysisControlOption = {
-  value: string;
-  label: string;
-  promptText: string;
-  enabled: boolean;
-};
+function resolveOptionValue(option: AnalysisControlOptionInput): string {
+  return option.value?.trim() || option.label.trim();
+}
 
-type AnalysisControl = {
-  id: string;
-  title: string;
-  enabled: boolean;
-  options: AnalysisControlOption[];
-};
-
-type AnalysisControlGroup = {
-  id: string;
-  title: string;
-  description?: string;
-  enabled: boolean;
-  controls: AnalysisControl[];
-};
-
-type AnalysisControlsConfigLike = {
-  groups?: AnalysisControlGroup[];
-  controls?: AnalysisControl[];
-};
-
-function cloneControl(control: AnalysisControl) {
+function normalizeOption(option: AnalysisControlOptionInput) {
   return {
-    ...control,
-    options: control.options.map((option: AnalysisControlOption) => ({ ...option })),
+    ...option,
+    value: resolveOptionValue(option),
+    promptText: option.promptText ?? '',
+    enabled: option.enabled ?? true,
   };
 }
 
-export function normalizeAnalysisControls(config: AnalysisControlsConfigLike): AnalysisControlsConfig {
-  const sourceGroups: AnalysisControlGroup[] | null = config.groups && config.groups.length > 0 ? config.groups : null;
+function cloneControl(control: AnalysisControlsConfig['controls'][number]) {
+  return {
+    ...control,
+    options: control.options.map((option) => ({ ...option })),
+  };
+}
+
+function normalizeControl(control: AnalysisControlInput): AnalysisControlsConfig['controls'][number] {
+  return {
+    ...control,
+    enabled: control.enabled ?? true,
+    options: control.options.map(normalizeOption).filter((option) => option.enabled),
+  };
+}
+
+function normalizeGroup(group: AnalysisControlGroupInput): AnalysisControlsConfig['groups'][number] {
+  return {
+    ...group,
+    description: group.description?.trim() || undefined,
+    enabled: group.enabled ?? true,
+    controls: group.controls.map(normalizeControl).filter((control) => control.enabled),
+  };
+}
+
+export function normalizeAnalysisControls(config: AnalysisControlsInput): AnalysisControlsConfig {
+  const sourceGroups = config.groups && config.groups.length > 0 ? config.groups : null;
 
   if (sourceGroups) {
-    const groups = sourceGroups.map((group: AnalysisControlGroup) => ({
-      ...group,
-      description: group.description?.trim() || undefined,
-      controls: group.controls.filter((control: AnalysisControl) => control.enabled).map(cloneControl),
-    }));
+    const groups = sourceGroups.map(normalizeGroup);
 
     return {
       groups,
-      controls: groups.flatMap((group: AnalysisControlGroup) => group.controls.map(cloneControl)),
+      controls: groups.flatMap((group) => group.controls.map(cloneControl)),
     };
   }
 
-  const controls = (config.controls ?? []).filter((control: AnalysisControl) => control.enabled).map(cloneControl);
+  const controls = (config.controls ?? []).map(normalizeControl).filter((control) => control.enabled);
 
   return {
     groups: [
@@ -156,13 +162,13 @@ export const appearanceSchema = z.object({
 });
 
 export const analysisControlsSchema = analysisControlsSchemaBase.superRefine(
-  (value: AnalysisControlsConfigLike, ctx: z.RefinementCtx) => {
+  (value: AnalysisControlsInput, ctx: z.RefinementCtx) => {
     const seenGroupIds = new Set<string>();
     const seenControlIds = new Set<string>();
     const groups = value.groups && value.groups.length > 0 ? value.groups : null;
-    const controls: AnalysisControl[] = groups ? groups.flatMap((group: AnalysisControlGroup) => group.controls) : value.controls ?? [];
+    const controls = groups ? groups.flatMap((group) => group.controls) : value.controls ?? [];
 
-    groups?.forEach((group: AnalysisControlGroup, groupIndex: number) => {
+    groups?.forEach((group, groupIndex: number) => {
       if (seenGroupIds.has(group.id)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -173,7 +179,7 @@ export const analysisControlsSchema = analysisControlsSchemaBase.superRefine(
       seenGroupIds.add(group.id);
     });
 
-    controls.forEach((control: AnalysisControl, controlIndex: number) => {
+    controls.forEach((control, controlIndex: number) => {
       if (seenControlIds.has(control.id)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -184,15 +190,17 @@ export const analysisControlsSchema = analysisControlsSchemaBase.superRefine(
       seenControlIds.add(control.id);
 
       const seenOptionValues = new Set<string>();
-      control.options.forEach((option: AnalysisControlOption, optionIndex: number) => {
-        if (seenOptionValues.has(option.value)) {
+      control.options.forEach((option, optionIndex: number) => {
+        const optionValue = resolveOptionValue(option);
+
+        if (seenOptionValues.has(optionValue)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: `动态检查项选项值重复：${option.value}`,
+            message: `动态检查项选项值重复：${optionValue}`,
             path: ['controls', controlIndex, 'options', optionIndex, 'value'],
           });
         }
-        seenOptionValues.add(option.value);
+        seenOptionValues.add(optionValue);
       });
     });
   },

@@ -11,11 +11,11 @@ import type {
   OutputModeRegistry as IOutputModeRegistry,
   ValidationResult,
   ProcessInput,
-  ProcessedReportData,
   BuildScoringContextParams,
   CollectedToolData,
 } from './types';
 import type { ReportScoringContext } from '@/types/analysis';
+import { getOutputModeManifest } from '@/features/output-modes/manifest';
 
 // ============================================================================
 // 静态导入所有模块（确保同步初始化）
@@ -24,6 +24,11 @@ import type { ReportScoringContext } from '@/types/analysis';
 // 从 features/output-modes/ 导入模块（模块自治架构）
 import { register as registerLiteraryReview } from '@/features/output-modes/literary-review/module';
 import { register as registerGaokaoEssay } from '@/features/output-modes/gaokao-essay/module';
+
+const OUTPUT_MODE_REGISTER_MAP: Record<string, (registry: IOutputModeRegistry) => void> = {
+  'literary-review': registerLiteraryReview,
+  'gaokao-essay': registerGaokaoEssay,
+};
 
 // ============================================================================
 // 注册表实现
@@ -54,13 +59,6 @@ class OutputModeRegistryImpl implements IOutputModeRegistry {
   }
 
   /**
-   * 获取所有模块
-   */
-  getAll(): OutputModeModule[] {
-    return Array.from(this.modules.values());
-  }
-
-  /**
    * 获取所有模块 ID
    */
   getIds(): string[] {
@@ -72,13 +70,6 @@ class OutputModeRegistryImpl implements IOutputModeRegistry {
    */
   getPrompt(id: string): string | undefined {
     return this.modules.get(id)?.prompt;
-  }
-
-  /**
-   * 获取模块 MCP 工具定义
-   */
-  getMcpToolDefinitions(id: string) {
-    return this.modules.get(id)?.mcpToolDefinitions;
   }
 
   /**
@@ -98,7 +89,7 @@ class OutputModeRegistryImpl implements IOutputModeRegistry {
   /**
    * 处理数据
    */
-  process(id: string, input: ProcessInput): ProcessedReportData {
+  process(id: string, input: ProcessInput): unknown {
     const module = this.modules.get(id);
     if (!module) {
       throw new Error(`未找到输出模式：${id}`);
@@ -162,8 +153,12 @@ class OutputModeRegistryImpl implements IOutputModeRegistry {
 export const outputModeRegistry = new OutputModeRegistryImpl();
 
 // 同步注册所有模块（在模块加载时立即执行）
-registerLiteraryReview(outputModeRegistry);
-registerGaokaoEssay(outputModeRegistry);
+for (const item of getOutputModeManifest()) {
+  const register = OUTPUT_MODE_REGISTER_MAP[item.id];
+  if (register) {
+    register(outputModeRegistry);
+  }
+}
 
 console.log('[OutputModeRegistry] 初始化完成，已注册模块:', outputModeRegistry.getIds());
 

@@ -1,15 +1,15 @@
 {
-  "slug": "novel-evaluate",
-  "title": "小说点评",
-  "description": "AI 驱动的小说文本深度诊断",
-  "route": "/evaluate/novel-evaluate",
+  "slug": "lyrics-evaluate",
+  "title": "歌词评审",
+  "description": "词作意境、韵脚考究与文本情感体验诊断",
+  "route": "/evaluate/lyrics-evaluate",
   "containers": [
     { "type": "analysis-controls" },
     { 
       "type": "text-blocks", 
       "params": { 
         "id": "main-text",
-        "title": "正文",
+        "title": "歌词正文",
         "subtitle": "待评文本",
         "prompt": "只有这部分需要评分",
         "defaultExpanded": true, 
@@ -20,16 +20,7 @@
       "type": "text-blocks", 
       "params": { 
         "id": "reference-material",
-        "title": "参考内容", 
-        "defaultExpanded": false, 
-        "initialBlockCount": 0 
-      } 
-    },
-    { 
-      "type": "text-blocks", 
-      "params": { 
-        "id": "reference-review",
-        "title": "参考评价", 
+        "title": "相关背景", 
         "defaultExpanded": false, 
         "initialBlockCount": 0 
       } 
@@ -38,7 +29,7 @@
   "outputMode": "literary-review",
   "entry": {
     "enabled": true,
-    "icon": "BookOpen",
-    "order": 1
+    "icon": "Music",
+    "order": 10
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
  * 检测页面是否首次加载
@@ -13,17 +13,8 @@ import { useEffect, useState, useRef } from 'react';
  */
 export function usePageFirstLoad(duration = 300): boolean {
   const [isFirstLoad, setIsFirstLoad] = useState(true);
-  const mountedRef = useRef(false);
 
   useEffect(() => {
-    // 已经是后续渲染了，直接返回 false
-    if (mountedRef.current) {
-      setIsFirstLoad(false);
-      return;
-    }
-
-    mountedRef.current = true;
-
     // 首次加载：等待最小时长后隐藏骨架屏
     const timer = setTimeout(() => {
       setIsFirstLoad(false);

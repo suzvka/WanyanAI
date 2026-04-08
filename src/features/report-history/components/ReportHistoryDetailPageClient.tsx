@@ -8,16 +8,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ReportErrorBoundary } from '@/components/evaluate/ReportErrorBoundary';
-import { getOutputModeRenderer } from '@/features/output-modes';
+import { getOutputModeRenderer, renderOutputMode } from '@/features/output-modes';
 import { reportHistoryStore } from '@/features/report-history/store';
 import type { CachedReportRecord } from '@/features/report-history/types';
-import type { ModuleConfig } from '@/types/module';
+import type { PageModulePublicMeta } from '@/types/module';
 import type { PlatformConfig } from '@/types/platform';
 import HistoryAppShell from './HistoryAppShell';
 
 interface ReportHistoryDetailPageClientProps {
   platformConfig: PlatformConfig;
-  modules: ModuleConfig[];
+  modules: PageModulePublicMeta[];
   reportId: string;
 }
 
@@ -63,24 +63,24 @@ export default function ReportHistoryDetailPageClient({
       return '/';
     }
 
-    return modules.find((module) => module.manifest.id === record.moduleId)?.manifest.route ?? '/';
+    return modules.some((module) => module.slug === record.moduleId)
+      ? `/evaluate/${record.moduleId}`
+      : '/';
   }, [modules, record]);
 
-  const outputMode = useMemo(() => {
+  const hasOutputRenderer = useMemo(() => {
     if (!record) {
-      return null;
+      return false;
     }
 
     if (record.status !== 'completed' || !record.report) {
-      return null;
+      return false;
     }
 
-    // eslint-disable-next-line react-hooks/static-components
-    return getOutputModeRenderer(record.outputMode) ?? null;
+    return Boolean(getOutputModeRenderer(record.outputMode));
   }, [record]);
 
-  const OutputRenderer = outputMode;
-  const canRender = Boolean(record && record.report && outputMode);
+  const canRender = Boolean(record && record.report && hasOutputRenderer);
 
   return (
     <HistoryAppShell platformConfig={platformConfig} modules={modules}>
@@ -211,7 +211,7 @@ export default function ReportHistoryDetailPageClient({
               </div>
             </CardContent>
           </Card>
-        ) : !outputMode || !OutputRenderer || !canRender ? (
+        ) : !canRender ? (
           <Card style={{
             opacity: isPageVisible ? 1 : 0,
             transform: isPageVisible ? 'translateY(0)' : 'translateY(12px)',
@@ -243,11 +243,11 @@ export default function ReportHistoryDetailPageClient({
           <ReportErrorBoundary
             onBackToEdit={() => router.push(moduleRoute)}
           >
-            <OutputRenderer
-              data={record.report}
-              onStartNew={() => router.push(moduleRoute)}
-              onBackToEdit={() => router.push(moduleRoute)}
-            />
+            {renderOutputMode(record.outputMode, {
+              data: record.report,
+              onStartNew: () => router.push(moduleRoute),
+              onBackToEdit: () => router.push(moduleRoute),
+            })}
           </ReportErrorBoundary>
         )}
       </main>

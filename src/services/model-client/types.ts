@@ -33,7 +33,7 @@ export type ModelClientResult = {
   /** 结束原因 */
   finishReason?: string;
   /** 捕获的工具调用（如果有） */
-  toolCall?: { name: string; params: Record<string, any> } | null;
+  toolCall?: { name: string; params: Record<string, unknown> } | null;
 };
 
 /**

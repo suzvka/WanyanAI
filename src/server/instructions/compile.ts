@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getModuleById } from '@/server/modules';
+import { getPageModuleBySlug } from '@/server/modules';
 import { createAppError } from '@/types/errors';
 import type { CompileInstructionsRequest, CompileInstructionsSuccessResponse } from '@/types/instructions';
 
@@ -23,8 +23,8 @@ function createInvalidControlSelectionError() {
 export async function compileDynamicInstructions(
   request: CompileInstructionsRequest,
 ): Promise<CompileInstructionsSuccessResponse> {
-  // configVersion 现在是 moduleId
-  const moduleConfig = await getModuleById(request.configVersion);
+  // configVersion 现在是页面模块 slug
+  const moduleConfig = await getPageModuleBySlug(request.configVersion);
 
   if (!moduleConfig) {
     throw createStaleConfigError();
@@ -55,6 +55,6 @@ export async function compileDynamicInstructions(
   return {
     instructionText: instructionParts.join('\n'),
     resolvedSelections,
-    configVersion: moduleConfig.manifest.id,
+    configVersion: moduleConfig.manifest.slug,
   };
 }

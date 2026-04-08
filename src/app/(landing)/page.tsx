@@ -1,12 +1,12 @@
 import LandingClient from '@/components/landing/LandingClient';
 import { getPlatformConfig } from '@/server/config';
-import { getAllModules } from '@/server/modules';
+import { getPageModulePublicEntries } from '@/server/modules';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   const platformConfig = await getPlatformConfig();
-  const modules = await getAllModules();
+  const modules = await getPageModulePublicEntries();
 
   return <LandingClient platformConfig={platformConfig} modules={modules} />;
 }

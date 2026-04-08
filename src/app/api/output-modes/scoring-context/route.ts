@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { outputModeError, outputModeSuccess } from '../_shared';
 import { buildOutputModeScoringContext } from '@/server/output-modes';
 import { toAppErrorPayload } from '@/types/errors';
 import type { ModuleConfig } from '@/types/module';
@@ -12,18 +13,12 @@ export async function POST(request: Request) {
     };
 
     if (!outputModeId || !params) {
-      return NextResponse.json(
-        { success: false, error: 'Missing outputModeId or params' },
-        { status: 400 }
-      );
+      return outputModeError('Missing outputModeId or params', 400);
     }
 
     const scoringContext = await buildOutputModeScoringContext(outputModeId, params);
 
-    return NextResponse.json({
-      success: true,
-      data: scoringContext ?? { multipliers: {}, defaultMultiplier: 1 },
-    });
+    return outputModeSuccess(scoringContext ?? { multipliers: {}, defaultMultiplier: 1 });
   } catch (error) {
     const payload = toAppErrorPayload(error, {
       code: 'unknown_error',
@@ -32,9 +27,6 @@ export async function POST(request: Request) {
       retryable: true,
     });
 
-    return NextResponse.json(
-      { success: false, error: payload.message },
-      { status: payload.status ?? 500 }
-    );
+    return outputModeError(payload.message, payload.status ?? 500);
   }
 }

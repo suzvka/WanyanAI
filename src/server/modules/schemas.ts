@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ModuleManifest, ContainerConfig, ContainerValidationError } from '@/types/module';
+import type { PageModuleManifest, ContainerConfig, ContainerValidationError } from '@/types/module';
 
 /**
  * 容器配置 Schema
@@ -18,33 +18,37 @@ export const textBlocksParamsSchema = z.object({
   initialBlockCount: z.number().int().min(0).optional().default(1),
 });
 
+const pageModuleEntrySchema = z.object({
+  enabled: z.boolean(),
+  icon: z.string().trim().min(1).optional(),
+  order: z.number().int(),
+});
+
 /**
- * 模块注册配置 Schema
+ * 页面模块注册配置 Schema
  */
-export const moduleManifestSchema = z.object({
-  id: z.string().trim().min(1),
-  name: z.string().trim().min(1),
+export const moduleManifestSchema: z.ZodType<PageModuleManifest> = z.object({
+  slug: z.string().trim().min(1),
+  title: z.string().trim().min(1),
   description: z.string().optional(),
   route: z.string().trim().min(1),
   containers: z.array(containerConfigSchema).min(1),
   outputMode: z.string().trim().min(1),
-  sidebar: z.object({
-    enabled: z.boolean(),
-    icon: z.string().trim().min(1),
-    order: z.number().int(),
-  }),
+  entry: pageModuleEntrySchema,
   // features 已废弃但保持向后兼容
-  features: z.object({
-    textBlocks: z.boolean(),
-    fileUpload: z.boolean(),
-    annotations: z.boolean(),
-  }).optional(),
+  features: z
+    .object({
+      textBlocks: z.boolean(),
+      fileUpload: z.boolean(),
+      annotations: z.boolean(),
+    })
+    .optional(),
 });
 
 /**
  * 验证模块注册配置
  */
-export function validateModuleManifest(data: unknown): ModuleManifest {
+export function validatePageModuleManifest(data: unknown): PageModuleManifest {
   return moduleManifestSchema.parse(data);
 }
 
@@ -55,8 +59,8 @@ export function validateModuleManifest(data: unknown): ModuleManifest {
  * @param registeredOutputModes 已注册的输出模式列表
  * @returns 验证错误列表，空数组表示验证通过
  */
-export function validateModuleContainers(
-  manifest: ModuleManifest,
+export function validatePageModuleContainers(
+  manifest: PageModuleManifest,
   registeredContainerTypes: string[],
   registeredOutputModes: string[],
 ): ContainerValidationError[] {
@@ -107,6 +111,6 @@ export function validateTextBlocksParams(
   }
   return {
     success: false,
-    errors: result.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`),
+    errors: result.error.issues.map((e: z.ZodIssue) => `${e.path.join('.')}: ${e.message}`),
   };
 }

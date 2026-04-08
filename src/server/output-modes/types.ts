@@ -5,7 +5,7 @@
  */
 
 import type { ReportScoringContext, AnalysisReportMetadata } from '@/types/analysis';
-import type { ModuleConfig } from '@/types/module';
+import type { PageModuleConfig } from '@/types/module';
 import type { McpToolDefinition } from '@/mcp/types';
 
 // ============================================================================
@@ -63,9 +63,13 @@ export interface ProcessedDashboard {
 
 /** 处理后的段落 */
 export interface ProcessedSection {
-  sectionTitle: string;
-  paragraphTitle: string;
+  sectionTitle?: string;
+  paragraphTitle?: string;
+  id?: string;
+  title?: string;
   body: string;
+  groupId?: string;
+  groupTitle?: string;
 }
 
 /** 处理后的元数据 */
@@ -122,7 +126,7 @@ export interface ProcessedReportData {
 
 /** 评分上下文构建参数 */
 export interface BuildScoringContextParams {
-  moduleConfig: ModuleConfig;
+  moduleConfig: PageModuleConfig;
   controlSelections: Record<string, string>;
 }
 
@@ -173,10 +177,10 @@ export interface OutputModeModule {
    *
    * 完整流程：
    * 1. 验证原始数据
-   * 2. 标准化为 ProcessedReportData
+   * 2. 标准化为模块报告数据
    * 3. 计算评分
    */
-  process: (input: ProcessInput) => ProcessedReportData;
+  process: (input: ProcessInput) => unknown;
 
   /**
    * 构建评分上下文
@@ -220,7 +224,6 @@ export type OutputModeRegisterFunction = (registry: OutputModeRegistry) => void;
 export interface OutputModeRegistry {
   register(module: OutputModeModule): void;
   get(id: string): OutputModeModule | undefined;
-  getAll(): OutputModeModule[];
   getIds(): string[];
   validate(id: string, data: unknown): ValidationResult;
   buildScoringContext(id: string, params: BuildScoringContextParams): ReportScoringContext;

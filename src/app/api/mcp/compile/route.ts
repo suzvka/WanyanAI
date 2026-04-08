@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { compileMcpPrompt, type McpCompileErrorResponse, type McpCompileSuccessResponse } from '@/mcp';
+import type { McpToolDefinition } from '@/mcp/types';
 import { getOutputModeModule } from '@/server/output-modes/registry';
 import { toAppErrorPayload } from '@/types/errors';
 
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
     }
 
     const outputModeId = parsed.data.outputModeId;
-    let tools: any[] = [];
+    let tools: McpToolDefinition[] = [];
 
     if (outputModeId) {
       // 从输出模式模块获取工具定义

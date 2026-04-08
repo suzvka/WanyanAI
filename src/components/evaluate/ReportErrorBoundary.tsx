@@ -109,7 +109,7 @@ export class ReportErrorBoundary extends Component<
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     reportReactError(error, {
       source: 'react-report',
-      detail: errorInfo.componentStack,
+      detail: errorInfo.componentStack || undefined,
     });
 
     // 调用外部错误处理回调（可用于日志记录）

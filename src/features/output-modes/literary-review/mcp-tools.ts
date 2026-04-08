@@ -16,15 +16,41 @@
 
 import 'server-only';
 
-import type { McpToolDefinition } from '@/mcp/types';
+import { z } from 'zod';
+import { defineMcpTool, type McpToolDefinition } from '@/mcp/types';
 import { abortWorkflowTool } from '@/mcp/tools/abortWorkflow';
 import { defaultSubscoreIds, defaultSubscoreDefinitions } from './subscores';
+
+const collectSummaryInputSchema = z.object({
+  title: z.string().optional(),
+  overview: z.string().default(''),
+});
+
+const collectSubscoreInputSchema = z.object({
+  id: z.string(),
+  grade: z.enum(['S', 'A', 'B', 'C', 'D']),
+  rationale: z.string(),
+});
+
+const collectConclusionInputSchema = z.object({
+  rationale: z.string(),
+});
+
+const collectSectionInputSchema = z.object({
+  sectionTitle: z.string(),
+  paragraphTitle: z.string(),
+  body: z.string(),
+});
+
+const finalizeReportInputSchema = z.object({
+  confirm: z.boolean(),
+});
 
 // ============================================================================
 // collect_summary - 收集报告摘要
 // ============================================================================
 
-export const collectSummaryMcpTool: McpToolDefinition = {
+export const collectSummaryMcpTool = defineMcpTool<typeof collectSummaryInputSchema>({
   name: 'collect_summary',
   description: '收集报告摘要信息，包括标题和概述',
   parameters: [
@@ -41,23 +67,23 @@ export const collectSummaryMcpTool: McpToolDefinition = {
       type: 'string',
     },
   ],
-  inputSchema: null as any,
-  handler: (params: any) => ({
+  inputSchema: collectSummaryInputSchema,
+  handler: (params) => ({
     ok: true,
     data: {
-      title: (params?.title as string) || '',
-      overview: (params?.overview as string) || '',
+      title: params.title ?? '',
+      overview: params.overview ?? '',
     },
     message: '摘要已收集',
   }),
-};
+});
 
 // ============================================================================
 // collect_subscore - 收集单个子维度评分
 // 注意：分数由 grade 计算得出，无需模型提供 score
 // ============================================================================
 
-export const collectSubscoreMcpTool: McpToolDefinition = {
+export const collectSubscoreMcpTool = defineMcpTool<typeof collectSubscoreInputSchema>({
   name: 'collect_subscore',
   description: `收集单个子维度评分。必须依次收集全部 6 个子维度：${defaultSubscoreIds.join(', ')}`,
   parameters: [
@@ -80,9 +106,9 @@ export const collectSubscoreMcpTool: McpToolDefinition = {
       type: 'string',
     },
   ],
-  inputSchema: null as any,
-  handler: (params: any) => {
-    const id = params?.id as string;
+  inputSchema: collectSubscoreInputSchema,
+  handler: (params) => {
+    const id = params.id;
     const definition = defaultSubscoreDefinitions.find((d) => d.id === id);
     
     return {
@@ -90,19 +116,19 @@ export const collectSubscoreMcpTool: McpToolDefinition = {
       data: {
         id,
         label: definition?.label || id,
-        grade: params?.grade as string,
-        rationale: (params?.rationale as string) || '',
+        grade: params.grade,
+        rationale: params.rationale,
       },
       message: `子维度 ${id} 已收集`,
     };
   },
-};
+});
 
 // ============================================================================
 // collect_conclusion - 收集报告结论
 // ============================================================================
 
-export const collectConclusionMcpTool: McpToolDefinition = {
+export const collectConclusionMcpTool = defineMcpTool<typeof collectConclusionInputSchema>({
   name: 'collect_conclusion',
   description: '收集报告结论',
   parameters: [
@@ -113,21 +139,21 @@ export const collectConclusionMcpTool: McpToolDefinition = {
       type: 'string',
     },
   ],
-  inputSchema: null as any,
-  handler: (params: any) => ({
+  inputSchema: collectConclusionInputSchema,
+  handler: (params) => ({
     ok: true,
     data: {
-      rationale: (params?.rationale as string) || '',
+      rationale: params.rationale,
     },
     message: '结论已收集',
   }),
-};
+});
 
 // ============================================================================
 // collect_section - 收集单个段落
 // ============================================================================
 
-export const collectSectionMcpTool: McpToolDefinition = {
+export const collectSectionMcpTool = defineMcpTool<typeof collectSectionInputSchema>({
   name: 'collect_section',
   description: '收集单个段落内容，段落按章节标题分组显示。建议先用一个章节围绕亮点进行赏析(每个段落抓住一条主线)，然后点出优缺点，最后一个章节总结。',
   parameters: [
@@ -150,23 +176,23 @@ export const collectSectionMcpTool: McpToolDefinition = {
       type: 'string',
     },
   ],
-  inputSchema: null as any,
-  handler: (params: any) => ({
+  inputSchema: collectSectionInputSchema,
+  handler: (params) => ({
     ok: true,
     data: {
-      sectionTitle: (params?.sectionTitle as string) || '',
-      paragraphTitle: (params?.paragraphTitle as string) || '',
-      body: (params?.body as string) || '',
+      sectionTitle: params.sectionTitle,
+      paragraphTitle: params.paragraphTitle,
+      body: params.body,
     },
-    message: `段落 ${params?.paragraphTitle} 已收集`,
+    message: `段落 ${params.paragraphTitle} 已收集`,
   }),
-};
+});
 
 // ============================================================================
 // finalize_report - 确认报告完成
 // ============================================================================
 
-export const finalizeReportMcpTool: McpToolDefinition = {
+export const finalizeReportMcpTool = defineMcpTool<typeof finalizeReportInputSchema>({
   name: 'finalize_report',
   description: '确认报告完成，结束工作流',
   parameters: [
@@ -177,14 +203,14 @@ export const finalizeReportMcpTool: McpToolDefinition = {
       type: 'boolean' as const,
     },
   ],
-  inputSchema: null as any,
-  handler: (_params: any) => ({
+  inputSchema: finalizeReportInputSchema,
+  handler: () => ({
     ok: true,
     data: { finalized: true },
     message: '报告已完成',
     terminate: true, // 终止工作流
   }),
-};
+});
 
 // ============================================================================
 // 导出所有工具

@@ -8,6 +8,14 @@ interface PageTransitionProps {
   className?: string;
 }
 
+type ViewTransitionResult = {
+  finished?: Promise<unknown>;
+};
+
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (callback: () => void) => ViewTransitionResult | void;
+};
+
 /**
  * 页面过渡动画组件
  * 
@@ -30,7 +38,7 @@ export function PageTransition({ children, className = '' }: PageTransitionProps
       // 路由变化：先淡出再淡入
       const hideTimer = setTimeout(() => setIsVisible(false), 0);
       const showTimer = setTimeout(() => {
-        setAnimationKey((k) => k + 1);
+        setAnimationKey((k: number) => k + 1);
         setIsVisible(true);
       }, 100);
       prevPathnameRef.current = pathname;
@@ -104,14 +112,20 @@ export function useViewTransition() {
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const startTransition = (callback: () => void) => {
+    const transitionDocument = document as ViewTransitionDocument;
+
     // 检查浏览器是否支持 View Transitions API
-    if (typeof document !== 'undefined' && 'startViewTransition' in document) {
+    if (typeof document !== 'undefined' && typeof transitionDocument.startViewTransition === 'function') {
       setIsTransitioning(true);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (document as any).startViewTransition(() => {
+      const transition = transitionDocument.startViewTransition(() => {
         callback();
-        setIsTransitioning(false);
       });
+
+      if (transition?.finished) {
+        void transition.finished.finally(() => setIsTransitioning(false));
+      } else {
+        setIsTransitioning(false);
+      }
     } else {
       // 降级方案：直接执行回调
       callback();

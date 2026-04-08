@@ -10,11 +10,11 @@ import {
   outputModeRegistry,
 } from './output-modes/registry';
 import type { ReportScoringContext } from '@/types/analysis';
-import type { ModuleConfig } from '@/types/module';
+import type { PageModuleConfig } from '@/types/module';
 
 // 重新导出类型
 export type BuildScoringContextParams = {
-  moduleConfig: ModuleConfig;
+  moduleConfig: PageModuleConfig;
   controlSelections: Record<string, string>;
 };
 

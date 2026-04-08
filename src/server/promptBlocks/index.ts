@@ -3,7 +3,7 @@ import 'server-only';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
-const promptBlocksDir = path.join(process.cwd(), 'ops-config', 'prompt-blocks');
+const promptBlocksDir = path.join(process.cwd(), 'platform-config', 'prompt-blocks');
 
 /**
  * 获取所有提示词块文件名（排序后）

@@ -84,7 +84,7 @@ export class GlobalErrorBoundary extends Component<
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     reportReactError(error, {
       source: 'react',
-      detail: errorInfo.componentStack,
+      detail: errorInfo.componentStack || undefined,
     });
 
     // 调用自定义错误回调

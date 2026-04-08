@@ -1,5 +1,5 @@
 import { getPlatformConfig } from '@/server/config';
-import { getAllModules } from '@/server/modules';
+import { getPageModulePublicEntries } from '@/server/modules';
 import ReportHistoryDetailPageClient from '@/features/report-history/components/ReportHistoryDetailPageClient';
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,7 @@ interface HistoryDetailPageProps {
 export default async function HistoryDetailPage({ params }: HistoryDetailPageProps) {
   const { reportId } = await params;
   const platformConfig = await getPlatformConfig();
-  const modules = await getAllModules();
+  const modules = await getPageModulePublicEntries();
 
   return (
     <ReportHistoryDetailPageClient

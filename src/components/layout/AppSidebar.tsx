@@ -4,7 +4,7 @@ import type { ComponentType, MouseEvent } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BookOpen, Compass, History, Home, Sparkles } from 'lucide-react';
-import type { ModuleConfig } from '@/types/module';
+import type { PageModulePublicMeta } from '@/types/module';
 import {
   Sidebar,
   SidebarContent,
@@ -31,18 +31,17 @@ const ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
 interface AppSidebarProps {
   title: string;
   primaryColor?: string;
-  modules?: ModuleConfig[];
+  modules?: PageModulePublicMeta[];
+}
+
+function getModuleHref(slug: string): string {
+  return `/evaluate/${slug}`;
 }
 
 export default function AppSidebar({ title, primaryColor, modules = [] }: AppSidebarProps) {
   const pathname = usePathname();
   const { requestNavigate } = useNavigationGuard();
   const isHistoryActive = pathname === '/history' || pathname.startsWith('/history/');
-
-  // 过滤并排序侧栏启用的模块
-  const sidebarModules = modules
-    .filter((m) => m.manifest.sidebar.enabled)
-    .sort((a, b) => a.manifest.sidebar.order - b.manifest.sidebar.order);
 
   // 处理导航点击
   const handleNavigate = (href: string, e: MouseEvent<HTMLAnchorElement>) => {
@@ -88,24 +87,24 @@ export default function AppSidebar({ title, primaryColor, modules = [] }: AppSid
         </SidebarGroup>
 
         {/* 功能模块入口 */}
-        {sidebarModules.length > 0 && (
+        {modules.length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>功能模块</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {sidebarModules.map((module) => {
-                  const IconComponent = ICON_MAP[module.manifest.sidebar.icon] || Compass;
-                  const isActive = pathname === module.manifest.route;
+                {modules.map((module) => {
+                  const isActive = pathname === getModuleHref(module.slug);
+                  const IconComponent = ICON_MAP.BookOpen || Compass;
 
                   return (
-                    <SidebarMenuItem key={module.manifest.id}>
+                    <SidebarMenuItem key={module.slug}>
                       <SidebarMenuButton asChild isActive={isActive}>
                         <Link
-                          href={module.manifest.route}
-                          onClick={(e: MouseEvent<HTMLAnchorElement>) => handleNavigate(module.manifest.route, e)}
+                          href={getModuleHref(module.slug)}
+                          onClick={(e: MouseEvent<HTMLAnchorElement>) => handleNavigate(getModuleHref(module.slug), e)}
                         >
                           <IconComponent />
-                          <span>{module.manifest.name}</span>
+                          <span>{module.title}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

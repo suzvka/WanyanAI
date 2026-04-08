@@ -15,6 +15,7 @@ import 'server-only';
 
 import type { OutputModeModule, OutputModeRegistry, ProcessInput, ProcessedReportData, BuildScoringContextParams, CollectedToolData } from '@/server/output-modes/types';
 import type { ReportScoringContext } from '@/types/analysis';
+import type { ReportRating } from '@/config/reportScoring';
 import { reportNeutralMultiplier, reportBaseScore } from '@/config/reportScoring';
 import { createAppError } from '@/types/errors';
 
@@ -69,10 +70,13 @@ export const literaryReviewModule: OutputModeModule = {
 
     const parsed = modelMinimalReportSchema.safeParse(data);
     if (!parsed.success) {
-      const errors = parsed.error.issues.map((issue) => ({
-        path: issue.path.join('.'),
-        message: issue.message,
-      }));
+      const errors: Array<{ path: string; message: string }> = [];
+      for (const issue of parsed.error.issues as Array<{ path: Array<string | number>; message: string }>) {
+        errors.push({
+          path: issue.path.join('.'),
+          message: issue.message,
+        });
+      }
       return { success: false, errors };
     }
 
@@ -105,7 +109,7 @@ export const literaryReviewModule: OutputModeModule = {
     }
 
     // 2. 提取 grades 和 rationales
-    const grades: Record<string, string> = {};
+    const grades: Record<string, ReportRating> = {};
     const rationales: Record<string, string> = {};
     for (const subscore of parsed.data.subscores) {
       grades[subscore.id] = subscore.grade;
@@ -121,10 +125,10 @@ export const literaryReviewModule: OutputModeModule = {
     const subscores: ProcessedReportData['dashboard']['subscores'] = [];
 
     for (const def of definitions) {
-      const grade = grades[def.id] || 'D';
+      const grade = grades[def.id] ?? 'D';
       const rationale = rationales[def.id] || '';
       const multiplier = multipliers[def.id] ?? defaultMultiplier;
-      const score = Math.round(calcSubscore(grade as any, multiplier));
+      const score = Math.round(calcSubscore(grade, multiplier));
 
       totalScore += score;
       subscores.push({

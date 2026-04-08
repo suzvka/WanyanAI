@@ -1,4 +1,4 @@
-import { logInfo, logWarn, logDebug, LogContext } from './logger';
+import { logInfo, logWarn, logDebug } from './logger';
 
 // Hook 上下文
 export interface HookContext {
@@ -6,7 +6,7 @@ export interface HookContext {
     browserId: string;
     modelId: string;
     messages: Array<{ role: string; content: string }>;
-    parameters: Record<string, any>;
+    parameters: Record<string, unknown>;
   };
   metadata: {
     requestId: string;
@@ -18,7 +18,7 @@ export interface HookContext {
 // Hook 结果
 export interface HookResult {
   action: 'proceed' | 'block' | 'modify';
-  data?: any;
+  data?: unknown;
   error?: string;
 }
 

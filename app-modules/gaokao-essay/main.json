@@ -1,6 +1,6 @@
 {
-  "id": "gaokao-essay",
-  "name": "高考作文评分",
+  "slug": "gaokao-essay",
+  "title": "高考作文评分",
   "description": "高考作文评分与诊断",
   "route": "/evaluate/gaokao-essay",
   "containers": [
@@ -30,7 +30,7 @@
     }
   ],
   "outputMode": "gaokao-essay",
-  "sidebar": {
+  "entry": {
     "enabled": true,
     "icon": "GraduationCap",
     "order": 3

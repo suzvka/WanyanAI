@@ -140,7 +140,7 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
     console.log('[AnalysisTaskProvider] Creating task:', {
       taskId,
       schedulerKey,
-      moduleId: input.moduleConfig.manifest.id,
+      moduleId: input.moduleConfig.manifest.slug,
       model: input.modelConfig.selectedModel,
     });
 
@@ -162,7 +162,7 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
       id: taskId,
       title: buildTaskTitle(input),
       createdAt,
-      moduleId: input.moduleConfig.manifest.id,
+      moduleId: input.moduleConfig.manifest.slug,
       outputMode: input.moduleConfig.manifest.outputMode,
       model: input.modelConfig.selectedModel,
       baseUrl: input.modelConfig.baseUrl,

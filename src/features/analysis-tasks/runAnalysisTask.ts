@@ -7,64 +7,17 @@ import {
 } from '@/features/analysis-flow/lib';
 import { modelClient } from '@/services/model-client';
 import { ApiAnalysisService } from '@/services/analysis/apiAnalysisService';
-import { requestJson } from '@/lib/client-request';
+import {
+  assembleOutputModeData,
+  buildOutputModeScoringContext,
+  getOutputModeToolDefinitions,
+  validateOutputModeData,
+} from '@/services/output-modes/client';
 import { createAppError } from '@/types/errors';
-import type { PersistedAnalysisReport, ReportScoringContext } from '@/types/analysis';
+import type { PersistedAnalysisReport } from '@/types/analysis';
 import type { RuntimeAnalysisTask } from './types';
-import type { ModuleConfig } from '@/types/module';
-import type { McpToolDefinition } from '@/mcp/types';
 
 const templateService = new ApiAnalysisService();
-
-/**
- * 通过 API Route 获取输出模式工具定义
- */
-async function apiGetOutputModeToolDefinitions(
-  outputModeId: string
-): Promise<McpToolDefinition[]> {
-  const result = await requestJson<{ success?: boolean; data?: { tools?: any[] } }>(`/api/output-modes/tools?outputModeId=${outputModeId}`, {
-    errorMessage: '获取输出模式工具定义失败',
-    networkErrorMessage: '获取输出模式工具定义失败，请检查网络后重试',
-  });
-  
-  if (result.success && result.data?.tools) {
-    // 将 API 返回的工具描述转换为 McpToolDefinition 格式
-    // 注意：handler 需要在客户端重新定义
-    return result.data.tools.map((tool: any) => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters,
-      inputSchema: null as any, // 客户端不需要验证
-      handler: (params: Record<string, unknown>) => {
-        // abort_workflow 需要设置 terminate 标志
-        if (tool.name === 'abort_workflow') {
-          return {
-            ok: true,
-            data: params,
-            message: '工作流已中止',
-            terminate: true,
-          };
-        }
-        // finalize_report 需要设置 terminate 标志
-        if (tool.name === 'finalize_report') {
-          return {
-            ok: true,
-            data: { finalized: true },
-            message: '报告已完成',
-            terminate: true,
-          };
-        }
-        return {
-          ok: true,
-          data: params,
-          message: '数据已收集',
-        };
-      },
-    }));
-  }
-  
-  return [];
-}
 
 const MAX_VALIDATION_REPAIR_ATTEMPTS = 1;
 
@@ -99,7 +52,7 @@ async function resolveToolData(
     console.log('[runAnalysisTask] Multi-collect mode, assembling data...');
     console.log('[runAnalysisTask] Collected data:', JSON.stringify(toolCall.params, null, 2));
 
-    const assembledData = await apiAssembleOutputModeData(
+    const assembledData = await assembleOutputModeData(
       task.moduleConfig.manifest.outputMode,
       toolCall.params as Record<string, unknown[]>
     );
@@ -139,59 +92,6 @@ async function resolveToolData(
   });
 }
 
-/**
- * 通过 API Route 拼装输出模式数据（绕过 Server Actions 验证）
- */
-async function apiAssembleOutputModeData(
-  outputModeId: string,
-  collectedData: Record<string, unknown[]>
-): Promise<{ success: boolean; data?: Record<string, unknown>; error?: string }> {
-  return requestJson<{ success: boolean; data?: Record<string, unknown>; error?: string }>('/api/output-modes/assemble', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ outputModeId, collectedData }),
-    errorMessage: '拼装输出模式数据失败',
-    networkErrorMessage: '拼装输出模式数据失败，请检查网络后重试',
-  });
-}
-
-/**
- * 通过 API Route 验证输出模式数据（绕过 Server Actions 验证）
- */
-async function apiValidateOutputModeData(
-  outputModeId: string,
-  data: unknown
-): Promise<{ success: boolean; data?: unknown; errors?: Array<{ path: string; message: string }> }> {
-  return requestJson<{ success: boolean; data?: unknown; errors?: Array<{ path: string; message: string }> }>('/api/output-modes/validate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ outputModeId, data }),
-    errorMessage: '校验输出模式数据失败',
-    networkErrorMessage: '校验输出模式数据失败，请检查网络后重试',
-  });
-}
-
-/**
- * 通过 API Route 构建评分上下文（绕过 Server Actions 验证）
- */
-async function apiBuildOutputModeScoringContext(
-  outputModeId: string,
-  params: { moduleConfig: ModuleConfig; controlSelections: Record<string, string> }
-): Promise<ReportScoringContext> {
-  const result = await requestJson<{ success?: boolean; data?: ReportScoringContext }>('/api/output-modes/scoring-context', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ outputModeId, params }),
-    errorMessage: '构建评分上下文失败',
-    networkErrorMessage: '构建评分上下文失败，请检查网络后重试',
-  });
-
-  if (result.success) {
-    return result.data as ReportScoringContext;
-  }
-  // 返回默认值
-  return { multipliers: {}, defaultMultiplier: 1 };
-}
 
 export const DEFAULT_PROGRESS_STAGES: ProgressStage[] = [
   {
@@ -250,14 +150,14 @@ export async function runAnalysisTask(
   console.log('[runAnalysisTask] Task started:', {
     taskId: task.id,
     model: task.modelConfig.selectedModel,
-    moduleId: task.moduleConfig.manifest.id,
+    moduleId: task.moduleConfig.manifest.slug,
   });
 
   progressController.handleEvent({ type: 'workflow-stage', stage: 'prepare', timestamp: Date.now() });
 
   const compiledInstructions = await requestCompiledInstructions({
     controlSelections: task.controlSelections,
-    configVersion: task.moduleConfig.manifest.id,
+    configVersion: task.moduleConfig.manifest.slug,
   });
 
   progressController.handleEvent({ type: 'workflow-stage', stage: 'fetch-template', timestamp: Date.now() });
@@ -322,7 +222,7 @@ export async function runAnalysisTask(
 
   // 获取输出模式工具定义
   console.log('[runAnalysisTask] Fetching MCP tool definitions for:', task.moduleConfig.manifest.outputMode);
-  const mcpToolDefinitions = await apiGetOutputModeToolDefinitions(task.moduleConfig.manifest.outputMode);
+  const mcpToolDefinitions = await getOutputModeToolDefinitions(task.moduleConfig.manifest.outputMode);
   console.log('[runAnalysisTask] MCP tools loaded:', mcpToolDefinitions.map(t => t.name));
   let attemptMessages = [...initialMessages];
   let finalValidationData: unknown;
@@ -379,7 +279,7 @@ export async function runAnalysisTask(
       sectionsCount: (toolData.sections as unknown[])?.length || 0,
     });
 
-    const validation = await apiValidateOutputModeData(task.moduleConfig.manifest.outputMode, toolData);
+    const validation = await validateOutputModeData(task.moduleConfig.manifest.outputMode, toolData);
     if (validation.success) {
       finalValidationData = validation.data;
       completedAttempt = attempt + 1;
@@ -438,14 +338,14 @@ export async function runAnalysisTask(
   }
 
   const createdAt = new Date().toISOString();
-  const scoringContext = await apiBuildOutputModeScoringContext(task.moduleConfig.manifest.outputMode, {
+  const scoringContext = await buildOutputModeScoringContext(task.moduleConfig.manifest.outputMode, {
     moduleConfig: task.moduleConfig,
     controlSelections: task.controlSelections,
   });
 
   const analysisResult: PersistedAnalysisReport = {
     reportId: task.id,
-    moduleId: task.moduleConfig.manifest.id,
+    moduleId: task.moduleConfig.manifest.slug,
     outputMode: task.moduleConfig.manifest.outputMode,
     createdAt,
     rawJson: finalValidationData as Record<string, unknown>,

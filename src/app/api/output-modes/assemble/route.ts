@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { getErrorMessage, outputModeError, outputModeSuccess } from '../_shared';
 import { assembleOutputModeData } from '@/server/output-modes';
 
 export async function POST(request: NextRequest) {
@@ -10,19 +11,15 @@ export async function POST(request: NextRequest) {
     };
 
     if (!outputModeId || !collectedData) {
-      return NextResponse.json(
-        { success: false, error: 'Missing required parameters' },
-        { status: 400 }
-      );
+      return outputModeError('Missing required parameters', 400);
     }
 
     const result = await assembleOutputModeData(outputModeId, collectedData);
-    return NextResponse.json(result);
+    return result.success
+      ? outputModeSuccess(result.data)
+      : outputModeError(result.error ?? 'Unknown error', 200);
   } catch (error) {
     console.error('[API] assemble error:', error);
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return outputModeError(getErrorMessage(error), 500);
   }
 }

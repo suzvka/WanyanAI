@@ -48,16 +48,18 @@ src/
 └── server.ts                             # 自定义 Node.js Server 入口
 
 app-modules/
-└── <module-id>/                          # 评估模块目录
-    ├── main.json                         # 模块注册信息（必需）
-    ├── site.json                         # 模块文案配置（可选）
+└── <module-id>/                          # 功能页面模块目录
+    ├── main.json                         # 页面模块注册信息（必需）
+    ├── site.json                         # 页面文案配置（可选）
     └── analysis-controls.json            # 分析选项与 promptText（可选）
 
-ops-config/
+platform-config/
 ├── manifest.json                         # 平台配置版本信息
 ├── appearance.json                       # 品牌与主题配置
 ├── feature-flags.json                    # 平台功能开关
-└── prompt-blocks/                        # 预留目录，当前运行时未接入
+├── forward.json                          # 站内代理转发配置
+├── rate-limit.json                       # 站内代理限流配置
+└── prompt-blocks/                        # 预留目录，当前运行时未直接接入
 
 scripts/
 ├── dev.sh
@@ -320,12 +322,15 @@ export default function ClientComponent() {
 
 当前程序运行时使用两级配置：
 
-- 平台级配置位于 `ops-config/`
+- 平台级配置位于 `platform-config/`
   - `manifest.json`：配置版本与环境信息
   - `appearance.json`：品牌名称、口号、主题色
   - `feature-flags.json`：平台级功能开关
+  - `forward.json`：站内代理模型与 challenge 配置
+  - `rate-limit.json`：站内代理限流配置
+  - `prompt-blocks/`：预留目录，当前运行时未直接接入
 - 模块级配置位于 `app-modules/<module-id>/`
-  - `main.json`：模块 ID、路由、侧栏入口、容器声明、输出模式
+  - `main.json`：页面模块 `slug`、`title`、`description`、`entry`、`route`、容器声明与输出模式
   - `site.json`：输入页与进度文案
   - `analysis-controls.json`：分析选项、默认值与各选项对应的 `promptText`
 
@@ -335,7 +340,7 @@ export default function ClientComponent() {
 - 用户选择后，请求 `/api/instructions/compile`
 - 服务端将所选项对应的 `promptText` 按顺序拼接成最终动态指令
 
-`ops-config/prompt-blocks/` 目录当前为预留目录，运行时尚未直接使用该目录组装提示词。
+`platform-config/prompt-blocks/` 目录当前为预留目录，运行时尚未直接使用该目录组装提示词。
 
 ### 8. 站内代理鉴权说明
 
@@ -368,7 +373,7 @@ export default function ClientComponent() {
 1. 在 `app-modules/` 下创建新的独立目录
 2. 添加 `main.json` 作为模块注册信息
 3. 按需添加 `site.json` 与 `analysis-controls.json`
-4. 在 `main.json` 中声明 `route`、`sidebar`、`containers` 与 `outputMode`
+4. 在 `main.json` 中声明 `slug`、`title`、`description`、`entry`、`route`、`containers` 与 `outputMode`
 5. 页面会在运行时自动扫描并加载包含 `main.json` 的模块目录
 
 ### 创建业务组件
@@ -428,4 +433,6 @@ export const useStore = create<Store>((set) => ({
 5. **使用 `@/` 路径别名** 导入模块（已配置）
 6. **颜色统一规则**：除黑白外，其余颜色应从单一主题色派生，优先通过 CSS 变量和语义 token 表达
 7. **新增评估能力优先走模块配置**：复用 `app-modules/<module-id>/` 下的 `main.json`、`site.json`、`analysis-controls.json`
-8. **动态指令当前来自 `analysis-controls.json` 的 `promptText`**，而不是 `ops-config/prompt-blocks/`
+8. **动态指令当前来自 `analysis-controls.json` 的 `promptText`**，而不是 `platform-config/prompt-blocks/`
+9. **平台配置目录统一为 `platform-config/`**，不再保留 `ops-config/` 兼容读取
+10. **页面模块公开字段仅限 `slug`、`title`、`description`**，入口展示由 `entry` 声明控制

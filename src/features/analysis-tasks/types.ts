@@ -1,7 +1,7 @@
 import type { ProgressSnapshot } from '@/features/analysis-progress';
 import type { ControlSelections, AnalysisParams } from '@/providers/PageContext';
 import type { ModelConfig } from '@/types/modelConfig';
-import type { ModuleConfig } from '@/types/module';
+import type { PageModuleConfig } from '@/types/module';
 import type { EvaluationInput } from '@/types/report';
 import type { PersistedAnalysisReport } from '@/types/analysis';
 import type { AnalysisPhase } from '@/types/appFlow';
@@ -31,7 +31,7 @@ export type AnalysisTaskRecord = {
 };
 
 export type CreateAnalysisTaskInput = {
-  moduleConfig: ModuleConfig;
+  moduleConfig: PageModuleConfig;
   modelConfig: ModelConfig;
   controlSelections: ControlSelections;
   params: AnalysisParams;
@@ -41,7 +41,7 @@ export type CreateAnalysisTaskInput = {
 export type RuntimeAnalysisTask = {
   id: string;
   schedulerKey: string;
-  moduleConfig: ModuleConfig;
+  moduleConfig: PageModuleConfig;
   modelConfig: ModelConfig;
   controlSelections: ControlSelections;
   params: AnalysisParams;

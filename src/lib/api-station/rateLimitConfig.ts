@@ -1,56 +1,38 @@
-import fs from 'fs';
-import path from 'path';
+import {
+  loadRateLimitConfig as loadUnifiedRateLimitConfig,
+  type RateLimitConfig as UnifiedRateLimitConfig,
+  type RateLimitDefaults as UnifiedRateLimitDefaults,
+  type RateLimitRule as UnifiedRateLimitRule,
+  type GlobalRateLimitConfig as UnifiedGlobalRateLimitConfig,
+  type PerUserRateLimitConfig as UnifiedPerUserRateLimitConfig,
+} from '@/server/platform-config';
 
 // ========== 类型定义 ==========
 
 /**
  * 全局限流配置
  */
-export interface GlobalRateLimitConfig {
-  /** 每小时最大调用次数（该权限等级所有用户合计） */
-  maxCallsPerHour: number;
-}
+export type GlobalRateLimitConfig = UnifiedGlobalRateLimitConfig;
 
 /**
  * 用户级限流配置
  */
-export interface PerUserRateLimitConfig {
-  /** 每分钟最大调用次数 */
-  maxCallsPerMinute: number;
-  /** 每小时最大调用次数 */
-  maxCallsPerHour: number;
-}
+export type PerUserRateLimitConfig = UnifiedPerUserRateLimitConfig;
 
 /**
  * 单个权限等级的限流规则
  */
-export interface RateLimitRule {
-  /** 权限等级 */
-  permissionLevel: number;
-  /** 描述 */
-  description?: string;
-  /** 全局限流配置 */
-  global: GlobalRateLimitConfig;
-  /** 用户级限流配置 */
-  perUser: PerUserRateLimitConfig;
-}
+export type RateLimitRule = UnifiedRateLimitRule;
 
 /**
  * 默认行为配置
  */
-export interface RateLimitDefaults {
-  /** 未配置的权限等级处理方式：deny（拒绝）或 allow（允许） */
-  unspecifiedLevel: 'deny' | 'allow';
-}
+export type RateLimitDefaults = UnifiedRateLimitDefaults;
 
 /**
  * 限流配置文件结构
  */
-export interface RateLimitConfig {
-  version: string;
-  rules: RateLimitRule[];
-  defaults: RateLimitDefaults;
-}
+export type RateLimitConfig = UnifiedRateLimitConfig;
 
 // ========== 默认配置 ==========
 
@@ -78,56 +60,12 @@ const DEFAULT_CONFIG: RateLimitConfig = {
 
 // ========== 配置加载 ==========
 
-// 缓存配置
-let cachedConfig: RateLimitConfig | null = null;
-let configLastModified: number = 0;
-
-/**
- * 获取配置文件路径
- */
-function getConfigPath(): string {
-  return path.join(
-    process.env.COZE_WORKSPACE_PATH || '/workspace/projects',
-    'ops-config',
-    'rate-limit.json'
-  );
-}
-
 /**
  * 加载限流配置（支持热更新）
  */
 export function loadRateLimitConfig(): RateLimitConfig {
-  const configPath = getConfigPath();
-
   try {
-    // 检查文件是否存在
-    if (!fs.existsSync(configPath)) {
-      return DEFAULT_CONFIG;
-    }
-
-    const stats = fs.statSync(configPath);
-
-    // 如果配置文件已修改，重新加载
-    if (cachedConfig && stats.mtimeMs > configLastModified) {
-      cachedConfig = null;
-    }
-
-    // 如果有缓存，直接返回
-    if (cachedConfig) {
-      return cachedConfig;
-    }
-
-    // 读取配置文件
-    const configContent = fs.readFileSync(configPath, 'utf-8');
-    const parsedConfig = JSON.parse(configContent) as RateLimitConfig;
-
-    // 验证配置
-    const validatedConfig = validateConfig(parsedConfig);
-    
-    cachedConfig = validatedConfig;
-    configLastModified = stats.mtimeMs;
-
-    return cachedConfig;
+    return validateConfig(loadUnifiedRateLimitConfig());
   } catch {
     return DEFAULT_CONFIG;
   }
@@ -137,7 +75,6 @@ export function loadRateLimitConfig(): RateLimitConfig {
  * 强制重新加载配置
  */
 export function reloadRateLimitConfig(): RateLimitConfig {
-  cachedConfig = null;
   return loadRateLimitConfig();
 }
 

@@ -43,6 +43,13 @@ export type McpToolDefinition<
   handler: McpToolHandler<TSchema, TResult>;
 };
 
+export function defineMcpTool<
+  TSchema extends ZodTypeAny,
+  TResult = unknown,
+>(definition: McpToolDefinition<TSchema, TResult>): McpToolDefinition<TSchema, TResult> {
+  return definition;
+}
+
 export type McpPromptToolDescriptor = {
   name: string;
   description: string;

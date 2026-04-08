@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { ThemeProvider } from 'next-themes';
 import './globals.css';
@@ -9,8 +8,6 @@ import { GlobalErrorHandler } from '@/providers/GlobalErrorHandler';
 import { ModelConfigProvider } from '@/providers/ModelConfigProvider';
 import { AnalysisTaskProvider } from '@/providers/AnalysisTaskProvider';
 import { getPlatformConfig } from '@/server/config/loader';
-
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 // 动态生成 metadata，使用 appearance.json 中的品牌配置
 export async function generateMetadata(): Promise<Metadata> {
@@ -30,7 +27,7 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="zh-CN" suppressHydrationWarning>
-            <body className={`${inter.variable} font-sans antialiased`}>
+            <body className="font-sans antialiased">
                 <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
                     <GlobalErrorBoundary>
                         <GlobalErrorHandler>

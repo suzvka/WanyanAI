@@ -35,7 +35,7 @@ import { Input } from '@/components/ui/input';
 import { getOutputModeRenderer } from '@/features/output-modes';
 import { reportHistoryStore } from '@/features/report-history/store';
 import type { CachedReportRecord, ReportHistoryQuery } from '@/features/report-history/types';
-import type { ModuleConfig } from '@/types/module';
+import type { PageModulePublicMeta } from '@/types/module';
 import type { PlatformConfig } from '@/types/platform';
 import HistoryAppShell from './HistoryAppShell';
 
@@ -68,7 +68,7 @@ const actionLabel: Record<CachedReportRecord['status'], string> = {
 
 interface ReportHistoryPageClientProps {
   platformConfig: PlatformConfig;
-  modules: ModuleConfig[];
+  modules: PageModulePublicMeta[];
 }
 
 const defaultHistoryQuery: ReportHistoryQuery = {
@@ -232,7 +232,7 @@ export default function ReportHistoryPageClient({
             <div className="space-y-4">
               {records.map((record: CachedReportRecord, index: number) => {
                 const outputModeName = OUTPUT_MODE_NAMES[record.outputMode] ?? record.outputMode;
-                const moduleName = modules.find((module) => module.manifest.id === record.moduleId)?.manifest.name ?? record.moduleId;
+                const moduleName = modules.find((module) => module.slug === record.moduleId)?.title ?? record.moduleId;
                 const progress = record.progressSnapshot.progress;
                 const helperText =
                   record.status === 'failed'

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowRight, BookOpen } from 'lucide-react';
@@ -11,16 +11,20 @@ import { NavigationGuardProvider } from '@/providers/NavigationGuardContext';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { usePageFirstLoad } from '@/hooks/usePageFirstLoad';
 import type { PlatformConfig } from '@/types/platform';
-import type { ModuleConfig } from '@/types/module';
+import type { PageModulePublicMeta } from '@/types/module';
 
 // 图标映射表
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+const ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
   BookOpen,
 };
 
 interface LandingClientProps {
   platformConfig: PlatformConfig;
-  modules: ModuleConfig[];
+  modules: PageModulePublicMeta[];
+}
+
+function getModuleHref(slug: string): string {
+  return `/evaluate/${slug}`;
 }
 
 export default function LandingClient({ platformConfig, modules }: LandingClientProps) {
@@ -52,11 +56,6 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
       return () => clearTimeout(timer);
     }
   }, [isFirstLoad]);
-
-  // 过滤并排序侧栏启用的模块
-  const sidebarModules = modules
-    .filter((m) => m.manifest.sidebar.enabled)
-    .sort((a, b) => a.manifest.sidebar.order - b.manifest.sidebar.order);
 
   // 首次加载时显示骨架屏
   if (isFirstLoad) {
@@ -96,11 +95,11 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
 
           {/* 模块入口区域 */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
-            {sidebarModules.map((module, index) => {
-              const IconComponent = ICON_MAP[module.manifest.sidebar.icon] || BookOpen;
+            {modules.map((module, index) => {
+              const IconComponent = ICON_MAP.BookOpen || BookOpen;
 
               return (
-                <Link key={module.manifest.id} href={module.manifest.route}>
+                <Link key={module.slug} href={getModuleHref(module.slug)}>
                   <Card 
                     className="h-full cursor-pointer transition-all hover:shadow-lg hover:border-primary/50 group"
                     style={{
@@ -122,14 +121,14 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
                         </div>
                         <div>
                           <CardTitle className="text-xl group-hover:text-primary transition-colors">
-                            {module.manifest.name}
+                            {module.title}
                           </CardTitle>
                         </div>
                       </div>
                     </CardHeader>
                     <CardContent>
                       <CardDescription className="text-base">
-                        {module.manifest.description || '点击进入功能模块'}
+                        {module.description || '点击进入功能模块'}
                       </CardDescription>
                       <div className="mt-4 flex items-center text-sm text-primary">
                         <span>开始使用</span>
@@ -143,7 +142,7 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
           </div>
 
           {/* 空状态提示 */}
-          {sidebarModules.length === 0 && (
+          {modules.length === 0 && (
             <div className="text-center py-12">
               <p className="text-muted-foreground">暂无可用的功能模块</p>
             </div>

@@ -111,24 +111,6 @@
               "promptText": "提交的文本是能反映作品整体特征的关键片段。",
               "language_expression": 0.15,
               "empathic_effectiveness": 0.1
-            },
-            {
-              "value": "outline_or_setup",
-              "label": "大纲/设定稿",
-              "enabled": true,
-              "promptText": "提交的文本是大纲设定，请你专注于作者表达的意图而非写作形式。",
-              "structural_logic": 0.25,
-              "aesthetic_tension": 0.15,
-              "human_depth": 0.05
-            },
-            {
-              "value": "draft",
-              "label": "草稿/初稿",
-              "enabled": true,
-              "promptText": "提交的文本是作者的草稿。",
-              "structural_logic": 0.15,
-              "human_depth": 0.05,
-              "aesthetic_tension": 0.05
             }
           ]
         },
@@ -226,49 +208,6 @@
               "cohesive_integrity": 0.15,
               "empathic_effectiveness": 0.15,
               "human_depth": 0.1
-            }
-          ]
-        },
-        {
-          "id": "creation_stage",
-          "title": "创作阶段",
-          "enabled": true,
-          "sortOrder": 40,
-          "options": [
-            {
-              "value": "pre_publish",
-              "label": "发布前",
-              "enabled": true,
-              "promptText": "本作品即将发布：重点关注整体可读性、主要短板、明显风险、读者体验与发布前排查角度。",
-              "structural_logic": 0.2,
-              "empathic_effectiveness": 0.15
-            },
-            {
-              "value": "ideation",
-              "label": "构思阶段",
-              "enabled": true,
-              "promptText": "本作品尚在构思：偏重方向性建议、卖点判断、结构潜力与明显风险，不要求成熟正文标准。优先指出方向性短板、关键问题与高收益修改点，避免过度关注微观润色。",
-              "structural_logic": 0.2,
-              "aesthetic_tension": 0.15,
-              "human_depth": 0.05
-            },
-            {
-              "value": "revising",
-              "label": "修稿阶段",
-              "enabled": true,
-              "promptText": "本作品尚在修改：保留价值与问题清理，重点指出仍影响成稿质量的关键问题。",
-              "structural_logic": 0.2,
-              "language_expression": 0.1,
-              "empathic_effectiveness": 0.1
-            },
-            {
-              "value": "post_publish",
-              "label": "已发布",
-              "enabled": true,
-              "promptText": "",
-              "empathic_effectiveness": 0.2,
-              "human_depth": 0.1,
-              "structural_logic": 0.1
             }
           ]
         },

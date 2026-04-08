@@ -1,20 +1,23 @@
 'use client';
 
+import { createElement, type ComponentType, type ReactNode } from 'react';
+import { getOutputModeManifest } from './manifest';
+
 // 导出渲染器类型
 export type { RendererProps } from './renderer';
+import type { RendererProps } from './renderer';
 
-// 导出所有内置输出模式的渲染器
-import { LiteraryReviewRenderer } from './literary-review/renderer';
-import { GaokaoEssayRenderer } from './gaokao-essay/renderer';
+type OutputModeRendererComponent = ComponentType<RendererProps<unknown>>;
 
 /**
  * 输出模式渲染器映射表
  *
  * 客户端通过此表获取渲染器组件
  */
-const RENDERER_MAP: Record<string, React.ComponentType<any>> = {
-  'literary-review': LiteraryReviewRenderer,
-  'gaokao-essay': GaokaoEssayRenderer,
+const RENDERER_MAP: Record<string, OutputModeRendererComponent> = {
+  ...Object.fromEntries(
+    getOutputModeManifest().map((item) => [item.id, item.renderer]),
+  ) as Record<string, OutputModeRendererComponent>,
 };
 
 /**
@@ -23,7 +26,14 @@ const RENDERER_MAP: Record<string, React.ComponentType<any>> = {
  * @param outputModeId - 输出模式 ID
  * @returns 渲染器组件，如果未找到则返回 undefined
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function getOutputModeRenderer(outputModeId: string): React.ComponentType<any> | undefined {
+export function getOutputModeRenderer(outputModeId: string): OutputModeRendererComponent | undefined {
   return RENDERER_MAP[outputModeId];
+}
+
+export function renderOutputMode(
+  outputModeId: string,
+  props: RendererProps<unknown>,
+): ReactNode {
+  const renderer = getOutputModeRenderer(outputModeId);
+  return renderer ? createElement(renderer, props) : null;
 }

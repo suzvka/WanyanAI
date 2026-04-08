@@ -15,8 +15,8 @@
 
 import 'server-only';
 
-import type { OutputModeModule, OutputModeRegistry, BuildScoringContextParams, CollectedToolData } from '@/server/output-modes/types';
-import type { ReportScoringContext, AnalysisReportMetadata } from '@/types/analysis';
+import type { OutputModeModule, OutputModeRegistry, ProcessInput, BuildScoringContextParams, CollectedToolData } from '@/server/output-modes/types';
+import type { ReportScoringContext } from '@/types/analysis';
 import type { ReportRating } from '@/config/reportScoring';
 import { reportNeutralMultiplier } from '@/config/reportScoring';
 import { createAppError } from '@/types/errors';
@@ -43,22 +43,6 @@ function getProviderHost(baseUrl: string): string {
   } catch {
     return 'remote-openai-compatible';
   }
-}
-
-/**
- * 处理器输入参数（模块内部定义）
- */
-interface GaokaoProcessInput {
-  /** 报告 ID */
-  reportId: string;
-  /** 创建时间 */
-  createdAt: string;
-  /** 模型返回的原始 JSON 数据 */
-  rawJson: unknown;
-  /** 报告元数据 */
-  metadata: AnalysisReportMetadata;
-  /** 评分上下文 */
-  scoringContext: ReportScoringContext;
 }
 
 // ============================================================================
@@ -89,10 +73,13 @@ export const gaokaoEssayModule: OutputModeModule = {
 
     const parsed = modelMinimalReportSchema.safeParse(data);
     if (!parsed.success) {
-      const errors = parsed.error.issues.map((issue) => ({
-        path: issue.path.join('.'),
-        message: issue.message,
-      }));
+      const errors: Array<{ path: string; message: string }> = [];
+      for (const issue of parsed.error.issues as Array<{ path: Array<string | number>; message: string }>) {
+        errors.push({
+          path: issue.path.join('.'),
+          message: issue.message,
+        });
+      }
       return { success: false, errors };
     }
 
@@ -102,8 +89,8 @@ export const gaokaoEssayModule: OutputModeModule = {
   /**
    * 处理数据：验证 + 标准化 + 评分
    */
-  process: (input: any): any => {
-    const { reportId, createdAt, rawJson, metadata, scoringContext } = input as GaokaoProcessInput;
+  process: (input: ProcessInput): GaokaoEssayData => {
+    const { reportId, createdAt, rawJson, metadata, scoringContext } = input;
 
     // 1. 验证原始数据
     if (!rawJson || typeof rawJson !== 'object') {

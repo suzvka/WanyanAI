@@ -39,11 +39,27 @@ export type AnalysisControlOptionConfig = {
   [key: string]: unknown;
 };
 
+export type AnalysisControlOptionInput = {
+  value?: string;
+  label: string;
+  promptText?: string;
+  enabled?: boolean;
+  /** 自定义字段（渲染器可声明需要哪些字段） */
+  [key: string]: unknown;
+};
+
 export type AnalysisControlConfig = {
   id: string;
   title: string;
   enabled: boolean;
   options: AnalysisControlOptionConfig[];
+};
+
+export type AnalysisControlInput = {
+  id: string;
+  title: string;
+  enabled?: boolean;
+  options: AnalysisControlOptionInput[];
 };
 
 export type AnalysisControlGroupConfig = {
@@ -54,14 +70,22 @@ export type AnalysisControlGroupConfig = {
   controls: AnalysisControlConfig[];
 };
 
+export type AnalysisControlGroupInput = {
+  id: string;
+  title: string;
+  description?: string;
+  enabled?: boolean;
+  controls: AnalysisControlInput[];
+};
+
 export type AnalysisControlsConfig = {
   groups: AnalysisControlGroupConfig[];
   controls: AnalysisControlConfig[];
 };
 
 export type AnalysisControlsInput = {
-  groups?: AnalysisControlGroupConfig[];
-  controls?: AnalysisControlConfig[];
+  groups?: AnalysisControlGroupInput[];
+  controls?: AnalysisControlInput[];
 };
 
 export type SiteConfig = {
