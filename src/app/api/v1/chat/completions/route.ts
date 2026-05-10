@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateProxyKey } from '@/lib/api-station/auth';
-import { extractChallengeHeaders, extractProxyKey } from '@/lib/api-station/authExtractor';
+import { authenticateUnifiedToken } from '@/lib/api-station/auth';
+import { extractChallengeHeaders, extractUnifiedToken } from '@/lib/api-station/authExtractor';
 import { verifyChallengeIfPresent } from '@/lib/api-station/challenge';
 import { checkRateLimit } from '@/lib/api-station/rateLimit';
 import { executeHooks, HookContext } from '@/lib/api-station/hooks';
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     try {
         logInfo('[API:Chat] 收到聊天补全请求', { requestId });
 
-        const proxyKey = extractProxyKey(request);
+        const unifiedToken = extractUnifiedToken(request);
         const challengeParams = extractChallengeHeaders(request);
         const requestBody = await request.json();
 
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
         logInfo('[API:Chat] 请求参数解析', {
             requestId,
-            hasProxyKey: Boolean(proxyKey),
+            hasToken: Boolean(unifiedToken),
             model,
             messageCount: messages?.length || 0,
             stream,
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 
         // === 鉴权 ===
         logInfo('[API:Chat] 开始鉴权', { requestId });
-        const authResult = await authenticateProxyKey(proxyKey, request);
+        const authResult = await authenticateUnifiedToken(unifiedToken, request);
 
         if (!authResult.success) {
             logError('[API:Chat] 认证失败', authResult.error, { requestId });

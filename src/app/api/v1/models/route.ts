@@ -1,6 +1,6 @@
 import { stationRegistry, initializeStations } from '@/stations';
-import { authenticateProxyKey } from '@/lib/api-station/auth';
-import { extractProxyKey } from '@/lib/api-station/authExtractor';
+import { authenticateUnifiedToken } from '@/lib/api-station/auth';
+import { extractUnifiedToken } from '@/lib/api-station/authExtractor';
 import { logInfo, logError } from '@/lib/api-station/logger';
 
 function toSubjectPreview(subjectId: string | undefined): string {
@@ -9,7 +9,7 @@ function toSubjectPreview(subjectId: string | undefined): string {
 
 /**
  * GET /api/v1/models
- * 获取当前 proxy key 可用的模型列表。
+ * 获取当前 token 可用的模型列表。
  * 
  * 模型列表来自所有已注册的中转站。
  */
@@ -20,14 +20,14 @@ export async function GET(request: Request) {
     // 确保中转站已初始化（幂等操作）
     initializeStations();
 
-    const proxyKey = extractProxyKey(request);
+    const unifiedToken = extractUnifiedToken(request);
 
     logInfo('[API:Models] 收到模型列表请求', {
       requestId,
-      hasProxyKey: Boolean(proxyKey),
+      hasToken: Boolean(unifiedToken),
     });
 
-    const authResult = await authenticateProxyKey(proxyKey, request);
+    const authResult = await authenticateUnifiedToken(unifiedToken, request);
     if (!authResult.success) {
       logError('[API:Models] 鉴权失败', authResult.error, { requestId });
       return Response.json(

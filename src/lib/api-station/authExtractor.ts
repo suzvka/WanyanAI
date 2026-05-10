@@ -1,9 +1,15 @@
 import type { ChallengeAuthParams } from './auth';
 
 /**
- * 从 Authorization: Bearer 中提取 proxy key
+ * 统一 token 分隔符
+ * 格式: <proxyKey>::<accountToken>
  */
-export function extractProxyKey(request: Request): string | null {
+const TOKEN_SEPARATOR = '::';
+
+/**
+ * 从 Authorization: Bearer 中提取统一 token
+ */
+export function extractUnifiedToken(request: Request): string | null {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) {
     return null;
@@ -11,6 +17,45 @@ export function extractProxyKey(request: Request): string | null {
 
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
   return match ? match[1].trim() : null;
+}
+
+/**
+ * 从 Authorization: Bearer 中提取 proxy key（向后兼容）
+ * @deprecated 使用 extractUnifiedToken + parseUnifiedToken 替代
+ */
+export function extractProxyKey(request: Request): string | null {
+  const unifiedToken = extractUnifiedToken(request);
+  if (!unifiedToken) {
+    return null;
+  }
+  const { proxyKey } = parseUnifiedToken(unifiedToken);
+  return proxyKey;
+}
+
+/**
+ * 解析统一 token
+ * 
+ * @param unifiedToken - 统一 token 字符串
+ * @returns 解析结果，包含 proxyKey 和 accountToken
+ */
+export function parseUnifiedToken(unifiedToken: string): {
+  proxyKey: string;
+  accountToken: string | null;
+} {
+  const separatorIndex = unifiedToken.indexOf(TOKEN_SEPARATOR);
+
+  if (separatorIndex === -1) {
+    // 无分隔符 → 只有 proxyKey（兼容旧格式）
+    return { proxyKey: unifiedToken, accountToken: null };
+  }
+
+  const proxyKey = unifiedToken.slice(0, separatorIndex);
+  const accountToken = unifiedToken.slice(separatorIndex + TOKEN_SEPARATOR.length);
+
+  return {
+    proxyKey,
+    accountToken: accountToken || null,
+  };
 }
 
 /**
