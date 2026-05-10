@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "rules": [
+    {
+      "permissionLevel": 1,
+      "description": "游客用户",
+      "global": {
+        "maxCallsPerHour": 1000
+      },
+      "perUser": {
+        "maxCallsPerMinute": 10,
+        "maxCallsPerHour": 100
+      }
+    },
+    {
+      "permissionLevel": 2,
+      "description": "注册用户",
+      "global": {
+        "maxCallsPerHour": 5000
+      },
+      "perUser": {
+        "maxCallsPerMinute": 100,
+        "maxCallsPerHour": 1000
+      }
+    },
+    {
+      "permissionLevel": 3,
+      "description": "VIP用户",
+      "global": {
+        "maxCallsPerHour": 20000
+      },
+      "perUser": {
+        "maxCallsPerMinute": 100,
+        "maxCallsPerHour": 1000
+      }
+    }
+  ],
+  "defaults": {
+    "unspecifiedLevel": "deny"
+  }
+}

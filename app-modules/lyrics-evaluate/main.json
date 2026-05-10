@@ -1,0 +1,48 @@
+{
+  "slug": "lyrics-evaluate",
+  "title": "歌词评审",
+  "description": "词作意境、韵脚考究与文本情感体验诊断",
+  "route": "/evaluate/lyrics-evaluate",
+  "containers": [
+    {
+      "type": "analysis-controls"
+    },
+    {
+      "type": "text-blocks",
+      "params": {
+        "id": "lyrics-text",
+        "title": "歌词正文",
+        "subtitle": "待评歌词",
+        "prompt": "这是需要评分的正文内容",
+        "defaultExpanded": true,
+        "initialBlockCount": 1,
+        "maxBlockCount": 1
+      }
+    },
+    {
+      "type": "text-blocks",
+      "params": {
+        "id": "reference-material",
+        "title": "参考内容",
+        "defaultExpanded": false,
+        "initialBlockCount": 0
+      }
+    },
+    {
+      "type": "text-blocks",
+      "params": {
+        "id": "reference-review",
+        "title": "参考评价",
+        "defaultExpanded": false,
+        "initialBlockCount": 0
+      }
+    }
+  ],
+  "outputMode": "literary-review",
+  "controlsConfig": "./controls.json",
+  "entry": {
+    "enabled": true,
+    "icon": "Music",
+    "order": 2
+  }
+}

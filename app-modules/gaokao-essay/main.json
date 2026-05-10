@@ -1,0 +1,41 @@
+{
+  "slug": "gaokao-essay",
+  "title": "高考作文评分",
+  "description": "高考作文评分与诊断",
+  "route": "/evaluate/gaokao-essay",
+  "containers": [
+    {
+      "type": "analysis-controls"
+    },
+    {
+      "type": "text-blocks",
+      "params": {
+        "id": "question-text",
+        "title": "题干",
+        "subtitle": "作文题目与要求",
+        "defaultExpanded": true,
+        "initialBlockCount": 1,
+        "maxBlockCount": 1
+      }
+    },
+    {
+      "type": "text-blocks",
+      "params": {
+        "id": "essay-text",
+        "title": "正文",
+        "subtitle": "待评分作文",
+        "prompt": "这是需要评分的正文内容",
+        "defaultExpanded": true,
+        "initialBlockCount": 1,
+        "maxBlockCount": 1
+      }
+    }
+  ],
+  "outputMode": "gaokao-essay",
+  "controlsConfig": "./controls.json",
+  "entry": {
+    "enabled": true,
+    "icon": "GraduationCap",
+    "order": 3
+  }
+}
