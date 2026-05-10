@@ -1,5 +1,23 @@
 # 项目上下文
 
+---
+
+## ⚠️  重要提醒
+
+**本项目的默认分支是 `master`，不是 `main`。**
+
+在开始开发前，请确保你在正确的分支上：
+
+```bash
+# 检查当前分支
+git branch --show-current
+
+# 如果不在 master，切换过去
+git checkout master
+```
+
+---
+
 ### 技术栈
 
 Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS 4 · shadcn/ui (Radix UI) · coze-coding-dev-sdk
