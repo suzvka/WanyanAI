@@ -2,20 +2,22 @@
  * 简化版鉴权模块
  *
  * 流程：
- * 1. 格式校验（确保是我们的客户端）
- * 2. 限流（以 key 为 ID）
- * 3. 调用认证服务验证权限
- * 4. 认证服务离线时降级为游客
+ * 1. 提取 key（可选）
+ * 2. 限流检查（任何场景下都有效，使用 key 或 IP 作为标识）
+ * 3. 检查认证服务是否可用
+ * 4. 认证服务可用：格式校验 + 权限校验
+ * 5. 认证服务不可用：返回 fallback 权限
  *
  * 设计原则：
+ * - 限流在任何场景下有效（本地查表）
+ * - 只有认证服务可用时才进行格式校验+权限校验
  * - 业务服务器不持有密钥
  * - 业务服务器不解析 token 内容
- * - key 仅作为限流标识和认证服务查询凭证
  */
 
-import { logInfo, logError } from './logger';
+import { logInfo, logWarn, logError } from './logger';
 import { checkRateLimit } from './rateLimit';
-import { verifyKey } from './authClient';
+import { verifyKey, isAuthServiceAvailable, getFallbackPermissionLevel } from './authClient';
 import { isValidKeyFormat } from './keyFormat';
 
 // Re-export for convenience
@@ -46,38 +48,61 @@ export function extractKey(request: Request): string | null {
 }
 
 /**
+ * 从请求提取客户端 IP
+ */
+function extractClientIp(request: Request): string | null {
+  const forwardedFor = request.headers.get('X-Forwarded-For');
+  if (forwardedFor) {
+    const ip = forwardedFor.split(',')[0]?.trim();
+    if (ip) return ip;
+  }
+
+  const realIp = request.headers.get('X-Real-IP')?.trim();
+  if (realIp) return realIp;
+
+  const cfIp = request.headers.get('CF-Connecting-IP')?.trim();
+  return cfIp || null;
+}
+
+/**
+ * 获取限流标识（优先使用 key，其次使用 IP）
+ */
+function getRateLimitId(request: Request, key: string | null): string {
+  if (key && isValidKeyFormat(key)) {
+    return `key:${key}`;
+  }
+
+  const ip = extractClientIp(request);
+  if (ip) {
+    return `ip:${ip}`;
+  }
+
+  // 兜底：使用匿名标识
+  return 'anonymous';
+}
+
+/**
  * 统一鉴权入口
  *
  * @param request - 请求对象
  * @returns 鉴权结果
  */
 export async function authenticate(request: Request): Promise<AuthResult> {
-  // 1. 提取 key
+  // 1. 提取 key（可选）
   const key = extractKey(request);
 
-  // 2. 格式校验
-  if (!key) {
-    logError('[Auth] 鉴权失败: key 缺失');
-    return {
-      success: false,
-      error: 'Missing key',
-      errorCode: 'MISSING_KEY',
-    };
-  }
+  // 2. 获取限流标识
+  const rateLimitId = getRateLimitId(request, key);
 
-  if (!isValidKeyFormat(key)) {
-    logError('[Auth] 鉴权失败: key 格式无效', { keyPreview: key.slice(0, 16) + '...' });
-    return {
-      success: false,
-      error: 'Invalid key format',
-      errorCode: 'INVALID_KEY_FORMAT',
-    };
-  }
+  // 3. 限流检查（任何场景下都有效）
+  const fallbackPermission = await getFallbackPermissionLevel();
+  const rateLimitResult = checkRateLimit({
+    subjectId: rateLimitId,
+    permissionLevel: fallbackPermission,
+  });
 
-  // 3. 限流检查（以 key 为 ID，使用最低权限等级检查）
-  const rateLimitResult = checkRateLimit({ subjectId: key, permissionLevel: 1 });
   if (!rateLimitResult.allowed) {
-    logError('[Auth] 鉴权失败: 触发限流', { keyPreview: key.slice(0, 8) + '...' });
+    logError('[Auth] 鉴权失败: 触发限流', { rateLimitId });
     return {
       success: false,
       error: rateLimitResult.reason || 'Rate limited',
@@ -85,7 +110,47 @@ export async function authenticate(request: Request): Promise<AuthResult> {
     };
   }
 
-  // 4. 调用认证服务
+  // 4. 检查认证服务是否可用
+  const authAvailable = await isAuthServiceAvailable();
+
+  // 5. 认证服务不可用：返回 fallback 权限
+  if (!authAvailable) {
+    logInfo('[Auth] 认证服务不可用，使用 fallback 权限', {
+      rateLimitId,
+      permissionLevel: fallbackPermission,
+    });
+
+    return {
+      success: true,
+      key: key || undefined,
+      permissionLevel: fallbackPermission,
+      source: 'offline-fallback',
+    };
+  }
+
+  // 6. 认证服务可用：检查 key 是否存在
+  if (!key) {
+    logWarn('[Auth] key 缺失，使用 fallback 权限');
+    return {
+      success: true,
+      permissionLevel: fallbackPermission,
+      source: 'no-key',
+    };
+  }
+
+  // 7. 格式校验
+  if (!isValidKeyFormat(key)) {
+    logWarn('[Auth] key 格式无效，使用 fallback 权限', {
+      keyPreview: key.slice(0, 16) + '...',
+    });
+    return {
+      success: true,
+      permissionLevel: fallbackPermission,
+      source: 'invalid-key-fallback',
+    };
+  }
+
+  // 8. 调用认证服务验证权限
   const verifyResult = await verifyKey(key);
 
   logInfo('[Auth] 鉴权成功', {

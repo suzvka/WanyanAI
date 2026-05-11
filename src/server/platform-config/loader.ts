@@ -6,6 +6,7 @@ import path from 'node:path';
 import { validatePlatformConfig, platformManifestSchema, appearanceSchema, featureFlagsSchema } from '@/server/config/schemas';
 import { createLogger } from '@/lib/api-station/logger';
 import type {
+  AuthServiceConfig,
   ForwardConfig,
   ForwardModelConfig,
   PlatformConfig,
@@ -48,8 +49,18 @@ const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
   defaults: DEFAULT_RATE_LIMIT_DEFAULTS,
 };
 
+const DEFAULT_AUTH_SERVICE_CONFIG: AuthServiceConfig = {
+  url: undefined,
+  healthCheckIntervalMs: 30000,
+  healthCheckTimeoutMs: 3000,
+  verifyTimeoutMs: 5000,
+  fallbackPermissionLevel: 1,
+  enableHealthCheck: true,
+};
+
 let forwardCache: { key: string; value: ForwardConfig } | null = null;
 let rateLimitCache: { key: string; value: RateLimitConfig } | null = null;
+let authServiceCache: { key: string; value: AuthServiceConfig } | null = null;
 
 function getConfigRoot(): string {
   return process.cwd();
@@ -259,7 +270,43 @@ export function loadRateLimitConfig(): RateLimitConfig {
   }
 }
 
+/**
+ * 加载认证服务配置
+ */
+export function loadAuthServiceConfig(): AuthServiceConfig {
+  const configDir = resolveConfigDirSync();
+  const filePath = path.join(configDir, 'auth-service.json');
+  const cacheKey = createFileCacheKey(filePath);
+
+  if (authServiceCache?.key === cacheKey) {
+    return authServiceCache.value;
+  }
+
+  try {
+    const parsed = readPlatformJsonFileSync<Partial<AuthServiceConfig>>('auth-service.json');
+    const normalized: AuthServiceConfig = {
+      url: parsed.url || process.env.AUTH_SERVICE_URL || process.env.ACCOUNT_SERVICE_URL || undefined,
+      healthCheckIntervalMs: parsed.healthCheckIntervalMs ?? DEFAULT_AUTH_SERVICE_CONFIG.healthCheckIntervalMs,
+      healthCheckTimeoutMs: parsed.healthCheckTimeoutMs ?? DEFAULT_AUTH_SERVICE_CONFIG.healthCheckTimeoutMs,
+      verifyTimeoutMs: parsed.verifyTimeoutMs ?? DEFAULT_AUTH_SERVICE_CONFIG.verifyTimeoutMs,
+      fallbackPermissionLevel: parsed.fallbackPermissionLevel ?? DEFAULT_AUTH_SERVICE_CONFIG.fallbackPermissionLevel,
+      enableHealthCheck: parsed.enableHealthCheck ?? DEFAULT_AUTH_SERVICE_CONFIG.enableHealthCheck,
+    };
+    authServiceCache = { key: cacheKey, value: normalized };
+    return normalized;
+  } catch {
+    // 文件不存在或解析失败时使用默认值
+    const fallback: AuthServiceConfig = {
+      ...DEFAULT_AUTH_SERVICE_CONFIG,
+      url: process.env.AUTH_SERVICE_URL || process.env.ACCOUNT_SERVICE_URL || undefined,
+    };
+    authServiceCache = { key: cacheKey, value: fallback };
+    return fallback;
+  }
+}
+
 export function clearPlatformConfigRuntimeCaches() {
   forwardCache = null;
   rateLimitCache = null;
+  authServiceCache = null;
 }

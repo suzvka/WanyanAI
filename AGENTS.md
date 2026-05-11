@@ -96,10 +96,11 @@ keys/                          # 外部 API 模型配置（自动发现 *.json�
 **中转站系统（可插拔）**：所有模型转发通过中转站实现，位于 `src/stations/` 目录。每个中转站实现 `Station` 接口，提供 `getModels()`、`canHandle()`、`forward()` 方法。启动时自动扫描注册，删除目录即可移除功能。框架负责鉴权，中转站仅负责转发。
 
 **简化鉴权架构**：采用单 Token 统一鉴权，key 同时作为限流标识和权限查询凭证。
-- **业务服务器职责**：格式校验 + 限流 + 调用认证服务验证权限
+- **业务服务器职责**：限流检查 + 检查认证服务可用性 + 格式校验 + 调用认证服务验证权限
 - **认证服务器职责**：签发 key + 验证 key + 返回权限等级
-- **降级策略**：认证服务离线或 key 无效时降级为游客（permissionLevel=1）
-- **环境变量**：`AUTH_SERVICE_URL` 或 `ACCOUNT_SERVICE_URL` 指定认证服务地址
+- **降级策略**：认证服务离线时使用 fallback 权限（默认游客）
+- **配置文件**：`platform-config/auth-service.json` 配置认证服务地址和探活参数
+- **环境变量**：`AUTH_SERVICE_URL` 或 `ACCOUNT_SERVICE_URL` 作为认证服务地址的后备
 
 ## 鉴权流程
 
@@ -114,19 +115,41 @@ keys/                          # 外部 API 模型配置（自动发现 *.json�
 │  ┌─────────────┐                      ┌─────────────┐       │
 │  │   客户端     │────Bearer key───────►│  业务服务器  │       │
 │  │             │                      │             │       │
-│  │             │                      │ 1. 格式校验  │       │
-│  │             │                      │ 2. 限流检查  │       │
-│  │             │                      │ 3. 调用认证  │       │
-│  │             │◄─────────────────────│ 4. 业务处理  │       │
+│  │             │                      │ 1. 限流检查  │       │
+│  │             │                      │    （任何场景）│      │
+│  │             │                      │ 2. 检查认证   │       │
+│  │             │                      │    服务可用性 │       │
+│  │             │                      │ 3. 格式校验   │       │
+│  │             │                      │    （可用时） │       │
+│  │             │                      │ 4. 权限校验   │       │
+│  │             │                      │    （可用时） │       │
+│  │             │◄─────────────────────│ 5. 业务处理  │       │
 │  └─────────────┘                      └─────────────┘       │
 └─────────────────────────────────────────────────────────────┘
+
+关键特性：
+- 限流在任何场景下有效（本地查表）
+- 认证服务不可用时自动使用 fallback 权限
+- 探活检查定期执行，避免频繁请求
 ```
 
 **key 格式**：32-64 字符的字母数字下划线横线组合
 
 **认证服务接口**：
-- 签发：`POST /api/auth/issue`（认证服务器实现）
-- 验证：`POST /api/auth/verify`（认证服务器实现，返回 `{ valid, identityId, permissionLevel }`）
+- 健康检查：`GET /api/auth/health`（返回 200 表示可用）
+- 验证：`POST /api/auth/verify`（返回 `{ valid, identityId, permissionLevel }`）
+
+**认证服务配置** (`platform-config/auth-service.json`)：
+```json
+{
+  "url": "https://auth.example.com",
+  "healthCheckIntervalMs": 30000,
+  "healthCheckTimeoutMs": 3000,
+  "verifyTimeoutMs": 5000,
+  "fallbackPermissionLevel": 1,
+  "enableHealthCheck": true
+}
+```
 
 ## 开发规范
 
@@ -213,15 +236,17 @@ interface Station {
 |------|------|
 | `instrumentation.ts` | Next.js 启动钩子，预初始化服务端注册表 |
 | `src/lib/bootstrap/registry-init.ts` | 服务端注册表统一初始化入口 |
-| `src/lib/api-station/auth.ts` | **统一鉴权入口**（格式校验 + 限流 + 认证服务调用） |
-| `src/lib/api-station/authClient.ts` | **认证服务客户端**（调用 /api/auth/verify） |
+| `src/lib/api-station/auth.ts` | **统一鉴权入口**（限流 + 认证服务可用性检查 + 权限校验） |
+| `src/lib/api-station/authClient.ts` | **认证服务客户端**（探活 + 调用 /api/auth/verify） |
+| `src/lib/api-station/keyFormat.ts` | Key 格式校验（纯函数，客户端可用） |
 | `src/lib/api-station/rateLimit.ts` | 限流逻辑 |
+| `src/server/platform-config/loader.ts` | 平台配置加载（含认证服务配置） |
+| `platform-config/auth-service.json` | **认证服务配置**（地址、探活参数、fallback 权限） |
 | `src/server/modules/loader.ts` | 模块扫描、加载、容器验证 |
 | `src/server/output-modes/registry.ts` | 输出模式注册表（继承 BaseRegistry） |
 | `src/server/output-modes/manifest.ts` | 服务端输出模式注册清单（新增输出模式在此添加） |
 | `src/server/output-modes.ts` | 服务端输出模式门面（getServerOutputModePrompt 等） |
 | `src/server/instructions/compile.ts` | 动态指令编译（调用 ControlRegistry.compileAll） |
-| `src/server/platform-config/loader.ts` | 平台配置加载 |
 | `src/features/controls/registry.ts` | 控件注册表（继承 BaseRegistry） |
 | `src/features/analysis-tasks/getAnalysisResources.ts` | **Server Action** — 提供分析资源（提示词、编译结果），不接触 API Key |
 | `src/features/analysis-tasks/clientAnalysisRunner.ts` | **客户端** — 分析任务执行器，模型调用完全在客户端 |
