@@ -1,0 +1,179 @@
+'use server';
+
+/**
+ * 服务端资源获取接口
+ *
+ * 这些 Server Actions 只提供资源（提示词、编译结果等），
+ * 不涉及模型调用和 API Key，确保服务端不知道客户端的密钥。
+ */
+
+import {
+  requestCompiledInstructions,
+  requestCompiledMcpPrompt,
+} from '@/features/analysis-flow/lib';
+import {
+  getServerOutputModePrompt,
+  getOutputModeTools,
+  validateOutputModeData,
+  buildOutputModeScoringContext,
+  assembleOutputModeData,
+  resolveOutputModeToolCall,
+} from '@/server/output-modes';
+import type { ControlSelections } from '@/providers/PageContext';
+import type { PageModuleConfig } from '@/types/module';
+
+/**
+ * 获取分析任务所需的资源
+ *
+ * 返回客户端调用模型所需的所有资源，但不执行模型调用。
+ */
+export async function getAnalysisResources(input: {
+  moduleConfig: PageModuleConfig;
+  controlSelections: ControlSelections;
+}): Promise<{
+  systemPrompt: string;
+  instructionText: string;
+  mcpToolText: string;
+  mcpToolDefinitions: ReturnType<typeof getOutputModeTools>;
+}> {
+  const { moduleConfig, controlSelections } = input;
+
+  // 1. 获取系统提示词
+  const systemPrompt = getServerOutputModePrompt(moduleConfig.manifest.outputMode);
+  if (!systemPrompt) {
+    throw new Error(`Output mode "${moduleConfig.manifest.outputMode}" not found or has no prompt`);
+  }
+
+  // 2. 编译控件指令
+  const compiledInstructions = await requestCompiledInstructions({
+    controlSelections,
+    configVersion: moduleConfig.manifest.slug,
+  });
+
+  // 3. 获取 MCP 工具提示词
+  const compiledMcpPrompt = await requestCompiledMcpPrompt({
+    outputModeId: moduleConfig.manifest.outputMode,
+  });
+
+  // 4. 获取 MCP 工具定义
+  const mcpToolDefinitions = getOutputModeTools(moduleConfig.manifest.outputMode);
+
+  return {
+    systemPrompt,
+    instructionText: compiledInstructions.instructionText,
+    mcpToolText: compiledMcpPrompt.toolPromptText,
+    mcpToolDefinitions,
+  };
+}
+
+/**
+ * 验证模型输出数据
+ *
+ * 客户端调用模型后，将结果发送到这里验证。
+ */
+export async function validateAnalysisOutput(input: {
+  outputModeId: string;
+  toolName: string;
+  toolParams: Record<string, unknown>;
+}): Promise<{
+  success: boolean;
+  data?: unknown;
+  errors?: Array<{ path: string; message: string }>;
+}> {
+  const { outputModeId, toolName, toolParams } = input;
+
+  // 1. 解析工具调用
+  const resolution = resolveOutputModeToolCall(outputModeId, toolName, toolParams);
+
+  if (resolution.type === 'abort') {
+    return {
+      success: false,
+      errors: [{ path: '(root)', message: `${resolution.reason}: ${resolution.message}` }],
+    };
+  }
+
+  let toolData: Record<string, unknown>;
+
+  if (toolName === 'multi_collect_complete') {
+    // 多工具收集模式
+    const assembledData = assembleOutputModeData(outputModeId, toolParams as Record<string, unknown[]>);
+    if (!assembledData.success) {
+      return {
+        success: false,
+        errors: [{ path: '(root)', message: assembledData.error || '数据拼装失败' }],
+      };
+    }
+    toolData = assembledData.data!;
+  } else if (resolution.type === 'data') {
+    toolData = resolution.data ?? {};
+  } else if (resolution.type === 'finalize') {
+    const assembledData = assembleOutputModeData(outputModeId, {} as Record<string, unknown[]>);
+    if (!assembledData.success) {
+      return {
+        success: false,
+        errors: [{ path: '(root)', message: assembledData.error || '数据拼装失败' }],
+      };
+    }
+    toolData = assembledData.data ?? {};
+  } else {
+    return {
+      success: false,
+      errors: [{ path: '(root)', message: `未知工具调用: ${toolName}` }],
+    };
+  }
+
+  // 2. 验证数据结构
+  const validation = validateOutputModeData(outputModeId, toolData);
+
+  return {
+    success: validation.success,
+    data: validation.data,
+    errors: validation.errors,
+  };
+}
+
+/**
+ * 构建评分上下文
+ *
+ * 用于最终报告的评分计算。
+ */
+export async function buildScoringContext(input: {
+  outputModeId: string;
+  moduleConfig: PageModuleConfig;
+  controlSelections: ControlSelections;
+}): Promise<{
+  scoringContext: ReturnType<typeof buildOutputModeScoringContext>;
+}> {
+  const { outputModeId, moduleConfig, controlSelections } = input;
+
+  const scoringContext = buildOutputModeScoringContext(outputModeId, {
+    moduleConfig,
+    controlSelections,
+  });
+
+  return {
+    scoringContext: scoringContext ?? { multipliers: {}, defaultMultiplier: 1 },
+  };
+}
+
+/**
+ * 构建重试消息
+ *
+ * 当验证失败需要重试时，构建重试提示词。
+ */
+export async function buildRetryMessage(input: {
+  outputModeId: string;
+  issues: Array<{ path: string; message: string }>;
+  previousData: Record<string, unknown>;
+  attempt: number;
+  maxAttempts: number;
+}): Promise<string> {
+  const { buildValidationRetryMessage } = await import('@/features/analysis-flow/lib/buildValidationRetryMessage');
+  return buildValidationRetryMessage({
+    outputModeId: input.outputModeId,
+    issues: input.issues,
+    previousReportData: input.previousData,
+    attempt: input.attempt,
+    maxAttempts: input.maxAttempts,
+  });
+}

@@ -1,0 +1,772 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-border: var(--primary-border);
+  --color-primary-overlay: var(--primary-overlay);
+  --color-primary-ring: var(--primary-ring);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --font-sans:
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', ui-sans-serif,
+    system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  --font-serif:
+    'Noto Serif SC', 'Songti SC', 'SimSun', ui-serif, Georgia, Cambria,
+    'Times New Roman', Times, serif;
+}
+
+:root {
+  --radius: 0.625rem;
+  --motion-duration-fast: 160ms;
+  --motion-duration-standard: 220ms;
+  --motion-duration-slow: 280ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --theme-primary: oklch(0.205 0 0);
+  --theme-primary-foreground: oklch(0.985 0 0);
+  --primary: var(--theme-primary);
+  --primary-foreground: var(--theme-primary-foreground);
+  --primary-soft: color-mix(in oklab, var(--theme-primary) 14%, transparent);
+  --primary-border: color-mix(in oklab, var(--theme-primary) 24%, var(--border));
+  --primary-overlay: color-mix(in oklab, var(--theme-primary) 10%, transparent);
+  --primary-ring: color-mix(in oklab, var(--theme-primary) 56%, var(--ring));
+  --secondary: color-mix(in oklab, var(--theme-primary) 6%, var(--background));
+  --secondary-foreground: var(--foreground);
+  --muted: color-mix(in oklab, var(--theme-primary) 4%, var(--background));
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: color-mix(in oklab, var(--theme-primary) 8%, var(--background));
+  --accent-foreground: var(--foreground);
+  --destructive: var(--report-score-dark-red);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: color-mix(in oklab, var(--theme-primary) 92%, var(--foreground));
+  --chart-2: color-mix(in oklab, var(--theme-primary) 74%, var(--foreground));
+  --chart-3: color-mix(in oklab, var(--theme-primary) 56%, var(--foreground));
+  --chart-4: color-mix(in oklab, var(--theme-primary) 38%, var(--foreground));
+  --chart-5: color-mix(in oklab, var(--theme-primary) 22%, var(--foreground));
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: var(--theme-primary);
+  --sidebar-primary-foreground: var(--theme-primary-foreground);
+  --sidebar-accent: var(--primary-soft);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--primary-ring);
+  --report-score-gold: oklch(0.78 0.14 84);
+  --report-score-gold-soft: color-mix(in oklab, var(--report-score-gold) 14%, transparent);
+  --report-score-purple: oklch(0.62 0.19 305);
+  --report-score-purple-soft: color-mix(in oklab, var(--report-score-purple) 14%, transparent);
+  --report-score-blue: oklch(0.60 0.17 250);
+  --report-score-blue-soft: color-mix(in oklab, var(--report-score-blue) 14%, transparent);
+  --report-score-green: oklch(0.64 0.16 145);
+  --report-score-green-soft: color-mix(in oklab, var(--report-score-green) 14%, transparent);
+  --report-score-dark-red: oklch(0.46 0.16 28);
+  --report-score-dark-red-soft: color-mix(in oklab, var(--report-score-dark-red) 14%, transparent);
+  --report-neutral: color-mix(in oklab, var(--theme-primary) 30%, var(--foreground));
+  --report-neutral-soft: color-mix(in oklab, var(--theme-primary) 6%, transparent);
+  --report-score-high: var(--report-score-gold);
+  --report-score-medium: var(--report-score-blue);
+  --report-score-low: var(--report-score-dark-red);
+  --report-grade-s: var(--report-score-gold);
+  --report-grade-a: var(--report-score-purple);
+  --report-grade-b: var(--report-score-blue);
+  --report-grade-c: var(--report-score-green);
+  --report-grade-d: var(--report-score-dark-red);
+  --report-grade-s-soft: var(--report-score-gold-soft);
+  --report-grade-a-soft: var(--report-score-purple-soft);
+  --report-grade-b-soft: var(--report-score-blue-soft);
+  --report-grade-c-soft: var(--report-score-green-soft);
+  --report-grade-d-soft: var(--report-score-dark-red-soft);
+  --report-grade-e: var(--report-score-dark-red);
+  --report-grade-e-soft: var(--report-score-dark-red-soft);
+  --report-surface: var(--background);
+  --report-surface-strong: var(--background);
+  --report-border: color-mix(in oklab, var(--theme-primary) 16%, var(--border));
+  --report-text-subtle: color-mix(in oklab, var(--theme-primary) 22%, var(--foreground));
+  --report-text-heading: color-mix(in oklab, var(--theme-primary) 52%, var(--foreground));
+  --report-accent-dot: color-mix(in oklab, var(--theme-primary) 40%, var(--foreground));
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --theme-primary: oklch(0.922 0 0);
+  --theme-primary-foreground: oklch(0.205 0 0);
+  --primary: var(--theme-primary);
+  --primary-foreground: var(--theme-primary-foreground);
+  --primary-soft: color-mix(in oklab, var(--theme-primary) 16%, transparent);
+  --primary-border: color-mix(in oklab, var(--theme-primary) 28%, var(--border));
+  --primary-overlay: color-mix(in oklab, var(--theme-primary) 12%, transparent);
+  --primary-ring: color-mix(in oklab, var(--theme-primary) 52%, var(--ring));
+  --secondary: color-mix(in oklab, var(--theme-primary) 8%, var(--background));
+  --secondary-foreground: var(--foreground);
+  --muted: color-mix(in oklab, var(--theme-primary) 6%, var(--background));
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: color-mix(in oklab, var(--theme-primary) 10%, var(--background));
+  --accent-foreground: var(--foreground);
+  --destructive: var(--report-score-dark-red);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: color-mix(in oklab, var(--theme-primary) 92%, var(--foreground));
+  --chart-2: color-mix(in oklab, var(--theme-primary) 74%, var(--foreground));
+  --chart-3: color-mix(in oklab, var(--theme-primary) 56%, var(--foreground));
+  --chart-4: color-mix(in oklab, var(--theme-primary) 38%, var(--foreground));
+  --chart-5: color-mix(in oklab, var(--theme-primary) 22%, var(--foreground));
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: var(--theme-primary);
+  --sidebar-primary-foreground: var(--theme-primary-foreground);
+  --sidebar-accent: var(--primary-soft);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--primary-ring);
+  --report-score-gold: oklch(0.84 0.13 84);
+  --report-score-gold-soft: color-mix(in oklab, var(--report-score-gold) 18%, transparent);
+  --report-score-purple: oklch(0.78 0.16 305);
+  --report-score-purple-soft: color-mix(in oklab, var(--report-score-purple) 18%, transparent);
+  --report-score-blue: oklch(0.74 0.15 250);
+  --report-score-blue-soft: color-mix(in oklab, var(--report-score-blue) 18%, transparent);
+  --report-score-green: oklch(0.76 0.14 145);
+  --report-score-green-soft: color-mix(in oklab, var(--report-score-green) 18%, transparent);
+  --report-score-dark-red: oklch(0.68 0.15 28);
+  --report-score-dark-red-soft: color-mix(in oklab, var(--report-score-dark-red) 18%, transparent);
+  --report-danger: var(--report-score-dark-red);
+  --report-danger-soft: var(--report-score-dark-red-soft);
+  --report-neutral: color-mix(in oklab, var(--theme-primary) 34%, var(--foreground));
+  --report-neutral-soft: color-mix(in oklab, var(--theme-primary) 8%, transparent);
+  --report-score-high: var(--report-score-gold);
+  --report-score-medium: var(--report-score-blue);
+  --report-score-low: var(--report-score-dark-red);
+  --report-grade-s: var(--report-score-gold);
+  --report-grade-a: var(--report-score-purple);
+  --report-grade-b: var(--report-score-blue);
+  --report-grade-c: var(--report-score-green);
+  --report-grade-d: var(--report-score-dark-red);
+  --report-grade-s-soft: var(--report-score-gold-soft);
+  --report-grade-a-soft: var(--report-score-purple-soft);
+  --report-grade-b-soft: var(--report-score-blue-soft);
+  --report-grade-c-soft: var(--report-score-green-soft);
+  --report-grade-d-soft: var(--report-score-dark-red-soft);
+  --report-grade-e: var(--report-score-dark-red);
+  --report-grade-e-soft: var(--report-score-dark-red-soft);
+  --report-surface: color-mix(in oklab, var(--theme-primary) 4%, var(--background) / 0.88);
+  --report-surface-strong: color-mix(in oklab, var(--theme-primary) 8%, var(--background) / 0.96);
+  --report-border: color-mix(in oklab, var(--theme-primary) 18%, var(--border));
+  --report-text-subtle: color-mix(in oklab, var(--theme-primary) 24%, var(--foreground));
+  --report-text-heading: color-mix(in oklab, var(--theme-primary) 58%, var(--foreground));
+  --report-accent-dot: color-mix(in oklab, var(--theme-primary) 42%, var(--foreground));
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scrollbar-gutter: stable;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+body {
+  @apply font-sans;
+}
+
+/* Mobile optimization styles */
+@layer mobile {
+  /* Prevent text size adjustment on orientation change */
+  * {
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Better touch target sizing for all interactive elements */
+  button,
+  a,
+  input,
+  textarea,
+  select,
+  [role="button"],
+  [role="link"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="switch"],
+  [role="tab"] {
+    min-height: 44px;
+    min-width: 44px;
+    touch-action: manipulation;
+  }
+
+  /* Improve touch targets for icon buttons */
+  button[class*="icon"],
+  button:has(> svg:only-child) {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  /* Prevent zoom on input focus on iOS */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  /* Safe area insets for notch devices */
+  @supports (padding: env(safe-area-inset-top)) {
+    body {
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+
+    .safe-area-top {
+      padding-top: env(safe-area-inset-top);
+    }
+
+    .safe-area-bottom {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+  }
+
+  /* Improve scrolling performance */
+  html,
+  body {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Prevent horizontal scroll on mobile */
+  body {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  /* Improve dialog/overlay z-index for mobile */
+  [data-radix-popper-content-wrapper],
+  [data-radix-dropdown-menu-content-wrapper] {
+    z-index: 100 !important;
+  }
+}
+
+@layer utilities {
+  /* Brand background styles */
+  .bg-brand-overlay {
+    background-color: var(--brand-overlay-color);
+  }
+  
+  .text-brand {
+    color: var(--brand-text-color);
+  }
+
+  @keyframes ui-overlay-in {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes ui-overlay-out {
+    from {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes ui-panel-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 12px, 0) scale(0.985);
+      filter: blur(2px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes ui-panel-out {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+      filter: blur(0);
+    }
+
+    to {
+      opacity: 0;
+      transform: translate3d(0, 8px, 0) scale(0.99);
+      filter: blur(1px);
+    }
+  }
+
+  @keyframes ui-pop-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 6px, 0) scale(0.96);
+    }
+
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+  }
+
+  @keyframes ui-pop-out {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+
+    to {
+      opacity: 0;
+      transform: translate3d(0, 4px, 0) scale(0.98);
+    }
+  }
+
+  @keyframes ui-sheet-right-in {
+    from {
+      opacity: 0;
+      transform: translate3d(10%, 0, 0);
+    }
+
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes ui-sheet-right-out {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+
+    to {
+      opacity: 0;
+      transform: translate3d(10%, 0, 0);
+    }
+  }
+
+  @keyframes ui-sheet-left-in {
+    from {
+      opacity: 0;
+      transform: translate3d(-10%, 0, 0);
+    }
+
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes ui-sheet-left-out {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+
+    to {
+      opacity: 0;
+      transform: translate3d(-10%, 0, 0);
+    }
+  }
+
+  @keyframes ui-sheet-top-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, -10%, 0);
+    }
+
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes ui-sheet-top-out {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+
+    to {
+      opacity: 0;
+      transform: translate3d(0, -10%, 0);
+    }
+  }
+
+  @keyframes ui-sheet-bottom-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 10%, 0);
+    }
+
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes ui-sheet-bottom-out {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+
+    to {
+      opacity: 0;
+      transform: translate3d(0, 10%, 0);
+    }
+  }
+
+  .motion-overlay-in {
+    animation: ui-overlay-in var(--motion-duration-standard) var(--motion-ease-standard) both;
+  }
+
+  .motion-overlay-out {
+    animation: ui-overlay-out var(--motion-duration-fast) var(--motion-ease-standard) both;
+  }
+
+  .motion-panel-in {
+    animation: ui-panel-in var(--motion-duration-standard) var(--motion-ease-emphasized) both;
+  }
+
+  .motion-panel-out {
+    animation: ui-panel-out var(--motion-duration-fast) var(--motion-ease-standard) both;
+  }
+
+  .motion-pop-in {
+    animation: ui-pop-in var(--motion-duration-standard) var(--motion-ease-emphasized) both;
+  }
+
+  .motion-pop-out {
+    animation: ui-pop-out var(--motion-duration-fast) var(--motion-ease-standard) both;
+  }
+
+  .motion-sheet-right-in {
+    animation: ui-sheet-right-in var(--motion-duration-standard) var(--motion-ease-emphasized) both;
+  }
+
+  .motion-sheet-right-out {
+    animation: ui-sheet-right-out var(--motion-duration-fast) var(--motion-ease-standard) both;
+  }
+
+  .motion-sheet-left-in {
+    animation: ui-sheet-left-in var(--motion-duration-standard) var(--motion-ease-emphasized) both;
+  }
+
+  .motion-sheet-left-out {
+    animation: ui-sheet-left-out var(--motion-duration-fast) var(--motion-ease-standard) both;
+  }
+
+  .motion-sheet-top-in {
+    animation: ui-sheet-top-in var(--motion-duration-standard) var(--motion-ease-emphasized) both;
+  }
+
+  .motion-sheet-top-out {
+    animation: ui-sheet-top-out var(--motion-duration-fast) var(--motion-ease-standard) both;
+  }
+
+  .motion-sheet-bottom-in {
+    animation: ui-sheet-bottom-in var(--motion-duration-standard) var(--motion-ease-emphasized) both;
+  }
+
+  .motion-sheet-bottom-out {
+    animation: ui-sheet-bottom-out var(--motion-duration-fast) var(--motion-ease-standard) both;
+  }
+
+  .motion-sidebar-width {
+    transition-property: left, right, width;
+    transition-duration: var(--motion-duration-standard);
+    transition-timing-function: var(--motion-ease-standard);
+  }
+
+  .motion-sidebar-label {
+    transition-property: margin, opacity;
+    transition-duration: var(--motion-duration-standard);
+    transition-timing-function: var(--motion-ease-standard);
+  }
+
+  /* Collapsible 面板平滑展开/收起动画 */
+  /* 方案：使用 CSS Grid 实现高度动画 + 内容淡入淡出 */
+  
+  /* 
+   * CollapsibleContent 容器
+   * 使用 CSS Grid 的 grid-template-rows 实现高度过渡
+   */
+  [data-slot="collapsible-content"] {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* 关闭状态：行高为 0 */
+  [data-slot="collapsible-content"][data-state="closed"] {
+    grid-template-rows: 0fr;
+  }
+
+  /* 包装层：确保内容可以正确溢出隐藏 */
+  [data-slot="collapsible-content"] .collapsible-wrapper {
+    overflow: hidden;
+  }
+
+  /* 内部内容层：添加淡入淡出 + 轻微位移效果 */
+  [data-slot="collapsible-content"] .collapsible-inner {
+    opacity: 1;
+    transform: translateY(0);
+    transition: 
+      opacity 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  /* 关闭状态的内容样式 */
+  [data-slot="collapsible-content"][data-state="closed"] .collapsible-inner {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  /* API 配置管理 - 已选配置的强调效果 */
+  @keyframes config-selected-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 oklch(0.55 0.15 250 / 0);
+      border-color: oklch(0.70 0.12 250 / 0.3);
+    }
+    50% {
+      box-shadow: 0 0 0 4px oklch(0.55 0.15 250 / 0.15);
+      border-color: oklch(0.70 0.12 250 / 0.6);
+    }
+  }
+
+  .api-config-selected {
+    animation: config-selected-pulse 2s ease-in-out infinite;
+  }
+
+
+
+  /* New item appear animation */
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .animate-slide-down {
+    animation: slideDown 0.3s ease-out;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+}
+
+/* Sonner Toast 错误提示样式强化 */
+.toaster [data-sonner-toast][data-type="error"] {
+  border: 2px solid var(--destructive) !important;
+}
+
+.toaster [data-sonner-toast][data-type="error"] [data-icon] {
+  color: var(--destructive) !important;
+}
+
+/* Sonner Toast 垂直布局样式 */
+.toaster [data-sonner-toast].toast-vertical-layout {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0 !important;
+}
+
+/* 信息行：图标和文本水平排列 */
+.toaster [data-sonner-toast].toast-vertical-layout [data-content] {
+  display: flex;
+  align-items: flex-start;
+}
+
+/* 按钮行：单独一行，固定高度，右对齐 */
+.toaster [data-sonner-toast].toast-vertical-layout [data-action] {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 24px;
+  margin-top: 8px;
+  padding-right: 4px;
+  margin-left: 0 !important;
+  width: auto !important;
+  background: transparent !important;
+}
+
+/* 按钮内部样式：文本居中 */
+.toaster [data-sonner-toast].toast-vertical-layout [data-action] button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: auto;
+  line-height: 1;
+}
+
+/* ========================================
+   Page Transitions - 页面过渡动画
+   ======================================== */
+
+/* View Transitions API 样式 */
+::view-transition-old(root) {
+  animation: 120ms ease-out both fade-out,
+             120ms ease-out both slide-out;
+}
+
+::view-transition-new(root) {
+  animation: 220ms ease-out 60ms both fade-in,
+             220ms ease-out 60ms both slide-in;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slide-in {
+  from { transform: translateY(12px); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slide-out {
+  from { transform: translateY(0); }
+  to { transform: translateY(-8px); }
+}
+
+/* 页面过渡包装器 */
+.page-transition-wrapper {
+  min-height: 0;
+}
+
+/* 交错动画样式 - 子元素依次出现 */
+.staggered-content .staggered-item {
+  opacity: 0;
+  animation: stagger-fade-in var(--motion-duration-standard) var(--motion-ease-emphasized) forwards;
+}
+
+@keyframes stagger-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 页面淡入动画类 */
+.page-fade-in {
+  animation: page-enter var(--motion-duration-slow) var(--motion-ease-emphasized) both;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 尊重用户减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .page-transition-wrapper,
+  .staggered-content .staggered-item,
+  .page-fade-in {
+    transition: none !important;
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}

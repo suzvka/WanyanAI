@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "challenge": {
+    "enabled": true,
+    "difficulty": 3,
+    "tokenExpireMinutes": 30,
+    "maxNonceAgeSeconds": 300
+  }
+}

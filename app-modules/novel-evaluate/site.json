@@ -1,0 +1,18 @@
+{
+  "home": {
+    "title": "小说点评",
+    "subtitle": ""
+  },
+  "inputPanel": {
+    "title": "文本输入",
+    "description": "仅针对正文进行评析。"
+  },
+  "settingsPanel": {
+    "title": "分析设置",
+    "description": ""
+  },
+  "progress": {
+    "runningTitle": "正在准备分析请求...",
+    "runningDescription": ""
+  }
+}

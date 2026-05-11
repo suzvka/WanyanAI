@@ -1,0 +1,18 @@
+{
+  "home": {
+    "title": "高考作文评分",
+    "subtitle": "AI 驱动的高考作文评分与诊断"
+  },
+  "inputPanel": {
+    "title": "作文内容",
+    "description": "输入题干和正文，获取评分报告"
+  },
+  "settingsPanel": {
+    "title": "评分设置",
+    "description": "选择评分导向"
+  },
+  "progress": {
+    "runningTitle": "正在分析作文...",
+    "runningDescription": "AI 评分中，请稍候"
+  }
+}

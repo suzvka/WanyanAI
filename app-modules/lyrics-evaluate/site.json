@@ -1,0 +1,18 @@
+{
+  "home": {
+    "title": "歌词评审",
+    "subtitle": ""
+  },
+  "inputPanel": {
+    "title": "歌词正文",
+    "description": "仅针对歌词正文进行深度文笔、韵律与情感剖析。"
+  },
+  "settingsPanel": {
+    "title": "评审设置",
+    "description": ""
+  },
+  "progress": {
+    "runningTitle": "正在准备歌词分析报告...",
+    "runningDescription": ""
+  }
+}
