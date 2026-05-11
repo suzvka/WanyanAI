@@ -5,7 +5,6 @@
 
 import { requestJson } from '@/lib/client-request';
 import type { ModelInfo, ApiConfigValidationStatus } from '@/types/modelConfig';
-import { isValidKeyFormat } from './keyFormat';
 
 const USER_REF_KEY = 'built_in_user_ref';
 const BUILT_IN_PROXY_KEY = 'built_in_proxy_key';
@@ -70,11 +69,8 @@ export function getBuiltInApiKey(): string {
       return '';
     }
 
-    if (!isValidKeyFormat(key)) {
-      clearBuiltInApiKey();
-      return '';
-    }
-
+    // 不再检查格式，因为临时 key 格式可能不符合标准
+    // 格式校验由 auth.ts 在认证服务可用时进行
     return key;
   } catch {
     clearBuiltInApiKey();
@@ -106,6 +102,7 @@ export async function refreshBuiltInApiKey(): Promise<BuiltInProxyKeyInfo> {
     key?: string;
     expiresAt?: number;
     error?: { message?: string };
+    warning?: string;
   }>(`${getBuiltInBaseUrl()}/key`, {
     method: 'POST',
     credentials: 'same-origin',

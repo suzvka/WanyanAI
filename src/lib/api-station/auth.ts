@@ -2,15 +2,18 @@
  * 简化版鉴权模块
  *
  * 流程：
- * 1. 提取 key（可选）
- * 2. 限流检查（任何场景下都有效，使用 key 或 IP 作为标识）
- * 3. 检查认证服务是否可用
- * 4. 认证服务可用：格式校验 + 权限校验
- * 5. 认证服务不可用：返回 fallback 权限
+ * 1. 限流检查（任何场景下都有效）
+ * 2. 检查认证服务是否可用
+ *    - 不可用 → 跳过格式校验 + 跳过权限校验 → 返回默认权限
+ *    - 可用 → 继续
+ * 3. 格式校验
+ *    - 无效 → 返回默认权限
+ *    - 有效 → 继续
+ * 4. 调用认证服务获取权限等级
  *
  * 设计原则：
  * - 限流在任何场景下有效（本地查表）
- * - 只有认证服务可用时才进行格式校验+权限校验
+ * - 认证服务器不可用时，任意 key 都能通过验证且获取默认权限
  * - 业务服务器不持有密钥
  * - 业务服务器不解析 token 内容
  */
@@ -18,10 +21,9 @@
 import { logInfo, logWarn, logError } from './logger';
 import { checkRateLimit } from './rateLimit';
 import { verifyKey, isAuthServiceAvailable, getFallbackPermissionLevel } from './authClient';
-import { isValidKeyFormat, isGuestKey } from './keyFormat';
+import { isValidKeyFormat } from './keyFormat';
 
-// Re-export for convenience
-export { isValidKeyFormat, isGuestKey } from './keyFormat';
+export { isValidKeyFormat } from './keyFormat';
 
 export interface AuthResult {
   success: boolean;
@@ -68,7 +70,8 @@ function extractClientIp(request: Request): string | null {
  * 获取限流标识（优先使用 key，其次使用 IP）
  */
 function getRateLimitId(request: Request, key: string | null): string {
-  if (key && isValidKeyFormat(key)) {
+  // 有 key 就用 key（不管格式是否有效）
+  if (key) {
     return `key:${key}`;
   }
 
@@ -113,9 +116,9 @@ export async function authenticate(request: Request): Promise<AuthResult> {
   // 4. 检查认证服务是否可用
   const authAvailable = await isAuthServiceAvailable();
 
-  // 5. 认证服务不可用：返回 fallback 权限
+  // 5. 认证服务不可用 → 跳过所有校验，返回默认权限
   if (!authAvailable) {
-    logInfo('[Auth] 认证服务不可用，使用 fallback 权限', {
+    logInfo('[Auth] 认证服务不可用，使用默认权限', {
       rateLimitId,
       permissionLevel: fallbackPermission,
     });
@@ -128,9 +131,9 @@ export async function authenticate(request: Request): Promise<AuthResult> {
     };
   }
 
-  // 6. 认证服务可用：检查 key 是否存在
+  // 6. 认证服务可用 → 格式校验
   if (!key) {
-    logWarn('[Auth] key 缺失，使用 fallback 权限');
+    logWarn('[Auth] key 缺失，使用默认权限');
     return {
       success: true,
       permissionLevel: fallbackPermission,
@@ -138,22 +141,8 @@ export async function authenticate(request: Request): Promise<AuthResult> {
     };
   }
 
-  // 7. 检查是否为游客 key
-  if (isGuestKey(key)) {
-    logInfo('[Auth] 游客 key，使用 fallback 权限', {
-      keyPreview: key.slice(0, 20) + '...',
-    });
-    return {
-      success: true,
-      key,
-      permissionLevel: fallbackPermission,
-      source: 'guest-key',
-    };
-  }
-
-  // 8. 格式校验（针对标准 key）
   if (!isValidKeyFormat(key)) {
-    logWarn('[Auth] key 格式无效，使用 fallback 权限', {
+    logWarn('[Auth] key 格式无效，使用默认权限', {
       keyPreview: key.slice(0, 16) + '...',
     });
     return {
@@ -163,7 +152,7 @@ export async function authenticate(request: Request): Promise<AuthResult> {
     };
   }
 
-  // 9. 调用认证服务验证权限
+  // 7. 调用认证服务获取权限等级
   const verifyResult = await verifyKey(key);
 
   logInfo('[Auth] 鉴权成功', {
