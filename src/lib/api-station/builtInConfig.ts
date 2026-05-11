@@ -5,7 +5,7 @@
 
 import { requestJson } from '@/lib/client-request';
 import type { ModelInfo, ApiConfigValidationStatus } from '@/types/modelConfig';
-import { looksLikeProxyKey } from './proxyKey';
+import { isValidKeyFormat } from './keyFormat';
 
 const USER_REF_KEY = 'built_in_user_ref';
 const BUILT_IN_PROXY_KEY = 'built_in_proxy_key';
@@ -70,7 +70,7 @@ export function getBuiltInApiKey(): string {
       return '';
     }
 
-    if (!looksLikeProxyKey(key)) {
+    if (!isValidKeyFormat(key)) {
       clearBuiltInApiKey();
       return '';
     }

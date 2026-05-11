@@ -3,13 +3,6 @@ import type { PlatformConfig, PlatformManifest } from '@/types/platform';
 
 export type { AppearanceConfig, FeatureFlagsConfig, PlatformConfig, PlatformManifest };
 
-export type ForwardChallengeConfig = {
-  enabled: boolean;
-  difficulty: number;
-  tokenExpireMinutes: number;
-  maxNonceAgeSeconds: number;
-};
-
 export type ForwardModelConfig = {
   id: string;
   targetModel: string;
@@ -25,7 +18,6 @@ export type ForwardModelConfig = {
 
 export type ForwardConfig = {
   version: string;
-  challenge: ForwardChallengeConfig;
   models: ForwardModelConfig[];
 };
 

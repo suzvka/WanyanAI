@@ -4,7 +4,6 @@ export { loadPublishedPlatformConfig, loadForwardConfig, loadRateLimitConfig, cl
 export type {
   AppearanceConfig,
   FeatureFlagsConfig,
-  ForwardChallengeConfig,
   ForwardConfig,
   ForwardModelConfig,
   GlobalRateLimitConfig,

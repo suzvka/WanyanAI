@@ -6,7 +6,6 @@ import path from 'node:path';
 import { validatePlatformConfig, platformManifestSchema, appearanceSchema, featureFlagsSchema } from '@/server/config/schemas';
 import { createLogger } from '@/lib/api-station/logger';
 import type {
-  ForwardChallengeConfig,
   ForwardConfig,
   ForwardModelConfig,
   PlatformConfig,
@@ -20,16 +19,8 @@ const logger = createLogger('platform-config');
 const CONFIG_DIR_NAME = 'platform-config';
 const KEYS_DIR_NAME = 'keys';
 
-const DEFAULT_FORWARD_CHALLENGE: ForwardChallengeConfig = {
-  enabled: false,
-  difficulty: 3,
-  tokenExpireMinutes: 30,
-  maxNonceAgeSeconds: 300,
-};
-
 const DEFAULT_FORWARD_CONFIG: ForwardConfig = {
   version: '1.0',
-  challenge: DEFAULT_FORWARD_CHALLENGE,
   models: [],
 };
 
@@ -159,31 +150,6 @@ function normalizeForwardModel(model: Partial<ForwardModelConfig>): ForwardModel
   };
 }
 
-function normalizeForwardConfig(config: Partial<ForwardConfig>): ForwardConfig {
-  const models = Array.isArray(config.models)
-    ? config.models
-        .map((model) => normalizeForwardModel(model as Partial<ForwardModelConfig>))
-        .filter((model): model is ForwardModelConfig => model !== null)
-    : [];
-
-  return {
-    version: config.version || DEFAULT_FORWARD_CONFIG.version,
-    challenge: {
-      enabled: typeof config.challenge?.enabled === 'boolean' ? config.challenge.enabled : DEFAULT_FORWARD_CHALLENGE.enabled,
-      difficulty: typeof config.challenge?.difficulty === 'number' ? config.challenge.difficulty : DEFAULT_FORWARD_CHALLENGE.difficulty,
-      tokenExpireMinutes:
-        typeof config.challenge?.tokenExpireMinutes === 'number'
-          ? config.challenge.tokenExpireMinutes
-          : DEFAULT_FORWARD_CHALLENGE.tokenExpireMinutes,
-      maxNonceAgeSeconds:
-        typeof config.challenge?.maxNonceAgeSeconds === 'number'
-          ? config.challenge.maxNonceAgeSeconds
-          : DEFAULT_FORWARD_CHALLENGE.maxNonceAgeSeconds,
-    },
-    models,
-  };
-}
-
 function normalizeRateLimitRule(rule: Partial<RateLimitRule>): RateLimitRule {
   return {
     permissionLevel: typeof rule.permissionLevel === 'number' && rule.permissionLevel > 0 ? rule.permissionLevel : 1,
@@ -247,7 +213,7 @@ export async function loadForwardConfig(): Promise<ForwardConfig> {
   }
 
   try {
-    // 从 forward.json 读取 challenge 配置
+    // 从 forward.json 读取版本配置
     const parsed = readPlatformJsonFileSync<Partial<ForwardConfig>>('forward.json');
 
     // 从 keys 目录自动发现所有模型配置
@@ -255,18 +221,6 @@ export async function loadForwardConfig(): Promise<ForwardConfig> {
 
     const normalized: ForwardConfig = {
       version: parsed.version || DEFAULT_FORWARD_CONFIG.version,
-      challenge: {
-        enabled: typeof parsed.challenge?.enabled === 'boolean' ? parsed.challenge.enabled : DEFAULT_FORWARD_CHALLENGE.enabled,
-        difficulty: typeof parsed.challenge?.difficulty === 'number' ? parsed.challenge.difficulty : DEFAULT_FORWARD_CHALLENGE.difficulty,
-        tokenExpireMinutes:
-          typeof parsed.challenge?.tokenExpireMinutes === 'number'
-            ? parsed.challenge.tokenExpireMinutes
-            : DEFAULT_FORWARD_CHALLENGE.tokenExpireMinutes,
-        maxNonceAgeSeconds:
-          typeof parsed.challenge?.maxNonceAgeSeconds === 'number'
-            ? parsed.challenge.maxNonceAgeSeconds
-            : DEFAULT_FORWARD_CHALLENGE.maxNonceAgeSeconds,
-      },
       models,
     };
 
@@ -274,12 +228,12 @@ export async function loadForwardConfig(): Promise<ForwardConfig> {
     return normalized;
   } catch (error) {
     logger.warn('Failed to load forward config, using defaults', { error: String(error) });
-    
+
     const fallbackConfig: ForwardConfig = {
       ...DEFAULT_FORWARD_CONFIG,
       models: [],
     };
-    
+
     forwardCache = { key: cacheKey, value: fallbackConfig };
     return fallbackConfig;
   }

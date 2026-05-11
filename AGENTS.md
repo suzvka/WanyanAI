@@ -32,7 +32,7 @@ src/
 │   └── api/
 │       └── v1/                 # 站内 API（鉴权、限流、转发）
 │           ├── chat/completions/route.ts  # Chat Completions 转发入口
-│           ├── key/route.ts               # 代理密钥签发
+│           ├── key/route.ts               # [废弃] 代理密钥签发
 │           └── models/route.ts            # 模型列表
 ├── components/
 │   ├── evaluate/EvaluateClient.tsx   # 统一渲染组件
@@ -44,6 +44,11 @@ src/
 │   ├── output-modes/           # 输出模式（literary-review、gaokao-essay）
 │   └── analysis-controls/      # 分析控制逻辑
 ├── lib/
+│   ├── api-station/            # 鉴权与限流模块
+│   │   ├── auth.ts             # 统一鉴权入口
+│   │   ├── authClient.ts       # 认证服务客户端
+│   │   ├── authExtractor.ts    # Token 提取工具
+│   │   └── rateLimit.ts        # 限流逻辑
 │   ├── bootstrap/              # 服务端注册表统一初始化
 │   └── registry/               # BaseRegistry 注册表基类
 ├── mcp/                        # 流式 MCP 客户端（单次连接多工具调用）
@@ -89,6 +94,39 @@ keys/                          # 外部 API 模型配置（自动发现 *.json�
 - 内置模型：通过 `/api/v1/chat/completions` 调用中转站
 
 **中转站系统（可插拔）**：所有模型转发通过中转站实现，位于 `src/stations/` 目录。每个中转站实现 `Station` 接口，提供 `getModels()`、`canHandle()`、`forward()` 方法。启动时自动扫描注册，删除目录即可移除功能。框架负责鉴权，中转站仅负责转发。
+
+**简化鉴权架构**：采用单 Token 统一鉴权，key 同时作为限流标识和权限查询凭证。
+- **业务服务器职责**：格式校验 + 限流 + 调用认证服务验证权限
+- **认证服务器职责**：签发 key + 验证 key + 返回权限等级
+- **降级策略**：认证服务离线或 key 无效时降级为游客（permissionLevel=1）
+- **环境变量**：`AUTH_SERVICE_URL` 或 `ACCOUNT_SERVICE_URL` 指定认证服务地址
+
+## 鉴权流程
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        签发阶段                              │
+│  客户端 → 认证服务器（提交身份凭证）→ 返回 key               │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                        请求阶段                              │
+│  ┌─────────────┐                      ┌─────────────┐       │
+│  │   客户端     │────Bearer key───────►│  业务服务器  │       │
+│  │             │                      │             │       │
+│  │             │                      │ 1. 格式校验  │       │
+│  │             │                      │ 2. 限流检查  │       │
+│  │             │                      │ 3. 调用认证  │       │
+│  │             │◄─────────────────────│ 4. 业务处理  │       │
+│  └─────────────┘                      └─────────────┘       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**key 格式**：32-64 字符的字母数字下划线横线组合
+
+**认证服务接口**：
+- 签发：`POST /api/auth/issue`（认证服务器实现）
+- 验证：`POST /api/auth/verify`（认证服务器实现，返回 `{ valid, identityId, permissionLevel }`）
 
 ## 开发规范
 
@@ -175,6 +213,9 @@ interface Station {
 |------|------|
 | `instrumentation.ts` | Next.js 启动钩子，预初始化服务端注册表 |
 | `src/lib/bootstrap/registry-init.ts` | 服务端注册表统一初始化入口 |
+| `src/lib/api-station/auth.ts` | **统一鉴权入口**（格式校验 + 限流 + 认证服务调用） |
+| `src/lib/api-station/authClient.ts` | **认证服务客户端**（调用 /api/auth/verify） |
+| `src/lib/api-station/rateLimit.ts` | 限流逻辑 |
 | `src/server/modules/loader.ts` | 模块扫描、加载、容器验证 |
 | `src/server/output-modes/registry.ts` | 输出模式注册表（继承 BaseRegistry） |
 | `src/server/output-modes/manifest.ts` | 服务端输出模式注册清单（新增输出模式在此添加） |
@@ -197,3 +238,13 @@ interface Station {
 | `src/stations/coze/index.ts` | Coze 内部模型中转站 |
 | `src/app/api/v1/chat/completions/route.ts` | Chat Completions 转发入口（鉴权 + 中转站路由） |
 | `src/app/api/v1/models/route.ts` | 模型列表（聚合所有中转站模型） |
+| `src/types/apiStationAuth.ts` | 鉴权类型定义 |
+
+## 环境变量
+
+| 变量名 | 说明 | 示例 |
+|--------|------|------|
+| `AUTH_SERVICE_URL` | 认证服务地址（优先） | `https://auth.example.com` |
+| `ACCOUNT_SERVICE_URL` | 账户服务地址（兼容） | `https://account.example.com` |
+| `COZE_PROJECT_ENV` | 项目环境（PROD 启用 Coze 中转站） | `PROD` |
+| `DEPLOY_RUN_PORT` | 服务监听端口 | `5000` |
