@@ -39,17 +39,6 @@ export type CreateAnalysisTaskInput = {
   moduleName: string;
 };
 
-export type RuntimeAnalysisTask = {
-  id: string;
-  schedulerKey: string;
-  moduleConfig: PageModuleConfig;
-  modelConfig: ModelConfig;
-  controlSelections: ControlSelections;
-  params: AnalysisParams;
-  input: EvaluationInput;
-  createdAt: string;
-};
-
 export type TaskSubscriptionListener = (record: AnalysisTaskRecord | null) => void;
 
 export type RetryTaskResult = {

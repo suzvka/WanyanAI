@@ -6,10 +6,10 @@ import type { McpToolDefinition } from '@/mcp/types';
  * ModelClient 配置选项
  */
 export type ModelClientOptions = {
-  /** API 基础 URL */
-  baseUrl: string;
-  /** API 密钥 */
-  apiKey: string;
+  /** API 基础 URL（客户端直连模式必须） */
+  baseUrl?: string;
+  /** API 密钥（客户端直连模式必须） */
+  apiKey?: string;
   /** 模型标识 */
   model: string;
   /** 消息列表 */

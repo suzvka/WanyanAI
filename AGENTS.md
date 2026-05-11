@@ -81,7 +81,11 @@ keys/                          # 外部 API 模型配置（自动发现 *.json�
 
 **延迟初始化（统一注册表基类）**：三套注册表均继承 `BaseRegistry<TModule>`（`src/lib/registry/BaseRegistry.ts`），统一延迟初始化、幂等、reset 等生命周期行为。服务端注册表（控件、输出模式）由 `loader.ts` 在模块加载时显式调用 `initialize()`；客户端注册表（容器）通过 `renderContainer()` 的自动初始化守卫或显式调用 `initializeContainers()` 注册。
 
-**Server Action 边界**：`src/features/analysis-tasks/runAnalysisTask.ts` 标记为 `'use server'`，是服务端唯一的任务执行入口。客户端通过 Next.js Server Action 远程调用。
+**客户端模型调用**：模型调用完全在客户端执行，服务端不接触用户 API Key。
+- 服务端只提供资源（提示词、编译结果等）通过 `getAnalysisResources.ts`
+- 客户端使用 `clientAnalysisRunner.ts` 执行分析，Key 始终留在客户端
+- 用户自定义 Key：直接调用第三方 API
+- 内置模型：通过 `/api/v1/chat/completions` 调用中转站
 
 **中转站系统（可插拔）**：所有模型转发通过中转站实现，位于 `src/stations/` 目录。每个中转站实现 `Station` 接口，提供 `getModels()`、`canHandle()`、`forward()` 方法。启动时自动扫描注册，删除目录即可移除功能。框架负责鉴权，中转站仅负责转发。
 
@@ -175,7 +179,8 @@ interface Station {
 | `src/server/instructions/compile.ts` | 动态指令编译（调用 ControlRegistry.compileAll） |
 | `src/server/platform-config/loader.ts` | 平台配置加载 |
 | `src/features/controls/registry.ts` | 控件注册表（继承 BaseRegistry，延迟初始化） |
-| `src/features/analysis-tasks/runAnalysisTask.ts` | **Server Action** — 任务执行入口（'use server'） |
+| `src/features/analysis-tasks/getAnalysisResources.ts` | **Server Action** — 提供分析资源（提示词、编译结果），不接触 API Key |
+| `src/features/analysis-tasks/clientAnalysisRunner.ts` | **客户端** — 分析任务执行器，模型调用完全在客户端 |
 | `src/containers/registry.tsx` | 容器注册表（继承 BaseRegistry，延迟初始化，客户端） |
 | `src/lib/registry/BaseRegistry.ts` | 注册表基类（统一生命周期约定） |
 | `src/providers/PageContext.tsx` | 页面状态管理（controlSelections 初始化读取 definition.initialValue） |
