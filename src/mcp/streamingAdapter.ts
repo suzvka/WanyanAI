@@ -61,32 +61,53 @@ export class StreamingMCPAdapter {
     });
   }
 
+  /**
+   * 获取代理 key
+   *
+   * 如果认证服务不可用，返回一个临时的游客标识，后续鉴权会降级为游客权限
+   */
   private async getProxyKey(): Promise<string> {
     if (this.cachedProxyKey) {
       return this.cachedProxyKey;
     }
 
-    const keyData = await requestJson<{ key?: string; error?: { message?: string } }>('/api/v1/key', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify({}),
-      errorMessage: '获取站内代理凭证失败',
-      networkErrorMessage: '获取站内代理凭证失败，请检查网络后重试',
-    });
-
-    if (!keyData.key) {
-      throw createAppError({
-        code: 'provider_request_failed',
-        message: keyData.error?.message || '获取站内代理凭证失败',
-        retryable: true,
+    try {
+      const keyData = await requestJson<{ key?: string; warning?: string; error?: { message?: string } }>('/api/v1/key', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({}),
+        errorMessage: '获取站内代理凭证失败',
+        networkErrorMessage: '获取站内代理凭证失败，请检查网络后重试',
       });
-    }
 
-    this.cachedProxyKey = keyData.key;
-    return keyData.key;
+      if (keyData.key) {
+        this.cachedProxyKey = keyData.key;
+        return keyData.key;
+      }
+
+      // key 为空，可能是认证服务不可用
+      if (keyData.warning) {
+        logger.warn('认证服务不可用，将使用游客权限', { warning: keyData.warning });
+      } else if (keyData.error) {
+        logger.warn('获取 key 失败，将使用游客权限', { error: keyData.error.message });
+      }
+
+      // 返回一个临时的游客标识，后续鉴权会降级为游客权限
+      // 使用 'guest_local_' 前缀标识这是本地生成的临时标识
+      const guestKey = `guest_local_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      this.cachedProxyKey = guestKey;
+      return guestKey;
+    } catch (error) {
+      logger.warn('获取 key 请求失败，将使用游客权限', { error: String(error) });
+
+      // 返回一个临时的游客标识
+      const guestKey = `guest_local_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      this.cachedProxyKey = guestKey;
+      return guestKey;
+    }
   }
 
   /**

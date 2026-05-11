@@ -1,5 +1,5 @@
 {
-  "url": "",
+  "url": "https://your-auth-service.com",
   "healthCheckIntervalMs": 30000,
   "healthCheckTimeoutMs": 3000,
   "verifyTimeoutMs": 5000,
