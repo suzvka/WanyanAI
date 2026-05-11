@@ -310,3 +310,16 @@ export function clearPlatformConfigRuntimeCaches() {
   rateLimitCache = null;
   authServiceCache = null;
 }
+
+/**
+ * 获取认证服务配置（同步版本，使用缓存）
+ * 供 API 路由使用
+ */
+export function getAuthServiceConfig(): AuthServiceConfig {
+  // 如果缓存存在，直接返回
+  if (authServiceCache) {
+    return authServiceCache.value;
+  }
+  // 否则加载配置
+  return loadAuthServiceConfig();
+}
