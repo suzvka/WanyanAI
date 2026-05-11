@@ -8,37 +8,17 @@ import { validateSiteConfig } from '@/server/config/schemas';
 import type { SiteConfig } from '@/server/config/types';
 import { getBuiltInContainerTypes } from '@/containers/manifest';
 import { getServerOutputModeIds } from '@/server/output-modes';
+import { ensureServerRegistriesInitialized } from '@/lib/bootstrap';
 import type { PageModuleConfig, PageModuleRegistry, ControlsConfig } from '@/types/module';
 
 const logger = createLogger('ModuleLoader');
 
-// 延迟初始化：仅导入引用，不触发副作用
-// 实际注册在 loadPageModuleRegistry() 中显式调用
-import { initializeControls, controlRegistry } from '@/features/controls';
-import { initializeOutputModes } from '@/server/output-modes/registry';
+// 控件注册表引用（用于获取控件定义）
+import { controlRegistry } from '@/features/controls';
 
 // 注意：ContainerRegistry 是客户端注册表（'use client'），
 // 不在此处初始化。客户端容器通过 renderContainer() 的
 // 自动初始化守卫或显式调用 initializeContainers() 注册。
-
-/** 全局注册表是否已初始化 */
-let registriesInitialized = false;
-
-/**
- * 确保所有服务端注册表已初始化（幂等）
- *
- * 统一入口，避免各模块 import 时产生隐式副作用。
- * 在首次加载模块注册表时自动调用。
- *
- * 注意：仅覆盖服务端注册表（Controls、OutputModes）。
- * 客户端注册表（Containers）由客户端自行初始化。
- */
-function ensureRegistriesInitialized(): void {
-  if (registriesInitialized) return;
-  initializeControls();
-  initializeOutputModes();
-  registriesInitialized = true;
-}
 
 const modulesDir = path.join(process.cwd(), 'app-modules');
 
@@ -226,11 +206,11 @@ async function loadModule(moduleDir: string): Promise<PageModuleConfig | null> {
  * 加载页面模块注册表
  *
  * 扫描 app-modules 目录，验证并加载所有模块配置。
- * 首次调用时自动初始化控件注册表和输出模式注册表。
+ * 首次调用时自动初始化服务端注册表。
  */
 export async function loadPageModuleRegistry(): Promise<PageModuleRegistry> {
-  // 延迟初始化：确保全局注册表在首次使用前完成注册
-  ensureRegistriesInitialized();
+  // 确保服务端注册表已初始化（幂等）
+  await ensureServerRegistriesInitialized();
 
   const modules = await scanModules();
   logger.info('已加载模块', { count: modules.length });

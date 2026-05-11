@@ -44,6 +44,7 @@ src/
 │   ├── output-modes/           # 输出模式（literary-review、gaokao-essay）
 │   └── analysis-controls/      # 分析控制逻辑
 ├── lib/
+│   ├── bootstrap/              # 服务端注册表统一初始化
 │   └── registry/               # BaseRegistry 注册表基类
 ├── mcp/                        # 流式 MCP 客户端（单次连接多工具调用）
 ├── server/                     # 模块加载、指令编译、输出模式注册表
@@ -79,7 +80,7 @@ keys/                          # 外部 API 模型配置（自动发现 *.json�
 
 **提示词拼接顺序**：输出模式提示词（`getServerOutputModePrompt`）→ 动态指令（用户选择编译）
 
-**延迟初始化（统一注册表基类）**：三套注册表均继承 `BaseRegistry<TModule>`（`src/lib/registry/BaseRegistry.ts`），统一延迟初始化、幂等、reset 等生命周期行为。服务端注册表（控件、输出模式）由 `loader.ts` 在模块加载时显式调用 `initialize()`；客户端注册表（容器）通过 `renderContainer()` 的自动初始化守卫或显式调用 `initializeContainers()` 注册。
+**中心化初始化（Bootstrap）**：服务端注册表（Controls、OutputModes、Stations）通过 `instrumentation.ts` 在服务启动时统一初始化，由 `src/lib/bootstrap/` 提供中心化入口 `ensureServerRegistriesInitialized()`。确保任何代码路径（页面请求、API 调用）访问注册表前，初始化已完成。客户端注册表（Containers）仍通过 `renderContainer()` 的自动初始化守卫延迟初始化。
 
 **客户端模型调用**：模型调用完全在客户端执行，服务端不接触用户 API Key。
 - 服务端只提供资源（提示词、编译结果等）通过 `getAnalysisResources.ts`
@@ -172,16 +173,18 @@ interface Station {
 
 | 文件 | 职责 |
 |------|------|
-| `src/server/modules/loader.ts` | 模块扫描、加载、容器验证；统一调用 ensureRegistriesInitialized() |
-| `src/server/output-modes/registry.ts` | 输出模式注册表（继承 BaseRegistry，延迟初始化） |
+| `instrumentation.ts` | Next.js 启动钩子，预初始化服务端注册表 |
+| `src/lib/bootstrap/registry-init.ts` | 服务端注册表统一初始化入口 |
+| `src/server/modules/loader.ts` | 模块扫描、加载、容器验证 |
+| `src/server/output-modes/registry.ts` | 输出模式注册表（继承 BaseRegistry） |
 | `src/server/output-modes/manifest.ts` | 服务端输出模式注册清单（新增输出模式在此添加） |
 | `src/server/output-modes.ts` | 服务端输出模式门面（getServerOutputModePrompt 等） |
 | `src/server/instructions/compile.ts` | 动态指令编译（调用 ControlRegistry.compileAll） |
 | `src/server/platform-config/loader.ts` | 平台配置加载 |
-| `src/features/controls/registry.ts` | 控件注册表（继承 BaseRegistry，延迟初始化） |
+| `src/features/controls/registry.ts` | 控件注册表（继承 BaseRegistry） |
 | `src/features/analysis-tasks/getAnalysisResources.ts` | **Server Action** — 提供分析资源（提示词、编译结果），不接触 API Key |
 | `src/features/analysis-tasks/clientAnalysisRunner.ts` | **客户端** — 分析任务执行器，模型调用完全在客户端 |
-| `src/containers/registry.tsx` | 容器注册表（继承 BaseRegistry，延迟初始化，客户端） |
+| `src/containers/registry.tsx` | 容器注册表（继承 BaseRegistry，客户端延迟初始化） |
 | `src/lib/registry/BaseRegistry.ts` | 注册表基类（统一生命周期约定） |
 | `src/providers/PageContext.tsx` | 页面状态管理（controlSelections 初始化读取 definition.initialValue） |
 | `src/mcp/streamingClient.ts` | 流式 MCP 客户端核心 |
