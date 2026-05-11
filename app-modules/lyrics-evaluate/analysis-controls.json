@@ -1,0 +1,80 @@
+{
+  "groups": [
+    {
+      "id": "basic_context",
+      "title": "基础信息",
+      "controls": [
+        {
+          "title": "目标受众",
+          "id": "target_audience",
+          "options": [
+            {
+              "label": "大众听众",
+              "value": "general",
+              "promptText": "你是一名音乐爱好者，这首歌在你的歌单上第一次出现。你基于自己的品味来评判作品，不会迁就音乐风格。"
+            },
+            {
+              "label": "领域爱好者",
+              "value": "enthusiast",
+              "promptText": "你是歌词所属风格和流派的爱好者，同类的歌你听过很多了，希望这次能找到一点心意。"
+            },
+            {
+              "label": "圈外人",
+              "value": "outsider",
+              "promptText": "这首歌与你的音乐品味风格迥异，但它出现在了你的歌单里。你用圈外人的视角理解它。"
+            }
+          ]
+        },
+        {
+          "id": "evaluation_lens",
+          "title": "评价视角",
+          "options": [
+            {
+              "label": "文艺",
+              "value": "literary",
+              "promptText": "这是一首文艺歌词，评级标准基于其对特定受众群体的情感体验峰值，评价视角侧重于歌词的艺术性和情感深度。"
+            },
+            {
+              "label": "商业",
+              "value": "commercial",
+              "promptText": "这是一首商业歌词，评级标准基于其市场接受度和对特定受众群体的困惑度，评价视角侧重于与流行趋势的契合度"
+            },
+            {
+              "label": "影视OST",
+              "value": "ost",
+              "promptText": "这是一首影视OST歌词，评级标准基于流畅性、画面感和情感表达的契合度，着重审查内涵凝聚力。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "内容倾向",
+      "id": "content_bias",
+      "description": "",
+      "controls": [
+        {
+          "title": "优先视角",
+          "id": "priority_lens",
+          "options": [
+            {
+              "label": "均衡"
+            },
+            {
+              "label": "音乐性",
+              "promptText": "你对歌词节奏和韵律的评价更激进——你看重歌词随着旋律顺畅地流淌。"
+            },
+            {
+              "label": "文学性",
+              "promptText": "你对歌词的文学性和意境的评价更激进——你以诗文的标准要求歌词。"
+            },
+            {
+              "label": "艺术性",
+              "promptText": "你对歌词的艺术性和创意的评价更激进——你注重歌词的独特性和创新性。"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
