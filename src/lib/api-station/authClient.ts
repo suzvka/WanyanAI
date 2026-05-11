@@ -4,13 +4,13 @@
  * 负责调用认证服务的 key 验证接口。
  * 业务服务器不持有密钥，所有验证委托认证服务。
  *
- * 降级策略：
+ * 降级策略（静默）：
  * - 认证服务未配置 → 游客
  * - 认证服务离线/超时 → 游客
  * - key 无效 → 游客
  */
 
-import { logInfo, logWarn, logError } from './logger';
+import { logInfo, logError } from './logger';
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || process.env.ACCOUNT_SERVICE_URL || '';
 const REQUEST_TIMEOUT_MS = 3000;
@@ -19,7 +19,7 @@ export interface AuthVerifyResult {
   valid: boolean;
   identityId?: string;
   permissionLevel: number;
-  source: 'auth-service' | 'offline-fallback' | 'invalid-key-fallback';
+  source: 'auth-service' | 'offline-fallback' | 'invalid-key-fallback' | 'no-auth-service';
 }
 
 /**
@@ -29,10 +29,9 @@ export interface AuthVerifyResult {
  * @returns 验证结果，始终返回有效结果（降级为游客）
  */
 export async function verifyKey(key: string): Promise<AuthVerifyResult> {
-  // 认证服务未配置 → 游客
+  // 认证服务未配置 → 游客（静默）
   if (!AUTH_SERVICE_URL) {
-    logWarn('[AuthClient] 未配置认证服务地址，降级为游客');
-    return { valid: true, permissionLevel: 1, source: 'offline-fallback' };
+    return { valid: true, permissionLevel: 1, source: 'no-auth-service' };
   }
 
   // key 为空 → 游客
@@ -53,11 +52,8 @@ export async function verifyKey(key: string): Promise<AuthVerifyResult> {
 
     clearTimeout(timeoutId);
 
-    // 认证服务离线或错误 → 游客
+    // 认证服务离线或错误 → 游客（静默）
     if (!response.ok) {
-      logWarn('[AuthClient] 认证服务返回非 200 状态，降级为游客', {
-        status: response.status,
-      });
       return { valid: true, permissionLevel: 1, source: 'offline-fallback' };
     }
 
@@ -76,16 +72,10 @@ export async function verifyKey(key: string): Promise<AuthVerifyResult> {
       };
     }
 
-    // key 无效 → 游客
-    logInfo('[AuthClient] key 无效，降级为游客');
+    // key 无效 → 游客（静默）
     return { valid: true, permissionLevel: 1, source: 'invalid-key-fallback' };
-  } catch (error) {
-    // 认证服务不可达 → 游客
-    if (error instanceof Error && error.name === 'AbortError') {
-      logWarn('[AuthClient] 认证服务请求超时，降级为游客');
-    } else {
-      logError('[AuthClient] 认证服务请求失败', error);
-    }
+  } catch {
+    // 认证服务不可达 → 游客（静默）
     return { valid: true, permissionLevel: 1, source: 'offline-fallback' };
   }
 }
