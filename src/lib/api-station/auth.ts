@@ -48,14 +48,6 @@ export function extractKey(request: Request): string | null {
 /**
  * 统一鉴权入口
  *
- * 降级策略：
- * - 无 key → 游客权限（使用 IP 作为限流标识）
- * - key 格式无效 → 游客权限
- * - 认证服务离线 → 游客权限
- * - key 无效 → 游客权限
- *
- * 只有触发限流时才会拒绝请求。
- *
  * @param request - 请求对象
  * @returns 鉴权结果
  */
@@ -63,59 +55,26 @@ export async function authenticate(request: Request): Promise<AuthResult> {
   // 1. 提取 key
   const key = extractKey(request);
 
-  // 2. 无 key → 降级为游客（使用 IP 作为限流标识）
+  // 2. 格式校验
   if (!key) {
-    const clientIp = extractClientIp(request) || 'anonymous';
-    const rateLimitKey = `guest:${clientIp}`;
-
-    logInfo('[Auth] 无 key，降级为游客', { rateLimitKey });
-
-    // 限流检查
-    const rateLimitResult = checkRateLimit({ subjectId: rateLimitKey, permissionLevel: 1 });
-    if (!rateLimitResult.allowed) {
-      logError('[Auth] 游客触发限流', { rateLimitKey });
-      return {
-        success: false,
-        error: rateLimitResult.reason || 'Rate limited',
-        errorCode: 'RATE_LIMITED',
-      };
-    }
-
+    logError('[Auth] 鉴权失败: key 缺失');
     return {
-      success: true,
-      key: rateLimitKey,
-      permissionLevel: 1, // 游客
-      source: 'no-key-fallback',
+      success: false,
+      error: 'Missing key',
+      errorCode: 'MISSING_KEY',
     };
   }
 
-  // 3. key 格式无效 → 降级为游客
   if (!isValidKeyFormat(key)) {
-    const clientIp = extractClientIp(request) || 'anonymous';
-    const rateLimitKey = `invalid-key:${clientIp}`;
-
-    logInfo('[Auth] key 格式无效，降级为游客', { keyPreview: key.slice(0, 16) + '...' });
-
-    // 限流检查
-    const rateLimitResult = checkRateLimit({ subjectId: rateLimitKey, permissionLevel: 1 });
-    if (!rateLimitResult.allowed) {
-      logError('[Auth] 无效 key 触发限流', { rateLimitKey });
-      return {
-        success: false,
-        error: rateLimitResult.reason || 'Rate limited',
-        errorCode: 'RATE_LIMITED',
-      };
-    }
-
+    logError('[Auth] 鉴权失败: key 格式无效', { keyPreview: key.slice(0, 16) + '...' });
     return {
-      success: true,
-      key: rateLimitKey,
-      permissionLevel: 1, // 游客
-      source: 'invalid-key-fallback',
+      success: false,
+      error: 'Invalid key format',
+      errorCode: 'INVALID_KEY_FORMAT',
     };
   }
 
-  // 4. 限流检查（以 key 为 ID，使用最低权限等级检查）
+  // 3. 限流检查（以 key 为 ID，使用最低权限等级检查）
   const rateLimitResult = checkRateLimit({ subjectId: key, permissionLevel: 1 });
   if (!rateLimitResult.allowed) {
     logError('[Auth] 鉴权失败: 触发限流', { keyPreview: key.slice(0, 8) + '...' });
@@ -126,7 +85,7 @@ export async function authenticate(request: Request): Promise<AuthResult> {
     };
   }
 
-  // 5. 调用认证服务
+  // 4. 调用认证服务
   const verifyResult = await verifyKey(key);
 
   logInfo('[Auth] 鉴权成功', {
@@ -142,25 +101,6 @@ export async function authenticate(request: Request): Promise<AuthResult> {
     permissionLevel: verifyResult.permissionLevel,
     source: verifyResult.source,
   };
-}
-
-/**
- * 从请求中提取客户端 IP
- */
-function extractClientIp(request: Request): string | null {
-  const forwardedFor = request.headers.get('X-Forwarded-For');
-  if (forwardedFor) {
-    const ip = forwardedFor.split(',')[0]?.trim();
-    if (ip) return ip;
-  }
-
-  const realIp = request.headers.get('X-Real-IP');
-  if (realIp) return realIp.trim();
-
-  const cfIp = request.headers.get('CF-Connecting-IP');
-  if (cfIp) return cfIp.trim();
-
-  return null;
 }
 
 // ============ 兼容旧接口（过渡期） ============
