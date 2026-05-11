@@ -18,10 +18,10 @@
 import { logInfo, logWarn, logError } from './logger';
 import { checkRateLimit } from './rateLimit';
 import { verifyKey, isAuthServiceAvailable, getFallbackPermissionLevel } from './authClient';
-import { isValidKeyFormat } from './keyFormat';
+import { isValidKeyFormat, isGuestKey } from './keyFormat';
 
 // Re-export for convenience
-export { isValidKeyFormat } from './keyFormat';
+export { isValidKeyFormat, isGuestKey } from './keyFormat';
 
 export interface AuthResult {
   success: boolean;
@@ -138,7 +138,20 @@ export async function authenticate(request: Request): Promise<AuthResult> {
     };
   }
 
-  // 7. 格式校验
+  // 7. 检查是否为游客 key
+  if (isGuestKey(key)) {
+    logInfo('[Auth] 游客 key，使用 fallback 权限', {
+      keyPreview: key.slice(0, 20) + '...',
+    });
+    return {
+      success: true,
+      key,
+      permissionLevel: fallbackPermission,
+      source: 'guest-key',
+    };
+  }
+
+  // 8. 格式校验（针对标准 key）
   if (!isValidKeyFormat(key)) {
     logWarn('[Auth] key 格式无效，使用 fallback 权限', {
       keyPreview: key.slice(0, 16) + '...',
@@ -150,7 +163,7 @@ export async function authenticate(request: Request): Promise<AuthResult> {
     };
   }
 
-  // 8. 调用认证服务验证权限
+  // 9. 调用认证服务验证权限
   const verifyResult = await verifyKey(key);
 
   logInfo('[Auth] 鉴权成功', {

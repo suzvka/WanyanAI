@@ -23,24 +23,25 @@ export async function POST(request: Request) {
 
   // 检查认证服务是否配置
   if (!config || !config.url) {
-    logger.warn('认证服务未配置，返回空 key');
+    logger.warn('认证服务未配置，返回游客 key');
+    // 返回一个临时游客标识，5 分钟后过期
+    const guestKey = `guest_local_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     return NextResponse.json({
-      key: null,
-      error: {
-        message: 'Auth service not configured',
-        type: 'config_error',
-        code: 'AUTH_SERVICE_NOT_CONFIGURED',
-      },
+      key: guestKey,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+      warning: 'Auth service not configured, using guest mode',
     });
   }
 
   // 检查认证服务是否可用
   if (!(await isAuthServiceAvailable())) {
-    logger.warn('认证服务不可用，返回空 key（后续将降级为游客）');
-    // 返回空 key，让后续鉴权降级为游客
+    logger.warn('认证服务不可用，返回游客 key');
+    // 返回一个临时游客标识，5 分钟后过期
+    const guestKey = `guest_local_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     return NextResponse.json({
-      key: null,
-      warning: 'Auth service unavailable, will fallback to guest',
+      key: guestKey,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+      warning: 'Auth service unavailable, using guest mode',
     });
   }
 
