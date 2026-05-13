@@ -1,7 +1,7 @@
 'use client';
 
 import { createElement, type ComponentType, type ReactNode } from 'react';
-import { getOutputModeManifest } from './manifest';
+import { getOutputModeManifest, getOutputModeMcpTools } from './manifest';
 
 // 导出渲染器类型
 export type { RendererProps } from './renderer';
@@ -37,3 +37,6 @@ export function renderOutputMode(
   const renderer = getOutputModeRenderer(outputModeId);
   return renderer ? createElement(renderer, props) : null;
 }
+
+// 导出 MCP 工具获取函数
+export { getOutputModeMcpTools };

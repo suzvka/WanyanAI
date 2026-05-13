@@ -1,28 +1,38 @@
-import { requestJson } from '@/lib/client-request';
+import { compileMcpPrompt } from '@/mcp';
 import { createAppError } from '@/types/errors';
-import type { McpCompileErrorResponse, McpCompileSuccessResponse } from '@/mcp';
+import { outputModeRegistry } from '@/server/output-modes/registry';
+import type { McpCompileSuccessResponse, McpToolDefinition } from '@/mcp';
 
 type RequestCompiledMcpPromptPayload = {
   outputModeId?: string;
 };
 
+/**
+ * 请求编译 MCP 提示词
+ * 
+ * 在服务端直接调用 compileMcpPrompt，避免 HTTP 请求
+ */
 export async function requestCompiledMcpPrompt(payload: RequestCompiledMcpPromptPayload = {}) {
-  const data = await requestJson<McpCompileSuccessResponse | McpCompileErrorResponse>('/api/mcp/compile', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-    errorMessage: 'MCP 指令请求失败。',
-    networkErrorMessage: 'MCP 指令请求失败，请检查网络连接后重试。',
-  });
+  try {
+    const { outputModeId } = payload;
+    let tools: McpToolDefinition[] = [];
 
-  if (!data || !('toolPromptText' in data)) {
+    if (outputModeId) {
+      tools = outputModeRegistry.getTools(outputModeId);
+      if (tools.length === 0) {
+        throw createAppError({
+          code: 'config_invalid',
+          message: `未找到输出模式模块：${outputModeId}`,
+        });
+      }
+    }
+
+    const compiled = compileMcpPrompt(tools);
+    return compiled as McpCompileSuccessResponse;
+  } catch (error) {
     throw createAppError({
       code: 'unknown_error',
-      message: 'MCP 指令响应格式异常。',
+      message: error instanceof Error ? error.message : 'MCP 提示词编译失败',
     });
   }
-
-  return data;
 }
