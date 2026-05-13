@@ -15,7 +15,12 @@ const subscoreIdValues = defaultSubscoreIds as [DefaultSubscoreId, ...DefaultSub
 
 export const modelMinimalSummarySchema = z
   .object({
-    title: z.string().trim().min(1).optional(),
+    // title 可选：空字符串会被转为 undefined
+    title: z
+      .string()
+      .trim()
+      .transform((val) => (val === '' ? undefined : val))
+      .optional(),
     overview: z.string().trim().min(1),
   })
   .strict();
