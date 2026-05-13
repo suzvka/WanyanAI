@@ -37,6 +37,9 @@ export const gaokaoEssayModule: OutputModeModule = {
   mcpToolDefinitions: getGaokaoEssayMcpTools(),
 
   validate: (data: unknown) => {
+    // 调试日志
+    console.log('[gaokao-essay validate] Raw data:', JSON.stringify(data, null, 2));
+    
     if (!data || typeof data !== 'object') {
       return {
         success: false,
@@ -46,6 +49,15 @@ export const gaokaoEssayModule: OutputModeModule = {
 
     const parsed = modelMinimalReportSchema.safeParse(data);
     if (!parsed.success) {
+      // 调试日志：打印详细错误
+      console.error('[gaokao-essay validate] Validation failed:', {
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+          code: issue.code,
+        })),
+      });
+      
       const errors: Array<{ path: string; message: string }> = [];
       for (const issue of parsed.error.issues as Array<{ path: Array<string | number>; message: string }>) {
         errors.push({
@@ -77,9 +89,9 @@ export const gaokaoEssayModule: OutputModeModule = {
 
     const subscoresRaw = (collectedData.collect_subscore || []) as Array<{
       id: string;
-      label: string;
+      label?: string;
       grade: string;
-      score: number;
+      score?: number;
       rationale: string;
     }>;
 
@@ -87,7 +99,12 @@ export const gaokaoEssayModule: OutputModeModule = {
     for (const subscore of subscoresRaw) {
       subscoreMap.set(subscore.id, subscore);
     }
-    const subscoresData = Array.from(subscoreMap.values());
+    // 只保留验证 schema 需要的字段
+    const subscoresData = Array.from(subscoreMap.values()).map((s) => ({
+      id: s.id,
+      grade: s.grade,
+      rationale: s.rationale,
+    }));
 
     const conclusionData = collectedData.collect_conclusion?.[0] as {
       rationale: string;

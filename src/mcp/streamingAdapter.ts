@@ -217,10 +217,23 @@ export class StreamingMCPAdapter {
             // 工具含义由 OutputModeModule.resolveToolCall() 解释。
             if (toolEvent.result?.terminate === true) {
               logger.info('Tool triggered termination', { toolName: toolEvent.name });
+              
+              // 将收集的数据合并到 params 中，支持 finalize_report 场景
+              const mergedParams = Object.keys(this.collectedData).length > 0
+                ? { ...toolEvent.params, ...this.collectedData }
+                : toolEvent.params;
+              
               this.capturedToolCall = {
                 name: toolEvent.name,
-                params: toolEvent.params,
+                params: mergedParams,
               };
+              
+              if (Object.keys(this.collectedData).length > 0) {
+                logger.debug('数据已合并到终止工具调用', { 
+                  toolName: toolEvent.name,
+                  collectedKeys: Object.keys(this.collectedData),
+                });
+              }
             }
 
             if (toolEvent.result?.ok === false) {

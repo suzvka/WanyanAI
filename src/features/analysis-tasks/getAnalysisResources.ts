@@ -103,6 +103,13 @@ export async function validateAnalysisOutput(input: {
 }> {
   const { outputModeId, toolName, toolParams } = input;
 
+  // 调试日志
+  console.log('[validateAnalysisOutput] Input:', {
+    outputModeId,
+    toolName,
+    toolParamsKeys: Object.keys(toolParams),
+  });
+
   // 1. 解析工具调用
   const resolution = resolveOutputModeToolCall(outputModeId, toolName, toolParams);
 
@@ -128,20 +135,46 @@ export async function validateAnalysisOutput(input: {
   } else if (resolution.type === 'data') {
     toolData = resolution.data ?? {};
   } else if (resolution.type === 'finalize') {
-    const assembledData = assembleOutputModeData(outputModeId, {} as Record<string, unknown[]>);
-    if (!assembledData.success) {
-      return {
-        success: false,
-        errors: [{ path: '(root)', message: assembledData.error || '数据拼装失败' }],
-      };
+    // 检查 toolParams 是否包含收集的数据（来自 streamingAdapter 的合并）
+    const hasCollectedData = Object.keys(toolParams).some(key => 
+      key.startsWith('collect_') && Array.isArray(toolParams[key])
+    );
+    
+    console.log('[validateAnalysisOutput] Finalize branch:', {
+      hasCollectedData,
+      toolParamsKeys: Object.keys(toolParams),
+    });
+    
+    if (hasCollectedData) {
+      // 使用传入的收集数据
+      const assembledData = assembleOutputModeData(outputModeId, toolParams as Record<string, unknown[]>);
+      if (!assembledData.success) {
+        return {
+          success: false,
+          errors: [{ path: '(root)', message: assembledData.error || '数据拼装失败' }],
+        };
+      }
+      toolData = assembledData.data ?? {};
+    } else {
+      // 兼容旧逻辑：传入空对象
+      const assembledData = assembleOutputModeData(outputModeId, {} as Record<string, unknown[]>);
+      if (!assembledData.success) {
+        return {
+          success: false,
+          errors: [{ path: '(root)', message: assembledData.error || '数据拼装失败' }],
+        };
+      }
+      toolData = assembledData.data ?? {};
     }
-    toolData = assembledData.data ?? {};
   } else {
     return {
       success: false,
       errors: [{ path: '(root)', message: `未知工具调用: ${toolName}` }],
     };
   }
+
+  // 调试日志：打印组装后的数据
+  console.log('[validateAnalysisOutput] Assembled toolData:', JSON.stringify(toolData, null, 2));
 
   // 2. 验证数据结构
   const validation = validateOutputModeData(outputModeId, toolData);

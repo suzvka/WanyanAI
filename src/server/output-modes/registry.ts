@@ -41,6 +41,12 @@ class OutputModeRegistryImpl extends BaseRegistry<OutputModeModule> implements I
         errors: [{ path: '', message: `未找到输出模式：${id}` }],
       };
     }
+    // 调试日志
+    logger.info('Validating output mode data', { 
+      outputModeId: id, 
+      dataType: typeof data,
+      dataKeys: data && typeof data === 'object' ? Object.keys(data) : 'N/A',
+    });
     return outputMode.validate(data);
   }
 
