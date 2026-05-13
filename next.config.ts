@@ -24,22 +24,13 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // outputFileTracingRoot: path.resolve(__dirname, '../../'),  // Uncomment and add 'import path from "path"' if needed
-  /* config options here */
-  allowedDevOrigins: [
-    '9a8651b5-91e5-46ea-abe1-6d990ef7260b.dev.coze.site',
-    'vefaas-gwozwlfx-1fpxkvrzba-d7915k030ki0a103ler0-sandbox.sandbox-dev.coze-coding.bytedance.net',
-    '.dev.coze.site',
-    '.sandbox-dev.coze-coding.bytedance.net',
-  ],
+  // 允许所有来源访问（支持任意域名部署）
+  // 不再硬编码特定域名，项目可部署到任意服务器
   experimental: {
     serverActions: {
-      allowedOrigins: [
-        '9a8651b5-91e5-46ea-abe1-6d990ef7260b.dev.coze.site',
-        'vefaas-gwozwlfx-1fpxkvrzba-d7915k030ki0a103ler0-sandbox.sandbox-dev.coze-coding.bytedance.net',
-        '.dev.coze.site',
-        '.sandbox-dev.coze-coding.bytedance.net',
-      ],
+      // 使用 '*' 允许所有来源的 Server Actions 请求
+      // 这样项目可以在任意域名下运行，无需额外配置
+      allowedOrigins: ['*'],
     },
   },
   async headers() {
