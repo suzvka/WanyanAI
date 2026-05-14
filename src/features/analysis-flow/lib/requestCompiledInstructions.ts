@@ -1,4 +1,4 @@
-import { requestJson } from '@/lib/client-request';
+import { compileDynamicInstructions } from '@/server/instructions/compile';
 import { createAppError } from '@/types/errors';
 import type {
   CompileInstructionsErrorResponse,
@@ -10,23 +10,19 @@ type RequestCompiledInstructionsPayload = {
   configVersion: string;
 };
 
+/**
+ * 请求编译动态指令
+ * 
+ * 在服务端直接调用 compileDynamicInstructions，避免 HTTP 请求
+ */
 export async function requestCompiledInstructions(payload: RequestCompiledInstructionsPayload) {
-  const data = await requestJson<CompileInstructionsSuccessResponse | CompileInstructionsErrorResponse>('/api/instructions/compile', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-    errorMessage: '动态指令请求失败。',
-    networkErrorMessage: '动态指令请求失败，请检查网络连接后重试。',
-  });
-
-  if (!data || !('instructionText' in data)) {
+  try {
+    const compiled = await compileDynamicInstructions(payload);
+    return compiled as CompileInstructionsSuccessResponse;
+  } catch (error) {
     throw createAppError({
       code: 'unknown_error',
-      message: '动态指令响应格式异常。',
+      message: error instanceof Error ? error.message : '动态指令编译失败',
     });
   }
-
-  return data;
 }

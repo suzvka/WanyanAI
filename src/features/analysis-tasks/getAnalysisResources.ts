@@ -5,15 +5,19 @@
  *
  * 这些 Server Actions 只提供资源（提示词、编译结果等），
  * 不涉及模型调用和 API Key，确保服务端不知道客户端的密钥。
+ *
+ * 注意：MCP 工具定义不在服务端获取，因为它们包含不可序列化的 handler 和 Zod schema。
+ * 客户端应该直接使用 getOutputModeMcpTools() 获取工具定义。
  */
 
+import { headers } from 'next/headers';
+import { createLogger } from '@/lib/api-station/logger';
 import {
   requestCompiledInstructions,
   requestCompiledMcpPrompt,
 } from '@/features/analysis-flow/lib';
 import {
   getServerOutputModePrompt,
-  getOutputModeTools,
   validateOutputModeData,
   buildOutputModeScoringContext,
   assembleOutputModeData,
@@ -22,10 +26,13 @@ import {
 import type { ControlSelections } from '@/providers/PageContext';
 import type { PageModuleConfig } from '@/types/module';
 
+const logger = createLogger('getAnalysisResources');
+
 /**
  * 获取分析任务所需的资源
  *
  * 返回客户端调用模型所需的所有资源，但不执行模型调用。
+ * 注意：MCP 工具定义需要客户端通过 getOutputModeMcpTools() 获取。
  */
 export async function getAnalysisResources(input: {
   moduleConfig: PageModuleConfig;
@@ -34,8 +41,26 @@ export async function getAnalysisResources(input: {
   systemPrompt: string;
   instructionText: string;
   mcpToolText: string;
-  mcpToolDefinitions: ReturnType<typeof getOutputModeTools>;
 }> {
+  // 调试日志：记录请求头信息
+  try {
+    const headersList = await headers();
+    const origin = headersList.get('origin');
+    const host = headersList.get('host');
+    const forwardedHost = headersList.get('x-forwarded-host');
+    const forwardedProto = headersList.get('x-forwarded-proto');
+    
+    logger.info('Server Action called', {
+      origin,
+      host,
+      forwardedHost,
+      forwardedProto,
+      moduleSlug: input.moduleConfig?.manifest?.slug,
+    });
+  } catch (e) {
+    logger.error('Failed to get headers', e);
+  }
+
   const { moduleConfig, controlSelections } = input;
 
   // 1. 获取系统提示词
@@ -55,14 +80,10 @@ export async function getAnalysisResources(input: {
     outputModeId: moduleConfig.manifest.outputMode,
   });
 
-  // 4. 获取 MCP 工具定义
-  const mcpToolDefinitions = getOutputModeTools(moduleConfig.manifest.outputMode);
-
   return {
     systemPrompt,
     instructionText: compiledInstructions.instructionText,
     mcpToolText: compiledMcpPrompt.toolPromptText,
-    mcpToolDefinitions,
   };
 }
 
@@ -81,6 +102,13 @@ export async function validateAnalysisOutput(input: {
   errors?: Array<{ path: string; message: string }>;
 }> {
   const { outputModeId, toolName, toolParams } = input;
+
+  // 调试日志
+  console.log('[validateAnalysisOutput] Input:', {
+    outputModeId,
+    toolName,
+    toolParamsKeys: Object.keys(toolParams),
+  });
 
   // 1. 解析工具调用
   const resolution = resolveOutputModeToolCall(outputModeId, toolName, toolParams);
@@ -107,20 +135,46 @@ export async function validateAnalysisOutput(input: {
   } else if (resolution.type === 'data') {
     toolData = resolution.data ?? {};
   } else if (resolution.type === 'finalize') {
-    const assembledData = assembleOutputModeData(outputModeId, {} as Record<string, unknown[]>);
-    if (!assembledData.success) {
-      return {
-        success: false,
-        errors: [{ path: '(root)', message: assembledData.error || '数据拼装失败' }],
-      };
+    // 检查 toolParams 是否包含收集的数据（来自 streamingAdapter 的合并）
+    const hasCollectedData = Object.keys(toolParams).some(key => 
+      key.startsWith('collect_') && Array.isArray(toolParams[key])
+    );
+    
+    console.log('[validateAnalysisOutput] Finalize branch:', {
+      hasCollectedData,
+      toolParamsKeys: Object.keys(toolParams),
+    });
+    
+    if (hasCollectedData) {
+      // 使用传入的收集数据
+      const assembledData = assembleOutputModeData(outputModeId, toolParams as Record<string, unknown[]>);
+      if (!assembledData.success) {
+        return {
+          success: false,
+          errors: [{ path: '(root)', message: assembledData.error || '数据拼装失败' }],
+        };
+      }
+      toolData = assembledData.data ?? {};
+    } else {
+      // 兼容旧逻辑：传入空对象
+      const assembledData = assembleOutputModeData(outputModeId, {} as Record<string, unknown[]>);
+      if (!assembledData.success) {
+        return {
+          success: false,
+          errors: [{ path: '(root)', message: assembledData.error || '数据拼装失败' }],
+        };
+      }
+      toolData = assembledData.data ?? {};
     }
-    toolData = assembledData.data ?? {};
   } else {
     return {
       success: false,
       errors: [{ path: '(root)', message: `未知工具调用: ${toolName}` }],
     };
   }
+
+  // 调试日志：打印组装后的数据
+  console.log('[validateAnalysisOutput] Assembled toolData:', JSON.stringify(toolData, null, 2));
 
   // 2. 验证数据结构
   const validation = validateOutputModeData(outputModeId, toolData);

@@ -5,9 +5,10 @@
  *
  * 流程：
  * 1. 从服务端获取资源（提示词、编译结果等）
- * 2. 使用客户端持有的 Key 调用模型
- * 3. 处理流式响应和进度事件
- * 4. 验证结果并返回报告
+ * 2. 客户端直接获取 MCP 工具定义
+ * 3. 使用客户端持有的 Key 调用模型
+ * 4. 处理流式响应和进度事件
+ * 5. 验证结果并返回报告
  */
 
 import { modelClient } from '@/services/model-client';
@@ -18,6 +19,7 @@ import {
   buildScoringContext,
   buildRetryMessage,
 } from '@/features/analysis-tasks/getAnalysisResources';
+import { getOutputModeMcpTools } from '@/features/output-modes';
 import { buildAnalysisMessages } from '@/features/analysis-flow/lib/buildAnalysisMessages';
 import type { ModelConfig } from '@/types/modelConfig';
 import type { PageModuleConfig } from '@/types/module';
@@ -27,6 +29,11 @@ import type { PersistedAnalysisReport } from '@/types/analysis';
 import type { ProgressStage } from '@/features/analysis-progress';
 
 const MAX_VALIDATION_REPAIR_ATTEMPTS = 1;
+
+// 客户端调试日志
+const clientLog = (message: string, data?: unknown) => {
+  console.log(`[clientAnalysisRunner] ${message}`, data !== undefined ? data : '');
+};
 
 /**
  * 默认进度阶段定义
@@ -130,10 +137,28 @@ export async function runClientAnalysis(
     // === 阶段 2: 获取服务端资源 ===
     progressController.handleEvent({ type: 'workflow-stage', stage: 'fetch-template', timestamp: Date.now() });
 
-    const resources = await getAnalysisResources({
-      moduleConfig,
-      controlSelections,
+    clientLog('Calling getAnalysisResources', {
+      moduleSlug: moduleConfig?.manifest?.slug,
+      outputMode: moduleConfig?.manifest?.outputMode,
     });
+
+    let resources;
+    try {
+      resources = await getAnalysisResources({
+        moduleConfig,
+        controlSelections,
+      });
+      clientLog('getAnalysisResources succeeded', {
+        hasSystemPrompt: !!resources?.systemPrompt,
+        hasInstructionText: !!resources?.instructionText,
+      });
+    } catch (resourceError) {
+      clientLog('getAnalysisResources failed', {
+        error: resourceError instanceof Error ? resourceError.message : String(resourceError),
+        stack: resourceError instanceof Error ? resourceError.stack : undefined,
+      });
+      throw resourceError;
+    }
 
     // === 阶段 3: 构建提示词 ===
     progressController.handleEvent({ type: 'workflow-stage', stage: 'build-prompt', timestamp: Date.now() });
@@ -150,6 +175,10 @@ export async function runClientAnalysis(
     let attemptMessages = [...initialMessages];
     let finalValidationData: unknown;
 
+    // 客户端直接获取 MCP 工具定义
+    const mcpToolDefinitions = getOutputModeMcpTools(moduleConfig.manifest.outputMode);
+    clientLog('MCP tools loaded', { toolCount: mcpToolDefinitions.length, tools: mcpToolDefinitions.map(t => t.name) });
+
     for (let attempt = 0; attempt <= MAX_VALIDATION_REPAIR_ATTEMPTS; attempt += 1) {
       progressController.handleEvent({ type: 'workflow-stage', stage: 'request-model', timestamp: Date.now() });
 
@@ -161,7 +190,7 @@ export async function runClientAnalysis(
         messages: attemptMessages,
         temperature: 0.7,
         events: progressController.createEventHandlers(),
-        mcpToolDefinitions: resources.mcpToolDefinitions,
+        mcpToolDefinitions,
       });
 
       progressController.handleEvent({ type: 'workflow-stage', stage: 'parse-mcp', timestamp: Date.now() });

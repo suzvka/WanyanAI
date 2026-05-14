@@ -1,16 +1,15 @@
 import { stationRegistry, initializeStations } from '@/stations';
-import { authenticateUnifiedToken } from '@/lib/api-station/auth';
-import { extractUnifiedToken } from '@/lib/api-station/authExtractor';
+import { authenticate, extractKey } from '@/lib/api-station/auth';
 import { logInfo, logError } from '@/lib/api-station/logger';
 
-function toSubjectPreview(subjectId: string | undefined): string {
-  return subjectId ? `${subjectId.slice(0, 8)}...` : 'not_provided';
+function toKeyPreview(key: string | undefined): string {
+  return key ? `${key.slice(0, 8)}...` : 'not_provided';
 }
 
 /**
  * GET /api/v1/models
- * 获取当前 token 可用的模型列表。
- * 
+ * 获取当前 key 可用的模型列表。
+ *
  * 模型列表来自所有已注册的中转站。
  */
 export async function GET(request: Request) {
@@ -20,14 +19,13 @@ export async function GET(request: Request) {
     // 确保中转站已初始化（幂等操作）
     initializeStations();
 
-    const unifiedToken = extractUnifiedToken(request);
-
     logInfo('[API:Models] 收到模型列表请求', {
       requestId,
-      hasToken: Boolean(unifiedToken),
+      hasKey: Boolean(extractKey(request)),
     });
 
-    const authResult = await authenticateUnifiedToken(unifiedToken, request);
+    // === 鉴权 ===
+    const authResult = await authenticate(request);
     if (!authResult.success) {
       logError('[API:Models] 鉴权失败', authResult.error, { requestId });
       return Response.json(
@@ -48,29 +46,26 @@ export async function GET(request: Request) {
     }
 
     const permissionLevel = authResult.permissionLevel!;
-    const subjectId = authResult.subjectId!;
+    const key = authResult.key!;
 
     logInfo('[API:Models] 鉴权成功', {
       requestId,
-      subjectType: authResult.subjectType,
-      subjectPreview: toSubjectPreview(subjectId),
+      keyPreview: toKeyPreview(key),
       permissionLevel,
+      source: authResult.source,
     });
 
     // 从所有中转站获取模型列表
     const allModels = await stationRegistry.getAllModels();
 
     // 权限过滤（目前所有模型都要求 permissionLevel >= 1）
-    // 未来可以根据模型配置的 maxCallsPerHour 等属性进行更细粒度的控制
     const availableModels = allModels.filter(model => {
-      // 默认所有模型对 permissionLevel >= 1 的用户可用
       return permissionLevel >= 1;
     });
 
     logInfo('[API:Models] 返回模型列表', {
       requestId,
-      subjectType: authResult.subjectType,
-      subjectPreview: toSubjectPreview(subjectId),
+      keyPreview: toKeyPreview(key),
       availableModels: availableModels.length,
       stationCount: stationRegistry.getStations().length,
     });

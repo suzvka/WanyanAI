@@ -6,7 +6,7 @@ import path from 'node:path';
 import { validatePlatformConfig, platformManifestSchema, appearanceSchema, featureFlagsSchema } from '@/server/config/schemas';
 import { createLogger } from '@/lib/api-station/logger';
 import type {
-  ForwardChallengeConfig,
+  AuthServiceConfig,
   ForwardConfig,
   ForwardModelConfig,
   PlatformConfig,
@@ -20,16 +20,8 @@ const logger = createLogger('platform-config');
 const CONFIG_DIR_NAME = 'platform-config';
 const KEYS_DIR_NAME = 'keys';
 
-const DEFAULT_FORWARD_CHALLENGE: ForwardChallengeConfig = {
-  enabled: false,
-  difficulty: 3,
-  tokenExpireMinutes: 30,
-  maxNonceAgeSeconds: 300,
-};
-
 const DEFAULT_FORWARD_CONFIG: ForwardConfig = {
   version: '1.0',
-  challenge: DEFAULT_FORWARD_CHALLENGE,
   models: [],
 };
 
@@ -57,8 +49,18 @@ const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
   defaults: DEFAULT_RATE_LIMIT_DEFAULTS,
 };
 
+const DEFAULT_AUTH_SERVICE_CONFIG: AuthServiceConfig = {
+  url: undefined,
+  healthCheckIntervalMs: 30000,
+  healthCheckTimeoutMs: 3000,
+  verifyTimeoutMs: 5000,
+  fallbackPermissionLevel: 1,
+  enableHealthCheck: true,
+};
+
 let forwardCache: { key: string; value: ForwardConfig } | null = null;
 let rateLimitCache: { key: string; value: RateLimitConfig } | null = null;
+let authServiceCache: { key: string; value: AuthServiceConfig } | null = null;
 
 function getConfigRoot(): string {
   return process.cwd();
@@ -159,31 +161,6 @@ function normalizeForwardModel(model: Partial<ForwardModelConfig>): ForwardModel
   };
 }
 
-function normalizeForwardConfig(config: Partial<ForwardConfig>): ForwardConfig {
-  const models = Array.isArray(config.models)
-    ? config.models
-        .map((model) => normalizeForwardModel(model as Partial<ForwardModelConfig>))
-        .filter((model): model is ForwardModelConfig => model !== null)
-    : [];
-
-  return {
-    version: config.version || DEFAULT_FORWARD_CONFIG.version,
-    challenge: {
-      enabled: typeof config.challenge?.enabled === 'boolean' ? config.challenge.enabled : DEFAULT_FORWARD_CHALLENGE.enabled,
-      difficulty: typeof config.challenge?.difficulty === 'number' ? config.challenge.difficulty : DEFAULT_FORWARD_CHALLENGE.difficulty,
-      tokenExpireMinutes:
-        typeof config.challenge?.tokenExpireMinutes === 'number'
-          ? config.challenge.tokenExpireMinutes
-          : DEFAULT_FORWARD_CHALLENGE.tokenExpireMinutes,
-      maxNonceAgeSeconds:
-        typeof config.challenge?.maxNonceAgeSeconds === 'number'
-          ? config.challenge.maxNonceAgeSeconds
-          : DEFAULT_FORWARD_CHALLENGE.maxNonceAgeSeconds,
-    },
-    models,
-  };
-}
-
 function normalizeRateLimitRule(rule: Partial<RateLimitRule>): RateLimitRule {
   return {
     permissionLevel: typeof rule.permissionLevel === 'number' && rule.permissionLevel > 0 ? rule.permissionLevel : 1,
@@ -247,7 +224,7 @@ export async function loadForwardConfig(): Promise<ForwardConfig> {
   }
 
   try {
-    // 从 forward.json 读取 challenge 配置
+    // 从 forward.json 读取版本配置
     const parsed = readPlatformJsonFileSync<Partial<ForwardConfig>>('forward.json');
 
     // 从 keys 目录自动发现所有模型配置
@@ -255,18 +232,6 @@ export async function loadForwardConfig(): Promise<ForwardConfig> {
 
     const normalized: ForwardConfig = {
       version: parsed.version || DEFAULT_FORWARD_CONFIG.version,
-      challenge: {
-        enabled: typeof parsed.challenge?.enabled === 'boolean' ? parsed.challenge.enabled : DEFAULT_FORWARD_CHALLENGE.enabled,
-        difficulty: typeof parsed.challenge?.difficulty === 'number' ? parsed.challenge.difficulty : DEFAULT_FORWARD_CHALLENGE.difficulty,
-        tokenExpireMinutes:
-          typeof parsed.challenge?.tokenExpireMinutes === 'number'
-            ? parsed.challenge.tokenExpireMinutes
-            : DEFAULT_FORWARD_CHALLENGE.tokenExpireMinutes,
-        maxNonceAgeSeconds:
-          typeof parsed.challenge?.maxNonceAgeSeconds === 'number'
-            ? parsed.challenge.maxNonceAgeSeconds
-            : DEFAULT_FORWARD_CHALLENGE.maxNonceAgeSeconds,
-      },
       models,
     };
 
@@ -274,12 +239,12 @@ export async function loadForwardConfig(): Promise<ForwardConfig> {
     return normalized;
   } catch (error) {
     logger.warn('Failed to load forward config, using defaults', { error: String(error) });
-    
+
     const fallbackConfig: ForwardConfig = {
       ...DEFAULT_FORWARD_CONFIG,
       models: [],
     };
-    
+
     forwardCache = { key: cacheKey, value: fallbackConfig };
     return fallbackConfig;
   }
@@ -305,7 +270,56 @@ export function loadRateLimitConfig(): RateLimitConfig {
   }
 }
 
+/**
+ * 加载认证服务配置
+ */
+export function loadAuthServiceConfig(): AuthServiceConfig {
+  const configDir = resolveConfigDirSync();
+  const filePath = path.join(configDir, 'auth-service.json');
+  const cacheKey = createFileCacheKey(filePath);
+
+  if (authServiceCache?.key === cacheKey) {
+    return authServiceCache.value;
+  }
+
+  try {
+    const parsed = readPlatformJsonFileSync<Partial<AuthServiceConfig>>('auth-service.json');
+    const normalized: AuthServiceConfig = {
+      url: parsed.url || process.env.AUTH_SERVICE_URL || process.env.ACCOUNT_SERVICE_URL || undefined,
+      healthCheckIntervalMs: parsed.healthCheckIntervalMs ?? DEFAULT_AUTH_SERVICE_CONFIG.healthCheckIntervalMs,
+      healthCheckTimeoutMs: parsed.healthCheckTimeoutMs ?? DEFAULT_AUTH_SERVICE_CONFIG.healthCheckTimeoutMs,
+      verifyTimeoutMs: parsed.verifyTimeoutMs ?? DEFAULT_AUTH_SERVICE_CONFIG.verifyTimeoutMs,
+      fallbackPermissionLevel: parsed.fallbackPermissionLevel ?? DEFAULT_AUTH_SERVICE_CONFIG.fallbackPermissionLevel,
+      enableHealthCheck: parsed.enableHealthCheck ?? DEFAULT_AUTH_SERVICE_CONFIG.enableHealthCheck,
+    };
+    authServiceCache = { key: cacheKey, value: normalized };
+    return normalized;
+  } catch {
+    // 文件不存在或解析失败时使用默认值
+    const fallback: AuthServiceConfig = {
+      ...DEFAULT_AUTH_SERVICE_CONFIG,
+      url: process.env.AUTH_SERVICE_URL || process.env.ACCOUNT_SERVICE_URL || undefined,
+    };
+    authServiceCache = { key: cacheKey, value: fallback };
+    return fallback;
+  }
+}
+
 export function clearPlatformConfigRuntimeCaches() {
   forwardCache = null;
   rateLimitCache = null;
+  authServiceCache = null;
+}
+
+/**
+ * 获取认证服务配置（同步版本，使用缓存）
+ * 供 API 路由使用
+ */
+export function getAuthServiceConfig(): AuthServiceConfig {
+  // 如果缓存存在，直接返回
+  if (authServiceCache) {
+    return authServiceCache.value;
+  }
+  // 否则加载配置
+  return loadAuthServiceConfig();
 }

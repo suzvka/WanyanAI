@@ -3,9 +3,9 @@
  *
  * handler 只负责收集数据，不做验证（验证在 assemble 阶段统一进行），
  * 避免在流执行阶段引入额外计算开销。
+ *
+ * 注意：此文件在客户端使用，handler 在客户端执行。
  */
-
-import 'server-only';
 
 import { z } from 'zod';
 import { defineMcpTool, type McpToolDefinition } from '@/mcp/types';
