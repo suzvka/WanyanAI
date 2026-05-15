@@ -95,6 +95,11 @@ keys/                          # 外部 API 模型配置（自动发现 *.json�
 
 **中转站系统（可插拔）**：所有模型转发通过中转站实现，位于 `src/stations/` 目录。每个中转站实现 `Station` 接口，提供 `getModels()`、`canHandle()`、`forward()` 方法。启动时自动扫描注册，删除目录即可移除功能。框架负责鉴权，中转站仅负责转发。
 
+**路由隔离架构**：Server Actions 与中转站 API 通过路由隔离，安全边界清晰。
+- **Server Actions**：仅服务页面应用，使用 Next.js 默认同源校验（CSRF/Origin 验证）
+- **中转站 API**：通过 Route Handler 暴露（`/api/v1/chat/completions`），使用独立鉴权逻辑
+- **安全配置**：不放宽 `allowedOrigins`，不修改请求头，保持 Next.js 默认安全模型
+
 **简化鉴权架构**：采用单 Token 统一鉴权，key 同时作为限流标识和权限查询凭证。
 - **业务服务器职责**：限流检查 + 检查认证服务可用性 + 格式校验 + 调用认证服务验证权限
 - **认证服务器职责**：签发 key + 验证 key + 返回权限等级

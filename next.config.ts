@@ -24,15 +24,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // 允许所有来源访问（支持任意域名部署）
-  // 不再硬编码特定域名，项目可部署到任意服务器
-  experimental: {
-    serverActions: {
-      // 使用 '*' 允许所有来源的 Server Actions 请求
-      // 这样项目可以在任意域名下运行，无需额外配置
-      allowedOrigins: ['*'],
-    },
-  },
+  // Server Actions 使用默认同源校验，不再放宽安全策略
+  // 中转站 API 通过 Route Handler 独立暴露，与 Server Actions 路由隔离
   async headers() {
     return [
       {

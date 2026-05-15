@@ -10,8 +10,6 @@
  * 客户端应该直接使用 getOutputModeMcpTools() 获取工具定义。
  */
 
-import { headers } from 'next/headers';
-import { createLogger } from '@/lib/api-station/logger';
 import {
   requestCompiledInstructions,
   requestCompiledMcpPrompt,
@@ -25,8 +23,6 @@ import {
 } from '@/server/output-modes';
 import type { ControlSelections } from '@/providers/PageContext';
 import type { PageModuleConfig } from '@/types/module';
-
-const logger = createLogger('getAnalysisResources');
 
 /**
  * 获取分析任务所需的资源
@@ -42,25 +38,6 @@ export async function getAnalysisResources(input: {
   instructionText: string;
   mcpToolText: string;
 }> {
-  // 调试日志：记录请求头信息
-  try {
-    const headersList = await headers();
-    const origin = headersList.get('origin');
-    const host = headersList.get('host');
-    const forwardedHost = headersList.get('x-forwarded-host');
-    const forwardedProto = headersList.get('x-forwarded-proto');
-    
-    logger.info('Server Action called', {
-      origin,
-      host,
-      forwardedHost,
-      forwardedProto,
-      moduleSlug: input.moduleConfig?.manifest?.slug,
-    });
-  } catch (e) {
-    logger.error('Failed to get headers', e);
-  }
-
   const { moduleConfig, controlSelections } = input;
 
   // 1. 获取系统提示词
