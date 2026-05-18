@@ -25,7 +25,6 @@ coverage
 storybook-static
 
 # Package manager artifacts
-pnpm-lock.yaml
 package-lock.json
 yarn.lock
 .pnp*
