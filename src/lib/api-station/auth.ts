@@ -33,6 +33,8 @@ export interface AuthResult {
   source?: string;
   error?: string;
   errorCode?: string;
+  /** authenticate 内部限流检查后返回的配额信息，调用方可直接用于响应头 */
+  quota?: { limit: number; remaining: number; reset: number };
 }
 
 /**
@@ -128,6 +130,7 @@ export async function authenticate(request: Request): Promise<AuthResult> {
       key: key || undefined,
       permissionLevel: fallbackPermission,
       source: 'offline-fallback',
+      quota: rateLimitResult.quota,
     };
   }
 
@@ -138,6 +141,7 @@ export async function authenticate(request: Request): Promise<AuthResult> {
       success: true,
       permissionLevel: fallbackPermission,
       source: 'no-key',
+      quota: rateLimitResult.quota,
     };
   }
 
@@ -149,6 +153,7 @@ export async function authenticate(request: Request): Promise<AuthResult> {
       success: true,
       permissionLevel: fallbackPermission,
       source: 'invalid-key-fallback',
+      quota: rateLimitResult.quota,
     };
   }
 
@@ -167,6 +172,7 @@ export async function authenticate(request: Request): Promise<AuthResult> {
     identityId: verifyResult.identityId,
     permissionLevel: verifyResult.permissionLevel,
     source: verifyResult.source,
+    quota: rateLimitResult.quota,
   };
 }
 

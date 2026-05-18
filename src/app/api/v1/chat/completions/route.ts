@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticate, extractKey } from '@/lib/api-station/auth';
-import { checkRateLimit } from '@/lib/api-station/rateLimit';
 import { executeHooks, HookContext } from '@/lib/api-station/hooks';
 import { createErrorResponse } from '@/lib/api-station/mockResponse';
 import { logInfo, logError, generateRequestId } from '@/lib/api-station/logger';
@@ -62,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     const permissionLevel = authResult.permissionLevel!;
-    const key = authResult.key!;
+    const key = authResult.key ?? '';
 
     logInfo('[API:Chat] 认证成功', {
       requestId,
@@ -152,13 +151,12 @@ export async function POST(request: NextRequest) {
 
     logInfo('[API:Chat] Hook 预处理完成', { requestId });
 
-    // === 限流头计算（用于响应）===
-    const rateLimitResult = checkRateLimit({ subjectId: key, permissionLevel });
+    // === 限流头计算（复用 authenticate 内部已执行的限流结果，避免 double-count）===
     const rateLimitHeaders: Record<string, string> = {};
-    if (rateLimitResult.quota) {
-      rateLimitHeaders['X-RateLimit-Limit'] = rateLimitResult.quota.limit.toString();
-      rateLimitHeaders['X-RateLimit-Remaining'] = rateLimitResult.quota.remaining.toString();
-      rateLimitHeaders['X-RateLimit-Reset'] = rateLimitResult.quota.reset.toString();
+    if (authResult.quota) {
+      rateLimitHeaders['X-RateLimit-Limit'] = authResult.quota.limit.toString();
+      rateLimitHeaders['X-RateLimit-Remaining'] = authResult.quota.remaining.toString();
+      rateLimitHeaders['X-RateLimit-Reset'] = authResult.quota.reset.toString();
     }
 
     // === 转发请求 ===
