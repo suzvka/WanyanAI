@@ -1,14 +1,13 @@
 import 'server-only';
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { validatePlatformConfig, platformManifestSchema, appearanceSchema, featureFlagsSchema } from '@/server/config/schemas';
 import { createLogger } from '@/lib/api-station/logger';
 import type {
   AuthServiceConfig,
   ForwardConfig,
-  ForwardModelConfig,
   PlatformConfig,
   RateLimitConfig,
   RateLimitDefaults,
@@ -18,7 +17,6 @@ import type {
 const logger = createLogger('platform-config');
 
 const CONFIG_DIR_NAME = 'platform-config';
-const KEYS_DIR_NAME = 'keys';
 
 const DEFAULT_FORWARD_CONFIG: ForwardConfig = {
   version: '1.0',
@@ -71,14 +69,6 @@ function resolveConfigDirSync(): string {
   return existsSync(configDir) ? configDir : configDir;
 }
 
-/**
- * 解析 keys 目录路径
- */
-function resolveKeysDirSync(): string {
-  const keysDir = path.join(getConfigRoot(), KEYS_DIR_NAME);
-  return keysDir;
-}
-
 async function resolveConfigDir(): Promise<string> {
   return resolveConfigDirSync();
 }
@@ -102,63 +92,6 @@ function readPlatformJsonFileSync<T>(fileName: string): T {
   const configDir = resolveConfigDirSync();
   const content = readFileSync(path.join(configDir, fileName), 'utf-8');
   return JSON.parse(content) as T;
-}
-
-/**
- * 从 keys 目录加载所有模型配置
- * 自动发现所有 .json 文件，解析错误时跳过
- */
-async function loadModelConfigsFromKeysDir(): Promise<ForwardModelConfig[]> {
-  const keysDir = resolveKeysDirSync();
-
-  // 如果 keys 目录不存在，返回空数组
-  if (!existsSync(keysDir)) {
-    return [];
-  }
-
-  try {
-    const files = await readdir(keysDir);
-    const jsonFiles = files.filter(file => file.endsWith('.json'));
-
-    const models: ForwardModelConfig[] = [];
-
-    for (const file of jsonFiles) {
-      const filePath = path.join(keysDir, file);
-      try {
-        const content = await readFile(filePath, 'utf-8');
-        const parsed = JSON.parse(content) as Partial<ForwardModelConfig>;
-        const normalized = normalizeForwardModel(parsed);
-
-        if (normalized) {
-          models.push(normalized);
-        }
-      } catch (error) {
-        // 文件解析错误时跳过，不影响其他文件
-        logger.warn('Failed to load key file', { file, error: String(error) });
-        continue;
-      }
-    }
-
-    return models;
-  } catch (error) {
-    logger.warn('Failed to read keys directory', { error: String(error) });
-    return [];
-  }
-}
-
-function normalizeForwardModel(model: Partial<ForwardModelConfig>): ForwardModelConfig | null {
-  if (!model.id || !model.targetModel || !model.targetBaseUrl || !model.targetApiKey) {
-    return null;
-  }
-
-  return {
-    id: model.id,
-    targetModel: model.targetModel,
-    minPermissionLevel: typeof model.minPermissionLevel === 'number' && model.minPermissionLevel > 0 ? model.minPermissionLevel : 1,
-    maxCallsPerHour: typeof model.maxCallsPerHour === 'number' && model.maxCallsPerHour > 0 ? model.maxCallsPerHour : 1000,
-    targetBaseUrl: model.targetBaseUrl,
-    targetApiKey: model.targetApiKey,
-  };
 }
 
 function normalizeRateLimitRule(rule: Partial<RateLimitRule>): RateLimitRule {
@@ -216,23 +149,19 @@ export async function loadPublishedPlatformConfig(): Promise<PlatformConfig> {
 export async function loadForwardConfig(): Promise<ForwardConfig> {
   const configDir = resolveConfigDirSync();
   const filePath = path.join(configDir, 'forward.json');
-  const keysDir = resolveKeysDirSync();
-  const cacheKey = `${createFileCacheKey(filePath)}:${createFileCacheKey(keysDir)}`;
+  const cacheKey = createFileCacheKey(filePath);
 
   if (forwardCache?.key === cacheKey) {
     return forwardCache.value;
   }
 
   try {
-    // 从 forward.json 读取版本配置
+    // 从 forward.json 读取版本配置（模型列表由各中转站自行管理 keys/ 目录）
     const parsed = readPlatformJsonFileSync<Partial<ForwardConfig>>('forward.json');
-
-    // 从 keys 目录自动发现所有模型配置
-    const models = await loadModelConfigsFromKeysDir();
 
     const normalized: ForwardConfig = {
       version: parsed.version || DEFAULT_FORWARD_CONFIG.version,
-      models,
+      models: parsed.models ?? [],
     };
 
     forwardCache = { key: cacheKey, value: normalized };
