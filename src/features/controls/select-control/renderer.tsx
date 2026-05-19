@@ -36,10 +36,21 @@ export function SelectControlRenderer({
 }: SelectControlRendererProps) {
   const data = definition.data as { options?: SelectOption[] };
 
-  const options = data?.options ?? [];
+  const rawOptions = data?.options ?? [];
 
-  // 计算默认选项（首个 enabled 的）
-  const defaultOption = options.find((o: SelectOption) => o.enabled);
+  // 归一化选项：value 默认 fallback 为 label，默认 enabled
+  const options = rawOptions.map((o) => ({
+    value: o.value ?? o.label,
+    label: o.label,
+    enabled: o.enabled !== false,
+    defaultSelected: o.defaultSelected,
+  }));
+
+  // 默认选项：优先 defaultSelected，其次首个 enabled 项
+  const defaultOption = options.find((o) => o.defaultSelected) ?? options.find((o) => o.enabled);
+
+  // 解析当前值对应的 label 显示（value 存储的是 label 时也能正确匹配）
+  const resolvedValue = value || defaultOption?.value;
 
   return (
     <div className="flex items-center gap-3">
@@ -49,7 +60,7 @@ export function SelectControlRenderer({
         </Label>
       )}
       <Select
-        value={value || defaultOption?.value}
+        value={resolvedValue}
         onValueChange={(newValue) => onChange(definition.id, newValue)}
         disabled={disabled}
       >
@@ -58,8 +69,8 @@ export function SelectControlRenderer({
         </SelectTrigger>
         <SelectContent>
           {options
-            .filter((o: SelectOption) => o.enabled)
-            .map((option: SelectOption) => (
+            .filter((o) => o.enabled)
+            .map((option) => (
               <SelectItem key={option.value} value={option.value}>
                 {option.label}
               </SelectItem>

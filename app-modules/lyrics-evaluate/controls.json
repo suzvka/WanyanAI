@@ -2,195 +2,151 @@
   {
     "id": "evaluation_lens",
     "title": "评价视角",
-    "enabled": true,
+    "type": "select",
     "options": [
       {
-        "value": "music_listener",
         "label": "听众",
-        "enabled": true,
         "promptText": "你偏好所属的曲风类型，你将听到这首歌。你的评价代表听众的感受。",
         "empathic_effectiveness": 0.2,
         "structural_logic": 0.05
       },
       {
-        "value": "lyric_enthusiast",
         "label": "词作爱好者",
-        "enabled": true,
         "promptText": "你是一位词作爱好者，你对歌词有很高的审美要求，你会关注词作的质量与深度。",
         "language_expression": 0.25,
         "human_depth": 0.1
       },
       {
-        "value": "composer",
         "label": "作曲/编曲角度",
-        "enabled": true,
         "promptText": "你是一位作曲人/编曲人，你会关注歌词与旋律的配合度，歌词的节奏感、韵律感与留白。",
         "structural_logic": 0.2,
         "language_expression": 0.1
       },
       {
-        "value": "lyricist",
         "label": "词人角度",
-        "enabled": true,
         "promptText": "你是一位词人，你会关注歌词的表达、意象、意境与修辞。",
         "language_expression": 0.3,
         "human_depth": 0.15
       },
       {
-        "value": "casual_listener",
         "label": "普通听众",
-        "enabled": true,
         "promptText": "你是一位普通听众，你没有词作专业知识，你只关心这首歌是否好听。",
         "empathic_effectiveness": 0.3,
         "structural_logic": 0.05
       }
-    ],
-    "type": "select"
+    ]
   },
   {
     "id": "lyrics_focus",
     "title": "评审重点",
-    "enabled": true,
+    "type": "select",
     "options": [
       {
-        "value": "balanced",
         "label": "均衡",
-        "enabled": true,
         "promptText": ""
       },
       {
-        "value": "emotion_resonance",
         "label": "情感共鸣",
-        "enabled": true,
         "promptText": "本次评审重点为：情感表达是否真挚、是否引发共鸣、情感递进是否自然。",
         "human_depth": 0.3,
         "empathic_effectiveness": 0.2
       },
       {
-        "value": "imagery",
         "label": "意象与意境",
-        "enabled": true,
         "promptText": "本次评审重点为：意象选择是否精准、意境营造是否独特、画面感是否清晰。",
         "language_expression": 0.3,
         "human_depth": 0.1,
         "cohesive_integrity": 0.1
       },
       {
-        "value": "rhythm",
         "label": "韵脚与节奏",
-        "enabled": true,
         "promptText": "本次评审重点为：韵脚设计是否考究、节奏是否流畅、与旋律配合度。",
         "structural_logic": 0.3,
         "language_expression": 0.15
       },
       {
-        "value": "melody_fit",
         "label": "旋律配合",
-        "enabled": true,
         "promptText": "本次评审重点为：歌词是否适合演唱、断句是否自然、咬字是否顺畅。",
         "structural_logic": 0.25,
         "empathic_effectiveness": 0.1,
         "language_expression": 0.1
       },
       {
-        "value": "originality",
         "label": "原创性与深度",
-        "enabled": true,
         "promptText": "本次评审重点为：表达是否有新意、是否有深度、思想性与艺术性。",
         "language_expression": 0.2,
         "human_depth": 0.25,
         "cohesive_integrity": 0.15
       }
-    ],
-    "type": "select"
+    ]
   },
   {
     "id": "priority_bias",
     "title": "评审倾向",
-    "enabled": true,
+    "type": "select",
     "options": [
       {
-        "value": "balanced",
         "label": "均衡",
-        "enabled": true,
         "promptText": ""
       },
       {
-        "value": "emotion_first",
         "label": "情感表达",
-        "enabled": true,
         "promptText": "优先考虑情感表达、共鸣力与感染力。",
         "empathic_effectiveness": 0.3,
         "human_depth": 0.15
       },
       {
-        "value": "lyrics_first",
         "label": "词作质量",
-        "enabled": true,
         "promptText": "优先考虑词作质量、意象、意境与表达技巧。",
         "language_expression": 0.35,
         "cohesive_integrity": 0.1
       },
       {
-        "value": "commercial_first",
         "label": "传唱度/商业性",
-        "enabled": true,
         "promptText": "优先考虑歌词的传唱度、易记度与商业潜力。",
         "empathic_effectiveness": 0.25,
         "structural_logic": 0.1,
         "language_expression": 0.05
       },
       {
-        "value": "artistic_first",
         "label": "艺术性",
-        "enabled": true,
         "promptText": "优先考虑歌词的艺术性、思想深度与表达独特性。",
         "language_expression": 0.3,
         "human_depth": 0.25,
         "cohesive_integrity": 0.15
       }
-    ],
-    "type": "select"
+    ]
   },
   {
     "id": "feedback_style",
     "title": "反馈风格",
-    "enabled": true,
+    "type": "select",
     "options": [
       {
-        "value": "balanced",
         "label": "均衡",
-        "enabled": true,
         "promptText": ""
       },
       {
-        "value": "strict",
         "label": "严格",
-        "enabled": true,
         "promptText": "作者希望更严格的审查：你对词作中的缺点容忍度更低。",
         "language_expression": 0.1,
         "structural_logic": 0.15,
         "human_depth": 0.1
       },
       {
-        "value": "encouraging",
         "label": "鼓励",
-        "enabled": true,
         "promptText": "作者是初学者：你更重视词作的基本功，整体评价标准更宽松。",
         "structural_logic": 0.1,
         "empathic_effectiveness": 0.1,
         "language_expression": 0.05
       },
       {
-        "value": "professional",
         "label": "专业编辑",
-        "enabled": true,
         "promptText": "请采用冷静、清晰、专业的反馈方式，强调判断依据、问题性质与修改建议。",
         "structural_logic": 0.2,
         "empathic_effectiveness": 0.2,
         "language_expression": 0.1
       }
-    ],
-    "type": "select"
+    ]
   }
 ]

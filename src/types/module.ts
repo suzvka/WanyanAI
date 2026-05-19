@@ -95,10 +95,13 @@ export type ControlItemBase = {
 export type SelectControlItem = ControlItemBase & {
   type: 'select';
   options: Array<{
-    value: string;
+    /** 选项唯一值（可选，默认 fallback 为 label） */
+    value?: string;
     label: string;
     enabled?: boolean;
     promptText?: string;
+    /** 是否默认选中 */
+    defaultSelected?: boolean;
   }>;
 };
 

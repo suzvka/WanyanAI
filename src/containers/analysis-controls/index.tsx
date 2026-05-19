@@ -26,7 +26,7 @@ export default function AnalysisControlsContainer(
   return (
     <AnalysisControlsPanel
       title="分析设置"
-      controls={controls.filter(c => c.enabled)}
+      controls={controls.filter(c => c.enabled !== false && c.options?.length > 0)}
       controlSelections={controlSelections}
       isSubmitting={isSubmitting}
       onControlChange={updateControlSelection}

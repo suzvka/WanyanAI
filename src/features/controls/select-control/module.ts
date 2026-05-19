@@ -13,23 +13,31 @@ import type { SelectControlConfig, SelectControlItem } from './types';
 // 辅助函数
 // ============================================================================
 
+/**
+ * 获取选项的唯一标识值（value 优先，fallback 为 label）
+ */
+function optionValue(option: SelectControlItem['options'][number]): string {
+  return (option.value ?? option.label) as string;
+}
+
+/**
+ * 检查选项是否启用（默认 true）
+ */
+function optionEnabled(option: SelectControlItem['options'][number]): boolean {
+  return option.enabled !== false;
+}
+
 function findOption(
   control: SelectControlItem,
   value: string,
 ): SelectControlItem['options'][number] | undefined {
   // 优先使用 value 字段匹配
   if (control.options.some((o) => o.value !== undefined)) {
-    return control.options.find((o) => o.value === value && o.enabled);
+    return control.options.find((o) => optionValue(o) === value && optionEnabled(o));
   }
 
-  // 索引匹配（value 是数字字符串）
-  const index = parseInt(value, 10);
-  if (!isNaN(index) && index >= 0 && index < control.options.length) {
-    const option = control.options[index];
-    return option.enabled ? option : undefined;
-  }
-
-  return undefined;
+  // 当选项无 value 字段时，匹配 label
+  return control.options.find((o) => o.label === value && optionEnabled(o));
 }
 
 /** 将 RawControlItem 断言为 SelectControlItem（调用方已保证 type 匹配） */
@@ -86,11 +94,11 @@ export const selectControlModule: ControlModule = {
         id: control.id,
         type: 'select',
         title: control.title,
-        initialValue: defaultOpt ? String(defaultOpt.value) : undefined,
+        initialValue: defaultOpt ? optionValue(defaultOpt) : optionValue(control.options[0]),
         data: {
           options: control.options
-            .filter((o) => o.enabled)
-            .map((o) => ({ value: o.value, label: o.label })),
+            .filter((o) => optionEnabled(o))
+            .map((o) => ({ value: optionValue(o), label: o.label })),
         },
       }];
     });

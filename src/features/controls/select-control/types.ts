@@ -10,10 +10,14 @@
  * 选项配置
  */
 export interface SelectOptionConfig {
-  value: string;
+  /** 选项值（可选，默认为 label） */
+  value?: string;
   label: string;
-  promptText: string;
-  enabled: boolean;
+  promptText?: string;
+  /** 是否启用（可选，默认为 true） */
+  enabled?: boolean;
+  /** 是否默认选中 */
+  defaultSelected?: boolean;
   /** 扩展字段 */
   [key: string]: unknown;
 }
@@ -42,7 +46,8 @@ export type SelectControlConfig = SelectControlItem[];
  * 渲染器使用的选项类型（简化版）
  */
 export interface SelectOption {
-  value: string;
+  value?: string;
   label: string;
-  enabled: boolean;
+  enabled?: boolean;
+  defaultSelected?: boolean;
 }

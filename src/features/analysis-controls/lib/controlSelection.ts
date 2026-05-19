@@ -9,9 +9,7 @@ export function buildActiveControlSelections(
 ): Record<string, string> {
   const result: Record<string, string> = {};
   for (const ctrl of controls) {
-    if ('value' in ctrl && ctrl.value !== undefined) {
-      result[ctrl.id] = selections[ctrl.id] ?? ctrl.value;
-    }
+    result[ctrl.id] = selections[ctrl.id] ?? '';
   }
   return result;
 }
@@ -19,7 +17,7 @@ export function buildActiveControlSelections(
 export function getEnabledDynamicControls(
   moduleConfig: ModuleConfig,
 ): ControlConfig[] {
-  return moduleConfig.controls.filter((control) => control.enabled && control.options?.length > 0);
+  return moduleConfig.controls.filter((control) => control.enabled !== false && control.options?.length > 0);
 }
 
 /**
@@ -48,6 +46,13 @@ export function resolveInitialControlSelections(controls: ControlConfig[]) {
   );
 }
 
+/**
+ * 解析选项的唯一标识值（value 优先，fallback 为 label）
+ */
+function resolveOptionValue(opt: Record<string, unknown>): string {
+  return (typeof opt.value === 'string' ? opt.value : String(opt.label ?? '')) as string;
+}
+
 export function synchronizeControlSelections(
   controls: ControlConfig[],
   currentSelections: Record<string, string>,
@@ -55,10 +60,13 @@ export function synchronizeControlSelections(
   const updated = { ...currentSelections };
 
   for (const control of controls) {
-    if (!control.enabled || control.options.length === 0) continue;
+    if (control.enabled === false || control.options.length === 0) continue;
 
     const current = updated[control.id];
-    if (!current || !control.options.some((opt) => 'value' in opt && (opt as { value: string }).value === current)) {
+    if (!current || !control.options.some((opt) => {
+      const optObj = opt as Record<string, unknown>;
+      return resolveOptionValue(optObj) === current;
+    })) {
       updated[control.id] = '';
     }
   }

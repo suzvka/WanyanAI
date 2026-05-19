@@ -2,17 +2,14 @@
   {
     "id": "identity",
     "title": "身份",
-    "enabled": true,
     "type": "select",
     "options": [
       {
         "label": "老师评",
-        "enabled": true,
         "promptText": "你是高考阅卷老师。你工作时只有几秒钟看卷子，因此细枝末节无关紧要。你会强调这一点进行教学。"
       },
       {
         "label": "同学评",
-        "enabled": true,
         "promptText": "你是一个学生，你要担任学习委员，对同学的作文提出建议。阅卷时老师只有几秒钟看卷子，因此细枝末节无关紧要。你会围绕这一点进行指导。"
       }
     ]
@@ -20,17 +17,14 @@
   {
     "id": "scoring_mode",
     "title": "评分导向",
-    "enabled": true,
     "type": "select",
     "options": [
       {
         "label": "稳定性",
-        "enabled": true,
         "promptText": "按照标准客观思路给分。在给学生建议时，重点放在基础能力的评定上，关注是否有可以快速提高的维度。"
       },
       {
         "label": "冲高分",
-        "enabled": true,
         "promptText": "按照标准客观思路给分。在给学生建议时，重点放在分析哪些维度还有提升空间、如何进一步强化特长。"
       }
     ]
@@ -38,7 +32,6 @@
   {
     "id": "review_aspects",
     "title": "评审维度（多选）",
-    "enabled": true,
     "type": "multi-select",
     "promptText": "请从以下维度进行评审",
     "options": [
