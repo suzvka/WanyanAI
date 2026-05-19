@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "bash ./scripts/build.sh",
-    "dev": "bash ./scripts/dev.sh",
+    "build": "pnpm install --prefer-frozen-lockfile --prefer-offline --loglevel debug --reporter=append-only && pnpm next build && pnpm tsup src/server.ts --format cjs --platform node --target node20 --outDir dist --no-splitting --no-minify",
+    "dev": "npx kill-port 5000 && cross-env PORT=5000 pnpm tsx watch src/server.ts",
     "preinstall": "npx only-allow pnpm",
     "lint": "eslint",
-    "start": "bash ./scripts/start.sh",
+    "start": "node -e \"const fs=require('fs');if(!fs.existsSync('dist/server.js')){console.log('dist/server.js 不存在，请先运行 pnpm run build 构建项目');process.exit(1)}\" && cross-env PORT=5000 node dist/server.js",
     "ts-check": "tsc -p tsconfig.json"
   },
   "dependencies": {
@@ -63,8 +63,10 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
+    "kill-port": "^2.0.1",
     "only-allow": "^1.2.2",
     "shadcn": "latest",
     "tailwindcss": "^4",
