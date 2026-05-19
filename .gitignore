@@ -90,3 +90,4 @@ logs/
 *.csv
 /.vs
 /keys
+/.qoder
