@@ -1,11 +1,13 @@
 /**
  * 简化版鉴权模块
  *
- * 注意：鉴权已于 2026-05 下沉至各中转站内部。
- * 主系统仅保留 extractKey 用于提取 Authorization 头。
+ * 注意：鉴权已于 2026-05 上移至主入口 route.ts 统一处理。
+ * 主系统在 chat completions 路由中调用 verifyKey（authClient.ts）和
+ * checkRateLimit（rateLimit.ts），各子站不再自行鉴权限流。
+ * extractKey 仍用于从请求头提取 key。
  * authenticate() 已废弃，不应再被调用。
  *
- * @deprecated 鉴权逻辑已迁移至 src/stations/coze/index.ts
+ * @deprecated 鉴权逻辑已迁移至 src/app/api/v1/chat/completions/route.ts
  */
 
 import { logInfo, logWarn, logError } from './logger';
@@ -81,9 +83,9 @@ function getRateLimitId(request: Request, key: string | null): string {
  *
  * @param request - 请求对象
  * @returns 鉴权结果
- * @deprecated 鉴权已下沉至各中转站。请勿在主系统路由中调用此函数。
+ * @deprecated 鉴权已上移至主入口 route.ts。请勿在主系统路由中调用此函数。
  *             限流使用 checkRateLimit（来自 rateLimit.ts），
- *             鉴权使用 verifyKey + isAuthServiceAvailable（来自 authClient.ts）。
+ *             鉴权使用 verifyKey（来自 authClient.ts）。
  */
 export async function authenticate(request: Request): Promise<AuthResult> {
   // 1. 提取 key（可选）

@@ -93,7 +93,7 @@ keys/                          # 外部 API 模型配置（自动发现 *.json�
 - 用户自定义 Key：直接调用第三方 API
 - 内置模型：通过 `/api/v1/chat/completions` 调用中转站
 
-**中转站系统（可插拔）**：所有模型转发通过中转站实现，位于 `src/stations/` 目录。每个中转站实现 `Station` 接口，提供 `getModels()`、`canHandle()`、`forward()` 方法。启动时自动扫描注册，删除目录即可移除功能。框架负责鉴权，中转站仅负责转发。
+**中转站系统（可插拔）**：所有模型转发通过中转站实现，位于 `src/stations/` 目录。每个中转站实现 `Station` 接口，提供 `getModels()`、`canHandle()`、`forward()` 方法。启动时自动扫描注册，删除目录即可移除功能。鉴权与限流由主入口（`/api/v1/chat/completions`）统一处理，中转站仅负责转发。
 
 **路由隔离架构**：Server Actions 与中转站 API 通过路由隔离，安全边界清晰。
 - **Server Actions**：仅服务页面应用，使用 Next.js 默认同源校验（CSRF/Origin 验证）
@@ -142,6 +142,10 @@ keys/                          # 外部 API 模型配置（自动发现 *.json�
 **key 格式**：
 - 标准 key：32-64 字符的字母数字下划线横线组合（认证服务签发）
 - 本地 key：`local_<timestamp>_<random>`（内部组件自生成，用于站内代理）
+
+**key 双重用途**：同一 key 在不同场景下承担不同角色：
+- **鉴权凭证**：主入口通过认证服务验证 key，获取权限等级用于限流
+- **上游 API Key**：openai-forward 站将 key 直接作为上游模型服务的 API Key（用户自持 Key 模式）；coze 站忽略 key（使用 Coze SDK 内置凭证）
 
 **认证服务接口**：
 - 健康检查：`GET /api/auth/health`（返回 200 表示可用）

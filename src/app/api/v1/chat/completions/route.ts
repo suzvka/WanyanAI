@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractKey } from '@/lib/api-station/auth';
+import { verifyKey } from '@/lib/api-station/authClient';
+import { checkRateLimit } from '@/lib/api-station/rateLimit';
 import { executeHooks, HookContext } from '@/lib/api-station/hooks';
 import { createErrorResponse } from '@/lib/api-station/mockResponse';
-import { logInfo, logError, generateRequestId } from '@/lib/api-station/logger';
+import { logInfo, logError, logWarn, generateRequestId } from '@/lib/api-station/logger';
 import { stationRegistry, initializeStations } from '@/stations';
 
 /**
@@ -11,7 +13,7 @@ import { stationRegistry, initializeStations } from '@/stations';
  * 接收 OpenAI 格式请求，通过中转站转发到目标服务。
  *
  * 流程：
- * 1. 提取 key → 2. 查找中转站 → 3. 转发请求（鉴权与限流由中转站自行处理）
+ * 1. 提取 key → 2. 鉴权（获取权限等级）→ 3. 限流检查 → 4. 查找中转站 → 5. 转发请求
  */
 export async function POST(request: NextRequest) {
   const requestId = generateRequestId();
@@ -31,16 +33,6 @@ export async function POST(request: NextRequest) {
       ...otherParams
     } = requestBody;
 
-    const key = extractKey(request);
-
-    logInfo('[API:Chat] 请求参数解析', {
-      requestId,
-      hasKey: Boolean(key),
-      model,
-      messageCount: messages?.length || 0,
-      stream,
-    });
-
     // === 模型验证 ===
     if (!model) {
       logError('[API:Chat] 模型 ID 缺失', null, { requestId });
@@ -53,6 +45,77 @@ export async function POST(request: NextRequest) {
         ),
         { status: 400 },
       );
+    }
+
+    // === 提取 key ===
+    const key = extractKey(request);
+
+    logInfo('[API:Chat] 请求参数解析', {
+      requestId,
+      hasKey: Boolean(key),
+      model,
+      messageCount: messages?.length || 0,
+      stream,
+    });
+
+    // === 鉴权：验证 key，获取权限等级 ===
+    const verifyResult = await verifyKey(key);
+
+    // key 为空时返回 401
+    if (!key) {
+      logWarn('[API:Chat] 缺少 Authorization key', { requestId });
+      return NextResponse.json(
+        createErrorResponse(
+          'Missing Authorization header. Please provide a valid API key.',
+          'authentication_error',
+          'MISSING_API_KEY',
+          { requestId },
+        ),
+        { status: 401 },
+      );
+    }
+
+    const permissionLevel = verifyResult.permissionLevel;
+
+    logInfo('[API:Chat] 鉴权完成', {
+      requestId,
+      permissionLevel,
+      source: verifyResult.source,
+      identityId: verifyResult.identityId,
+    });
+
+    // === 限流检查 ===
+    const subjectId = `key:${key}`;
+    const rateLimitResult = checkRateLimit({ subjectId, permissionLevel });
+
+    if (!rateLimitResult.allowed) {
+      logWarn('[API:Chat] 限流触发', {
+        requestId,
+        subjectId,
+        permissionLevel,
+        reason: rateLimitResult.reason,
+      });
+      const retryAfter = rateLimitResult.retryAfter || 60;
+      return NextResponse.json(
+        createErrorResponse(
+          rateLimitResult.reason || 'Rate limit exceeded',
+          'rate_limit_error',
+          rateLimitResult.errorCode || 'RATE_LIMITED',
+          { requestId },
+        ),
+        {
+          status: 429,
+          headers: { 'Retry-After': String(retryAfter) },
+        },
+      );
+    }
+
+    // 构建限流响应头
+    const rateLimitHeaders: Record<string, string> = {};
+    if (rateLimitResult.quota) {
+      rateLimitHeaders['X-RateLimit-Limit'] = String(rateLimitResult.quota.limit);
+      rateLimitHeaders['X-RateLimit-Remaining'] = String(rateLimitResult.quota.remaining);
+      rateLimitHeaders['X-RateLimit-Reset'] = String(rateLimitResult.quota.reset);
     }
 
     // === 查找中转站 ===
@@ -82,7 +145,7 @@ export async function POST(request: NextRequest) {
     // === Hook 预处理 ===
     const hookContext: HookContext = {
       request: {
-        browserId: key || '',
+        browserId: key,
         modelId: model,
         messages: messages || [],
         parameters: otherParams,
@@ -90,7 +153,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         requestId,
         timestamp: Date.now(),
-        permissionLevel: 0, // 主系统不再参与鉴权，权限等级由中转站自行决定
+        permissionLevel,
       },
     };
 
@@ -122,7 +185,7 @@ export async function POST(request: NextRequest) {
 
     logInfo('[API:Chat] Hook 预处理完成', { requestId });
 
-    // === 转发请求（鉴权与限流由中转站内部处理）===
+    // === 转发请求（子站仅负责转发，不参与鉴权限流）===
     const forwardResponse = await station.forward({
       model,
       messages: messages || [],
@@ -130,14 +193,20 @@ export async function POST(request: NextRequest) {
       ...otherParams,
       headers: request.headers,
       requestId,
-      authKey: key || undefined,
+      authKey: key,
     });
 
     logInfo('[API:Chat] 请求处理完成', { requestId, model, stream });
 
+    // 合并限流响应头到转发响应
+    const mergedHeaders = new Headers(forwardResponse.headers);
+    for (const [name, value] of Object.entries(rateLimitHeaders)) {
+      mergedHeaders.set(name, value);
+    }
+
     return new Response(forwardResponse.body, {
       status: forwardResponse.status,
-      headers: forwardResponse.headers,
+      headers: mergedHeaders,
     });
 
   } catch (error) {

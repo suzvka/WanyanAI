@@ -1,8 +1,12 @@
 /**
  * 中转站模块类型定义
  * 
- * 中转站（Station）是自包含的 LLM 网关，负责鉴权、限流和请求转发。
- * 主系统仅负责路由，不参与鉴权和限流决策。
+ * 中转站（Station）是自包含的 LLM 转发器，仅负责将请求转发到具体的模型服务。
+ * 鉴权与限流由主入口（src/app/api/v1/chat/completions/route.ts）统一处理，
+ * 中转站不再参与鉴权和限流决策。
+ * 
+ * authKey 透传给子站：openai-forward 站将其用作用户自持 API Key 直接调用上游服务，
+ * coze 站忽略 authKey（使用 Coze SDK 内置凭证）。
  */
 
 import type { NextRequest } from 'next/server';
@@ -55,7 +59,7 @@ export interface ForwardRequest {
   /** 请求 ID（用于日志追踪） */
   requestId: string;
 
-  /** 从 Authorization 头提取的用户 key（供中转站鉴权使用） */
+  /** 从 Authorization 头提取的用户 key（由主入口鉴权后透传，子站按需使用） */
   authKey?: string;
 }
 
@@ -77,10 +81,11 @@ export interface ForwardResponse {
  * 中转站接口
  * 
  * 所有中转站必须实现此接口。
- * 中转站负责：
+ * 中转站职责：
  * 1. 声明自己能处理的模型
- * 2. 自行鉴权与限流（主系统不参与）
- * 3. 将请求转发到具体的模型服务
+ * 2. 将请求转发到具体的模型服务
+ * 
+ * 注意：鉴权与限流由主入口统一处理，中转站不应自行实现。
  */
 export interface Station {
   /** 中转站唯一标识 */

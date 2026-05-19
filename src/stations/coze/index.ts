@@ -7,8 +7,6 @@
 import type { Station, StationModel, ForwardRequest } from '../types';
 import { LLMClient, Config, HeaderUtils, type Message } from 'coze-coding-dev-sdk';
 import { createLogger } from '@/lib/api-station/logger';
-import { verifyKey, isAuthServiceAvailable } from '@/lib/api-station/authClient';
-import { checkRateLimit } from '@/lib/api-station/rateLimit';
 
 const logger = createLogger('Station:Coze');
 
@@ -196,68 +194,6 @@ export const cozeStation: Station = {
       );
     }
 
-    // === 鉴权 ===
-    let permissionLevel = 1; // 默认游客
-
-    if (authKey) {
-      const authAvailable = await isAuthServiceAvailable();
-      if (authAvailable) {
-        const verifyResult = await verifyKey(authKey);
-        if (verifyResult.permissionLevel === 0) {
-          logger.warn('key 无模型访问权限 (permissionLevel=0)', { requestId });
-          return new Response(
-            JSON.stringify({
-              error: {
-                message: 'Incorrect API key provided. You do not have permission to use this model.',
-                type: 'authentication_error',
-                code: 'insufficient_permissions',
-                requestId,
-              },
-            }),
-            { status: 401, headers: { 'Content-Type': 'application/json' } }
-          );
-        }
-        permissionLevel = verifyResult.permissionLevel;
-        logger.info('鉴权通过', { requestId, permissionLevel, source: verifyResult.source });
-      } else {
-        logger.info('认证服务不可用，降级为游客权限', { requestId });
-      }
-    }
-
-    // === 限流 ===
-    const subjectId = authKey ? `key:${authKey}` : 'anonymous';
-    const rateLimitResult = checkRateLimit({ subjectId, permissionLevel });
-
-    if (!rateLimitResult.allowed) {
-      logger.warn('限流触发', { requestId, subjectId, permissionLevel, reason: rateLimitResult.reason });
-      const retryAfter = rateLimitResult.retryAfter || 60;
-      return new Response(
-        JSON.stringify({
-          error: {
-            message: rateLimitResult.reason || 'Rate limit exceeded',
-            type: 'rate_limit_error',
-            code: rateLimitResult.errorCode || 'RATE_LIMITED',
-            requestId,
-          },
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': String(retryAfter),
-          },
-        }
-      );
-    }
-
-    // 构建限流响应头
-    const rateLimitHeaders: Record<string, string> = {};
-    if (rateLimitResult.quota) {
-      rateLimitHeaders['X-RateLimit-Limit'] = String(rateLimitResult.quota.limit);
-      rateLimitHeaders['X-RateLimit-Remaining'] = String(rateLimitResult.quota.remaining);
-      rateLimitHeaders['X-RateLimit-Reset'] = String(rateLimitResult.quota.reset);
-    }
-
     try {
       logger.info('收到请求', { requestId, model, stream });
 
@@ -307,7 +243,7 @@ export const cozeStation: Station = {
               },
             ],
           }),
-          { headers: { 'Content-Type': 'application/json', ...rateLimitHeaders } }
+          { headers: { 'Content-Type': 'application/json' } }
         );
       }
 
@@ -355,7 +291,6 @@ export const cozeStation: Station = {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
-          ...rateLimitHeaders,
         },
       });
     } catch (error) {
