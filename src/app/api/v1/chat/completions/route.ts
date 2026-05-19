@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticate, extractKey } from '@/lib/api-station/auth';
+import { extractKey } from '@/lib/api-station/auth';
 import { executeHooks, HookContext } from '@/lib/api-station/hooks';
 import { createErrorResponse } from '@/lib/api-station/mockResponse';
 import { logInfo, logError, generateRequestId } from '@/lib/api-station/logger';
 import { stationRegistry, initializeStations } from '@/stations';
-
-function toKeyPreview(key: string | undefined): string {
-  return key ? `${key.slice(0, 8)}...` : 'not_provided';
-}
 
 /**
  * POST /api/v1/chat/completions
@@ -15,7 +11,7 @@ function toKeyPreview(key: string | undefined): string {
  * 接收 OpenAI 格式请求，通过中转站转发到目标服务。
  *
  * 流程：
- * 1. 鉴权（格式校验 + 限流 + 认证服务验证）→ 2. 查找中转站 → 3. 转发请求
+ * 1. 提取 key → 2. 查找中转站 → 3. 转发请求（鉴权与限流由中转站自行处理）
  */
 export async function POST(request: NextRequest) {
   const requestId = generateRequestId();
@@ -35,39 +31,14 @@ export async function POST(request: NextRequest) {
       ...otherParams
     } = requestBody;
 
+    const key = extractKey(request);
+
     logInfo('[API:Chat] 请求参数解析', {
       requestId,
-      hasKey: Boolean(extractKey(request)),
+      hasKey: Boolean(key),
       model,
       messageCount: messages?.length || 0,
       stream,
-    });
-
-    // === 鉴权 ===
-    logInfo('[API:Chat] 开始鉴权', { requestId });
-    const authResult = await authenticate(request);
-
-    if (!authResult.success) {
-      logError('[API:Chat] 认证失败', authResult.error, { requestId });
-      return NextResponse.json(
-        createErrorResponse(
-          authResult.error!,
-          'authentication_error',
-          authResult.errorCode,
-          { requestId },
-        ),
-        { status: 401 },
-      );
-    }
-
-    const permissionLevel = authResult.permissionLevel!;
-    const key = authResult.key ?? '';
-
-    logInfo('[API:Chat] 认证成功', {
-      requestId,
-      keyPreview: toKeyPreview(key),
-      permissionLevel,
-      source: authResult.source,
     });
 
     // === 模型验证 ===
@@ -111,7 +82,7 @@ export async function POST(request: NextRequest) {
     // === Hook 预处理 ===
     const hookContext: HookContext = {
       request: {
-        browserId: key,
+        browserId: key || '',
         modelId: model,
         messages: messages || [],
         parameters: otherParams,
@@ -119,7 +90,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         requestId,
         timestamp: Date.now(),
-        permissionLevel,
+        permissionLevel: 0, // 主系统不再参与鉴权，权限等级由中转站自行决定
       },
     };
 
@@ -151,15 +122,7 @@ export async function POST(request: NextRequest) {
 
     logInfo('[API:Chat] Hook 预处理完成', { requestId });
 
-    // === 限流头计算（复用 authenticate 内部已执行的限流结果，避免 double-count）===
-    const rateLimitHeaders: Record<string, string> = {};
-    if (authResult.quota) {
-      rateLimitHeaders['X-RateLimit-Limit'] = authResult.quota.limit.toString();
-      rateLimitHeaders['X-RateLimit-Remaining'] = authResult.quota.remaining.toString();
-      rateLimitHeaders['X-RateLimit-Reset'] = authResult.quota.reset.toString();
-    }
-
-    // === 转发请求 ===
+    // === 转发请求（鉴权与限流由中转站内部处理）===
     const forwardResponse = await station.forward({
       model,
       messages: messages || [],
@@ -167,19 +130,14 @@ export async function POST(request: NextRequest) {
       ...otherParams,
       headers: request.headers,
       requestId,
-    });
-
-    // 构建最终响应
-    const responseHeaders = new Headers(forwardResponse.headers);
-    Object.entries(rateLimitHeaders).forEach(([key, value]) => {
-      responseHeaders.set(key, value);
+      authKey: key || undefined,
     });
 
     logInfo('[API:Chat] 请求处理完成', { requestId, model, stream });
 
     return new Response(forwardResponse.body, {
       status: forwardResponse.status,
-      headers: responseHeaders,
+      headers: forwardResponse.headers,
     });
 
   } catch (error) {

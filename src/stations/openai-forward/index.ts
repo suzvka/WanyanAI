@@ -137,7 +137,7 @@ export const openaiForwardStation: Station = {
   },
 
   async forward(request: ForwardRequest): Promise<Response> {
-    const { model, messages, stream, headers, requestId, ...params } = request;
+    const { model, messages, stream, headers, requestId, authKey, ...params } = request;
 
     const modelConfig = getModelConfig(model);
     
@@ -155,17 +155,21 @@ export const openaiForwardStation: Station = {
       );
     }
 
+    // 优先使用用户自己的 key，回退到配置文件中的 key
+    const apiKey = authKey || modelConfig.targetApiKey;
+
     logger.info('开始转发请求', {
       requestId,
       model,
       targetModel: modelConfig.targetModel,
       targetBaseUrl: modelConfig.targetBaseUrl,
       stream,
+      usingUserKey: Boolean(authKey),
     });
 
     const result = await modelConfigProvider.chatCompletions(
       modelConfig.targetBaseUrl,
-      modelConfig.targetApiKey,
+      apiKey,
       {
         model: modelConfig.targetModel,
         messages,

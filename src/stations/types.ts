@@ -1,8 +1,8 @@
 /**
  * 中转站模块类型定义
  * 
- * 中转站（Station）负责将请求转发到具体的模型服务。
- * 框架负责鉴权和路由，中转站只负责转发。
+ * 中转站（Station）是自包含的 LLM 网关，负责鉴权、限流和请求转发。
+ * 主系统仅负责路由，不参与鉴权和限流决策。
  */
 
 import type { NextRequest } from 'next/server';
@@ -54,6 +54,9 @@ export interface ForwardRequest {
   
   /** 请求 ID（用于日志追踪） */
   requestId: string;
+
+  /** 从 Authorization 头提取的用户 key（供中转站鉴权使用） */
+  authKey?: string;
 }
 
 /**
@@ -76,7 +79,8 @@ export interface ForwardResponse {
  * 所有中转站必须实现此接口。
  * 中转站负责：
  * 1. 声明自己能处理的模型
- * 2. 将请求转发到具体的模型服务
+ * 2. 自行鉴权与限流（主系统不参与）
+ * 3. 将请求转发到具体的模型服务
  */
 export interface Station {
   /** 中转站唯一标识 */

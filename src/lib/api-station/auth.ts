@@ -1,21 +1,11 @@
 /**
  * 简化版鉴权模块
  *
- * 流程：
- * 1. 限流检查（任何场景下都有效）
- * 2. 检查认证服务是否可用
- *    - 不可用 → 跳过格式校验 + 跳过权限校验 → 返回默认权限
- *    - 可用 → 继续
- * 3. 格式校验
- *    - 无效 → 返回默认权限
- *    - 有效 → 继续
- * 4. 调用认证服务获取权限等级
+ * 注意：鉴权已于 2026-05 下沉至各中转站内部。
+ * 主系统仅保留 extractKey 用于提取 Authorization 头。
+ * authenticate() 已废弃，不应再被调用。
  *
- * 设计原则：
- * - 限流在任何场景下有效（本地查表）
- * - 认证服务器不可用时，任意 key 都能通过验证且获取默认权限
- * - 业务服务器不持有密钥
- * - 业务服务器不解析 token 内容
+ * @deprecated 鉴权逻辑已迁移至 src/stations/coze/index.ts
  */
 
 import { logInfo, logWarn, logError } from './logger';
@@ -91,6 +81,9 @@ function getRateLimitId(request: Request, key: string | null): string {
  *
  * @param request - 请求对象
  * @returns 鉴权结果
+ * @deprecated 鉴权已下沉至各中转站。请勿在主系统路由中调用此函数。
+ *             限流使用 checkRateLimit（来自 rateLimit.ts），
+ *             鉴权使用 verifyKey + isAuthServiceAvailable（来自 authClient.ts）。
  */
 export async function authenticate(request: Request): Promise<AuthResult> {
   // 1. 提取 key（可选）
