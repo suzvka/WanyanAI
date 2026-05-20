@@ -1,0 +1,18 @@
+{
+  "home": {
+    "title": "小说点评（Agent）",
+    "subtitle": ""
+  },
+  "inputPanel": {
+    "title": "文本输入",
+    "description": "Agent 将自动拆解文本并生成评审清单后再执行评审。"
+  },
+  "settingsPanel": {
+    "title": "分析设置",
+    "description": ""
+  },
+  "progress": {
+    "runningTitle": "Agent 正在分析中...",
+    "runningDescription": ""
+  }
+}

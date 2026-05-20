@@ -163,6 +163,73 @@ function normalizeControlsJson(json: unknown): ControlsConfig {
 }
 
 /**
+ * 验证 Agent 管线配置
+ *
+ * 检查：
+ * - 所有步骤的输出模式已在服务端注册表中注册
+ * - maxIterations 合法
+ * - 步骤池非空
+ */
+function validateAgentPipeline(
+  agent: Record<string, unknown> | undefined,
+  slug: string,
+): string[] {
+  const errors: string[] = [];
+
+  if (!agent || typeof agent !== 'object') {
+    return errors; // 未配置 agent，不是错误
+  }
+
+  const agentObj = agent as Record<string, unknown>;
+
+  // enabled 检查
+  if (agentObj.enabled !== true) {
+    return errors; // 未启用
+  }
+
+  // maxIterations 验证
+  const maxIterations = Number(agentObj.maxIterations);
+  if (!Number.isFinite(maxIterations) || maxIterations < 1 || maxIterations > 50) {
+    errors.push(`agent.maxIterations 必须在 1-50 之间，当前值: ${agentObj.maxIterations}`);
+  }
+
+  // steps 验证
+  const steps = agentObj.steps as Array<{ outputMode: string; label: string }> | undefined;
+  if (!Array.isArray(steps) || steps.length === 0) {
+    errors.push('agent.steps 必须是非空数组');
+  } else {
+    const serverOutputModeIds = getServerOutputModeIds();
+    for (let i = 0; i < steps.length; i += 1) {
+      const step = steps[i];
+      if (!step || typeof step.outputMode !== 'string' || !step.outputMode) {
+        errors.push(`agent.steps[${i}].outputMode 必须是有效字符串`);
+      } else if (!serverOutputModeIds.includes(step.outputMode)) {
+        errors.push(`agent.steps[${i}].outputMode "${step.outputMode}" 未在输出模式注册表中注册`);
+      }
+      if (!step || typeof step.label !== 'string' || !step.label) {
+        errors.push(`agent.steps[${i}].label 必须是有效字符串`);
+      }
+    }
+  }
+
+  // terminalStep 验证
+  const terminalStep = agentObj.terminalStep as { outputMode: string; label: string } | undefined;
+  if (!terminalStep || typeof terminalStep.outputMode !== 'string' || !terminalStep.outputMode) {
+    errors.push('agent.terminalStep.outputMode 必须是有效字符串');
+  } else {
+    const serverOutputModeIds = getServerOutputModeIds();
+    if (!serverOutputModeIds.includes(terminalStep.outputMode)) {
+      errors.push(`agent.terminalStep.outputMode "${terminalStep.outputMode}" 未在输出模式注册表中注册`);
+    }
+  }
+  if (!terminalStep || typeof terminalStep.label !== 'string' || !terminalStep.label) {
+    errors.push('agent.terminalStep.label 必须是有效字符串');
+  }
+
+  return errors;
+}
+
+/**
  * 加载单个模块配置
  */
 async function loadModule(moduleDir: string): Promise<PageModuleConfig | null> {
@@ -185,6 +252,15 @@ async function loadModule(moduleDir: string): Promise<PageModuleConfig | null> {
 
   if (validationErrors.length > 0) {
     logger.warn('模块容器验证失败', { slug: manifest.slug, errorCount: validationErrors.length });
+    return null;
+  }
+
+  // 验证 Agent 管线配置（如果启用）
+  const agentErrors = validateAgentPipeline(manifest.agent, manifest.slug);
+  if (agentErrors.length > 0) {
+    for (const err of agentErrors) {
+      logger.warn('Agent 管线验证失败', { slug: manifest.slug, message: err });
+    }
     return null;
   }
 

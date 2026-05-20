@@ -32,6 +32,8 @@ function getProviderHost(baseUrl: string): string {
 export const gaokaoEssayModule: OutputModeModule = {
   id: 'gaokao-essay',
   name: '高考作文',
+  description:
+    '按照高考作文评分标准进行评价，覆盖审题立意、内容充实、结构逻辑、语言表达、发展等级（深刻性、创新性）等维度，产出符合高考评分规范的报告。',
   prompt: GAOKAO_ESSAY_PROMPT,
 
   mcpToolDefinitions: getGaokaoEssayMcpTools(),

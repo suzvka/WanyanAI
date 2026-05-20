@@ -31,6 +31,8 @@ function getProviderHost(baseUrl: string): string {
 export const literaryReviewModule: OutputModeModule = {
   id: 'literary-review',
   name: '文学作品',
+  description:
+    '对文学作品进行多维度评审，涵盖语言表现力、结构逻辑、人文深度、审美张力、内涵凝聚力、共情效能六个子维度，产出带评级的详细评审报告。',
   prompt: LITERARY_REVIEW_PROMPT,
 
   mcpToolDefinitions: getLiteraryReviewMcpTools(),

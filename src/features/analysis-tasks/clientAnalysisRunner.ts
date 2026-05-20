@@ -15,6 +15,7 @@ import { modelClient } from '@/services/model-client';
 import { ProgressController } from '@/features/analysis-progress';
 import {
   getAnalysisResources,
+  getStepResources,
   validateAnalysisOutput,
   buildScoringContext,
   buildRetryMessage,
@@ -27,6 +28,7 @@ import type { ControlSelections } from '@/providers/PageContext';
 import type { EvaluationInput } from '@/types/report';
 import type { PersistedAnalysisReport } from '@/types/analysis';
 import type { ProgressStage } from '@/features/analysis-progress';
+import type { AgentStepResult } from '@/features/agent/types';
 
 const MAX_VALIDATION_REPAIR_ATTEMPTS = 1;
 
@@ -269,6 +271,127 @@ export async function runClientAnalysis(
     return { success: true, report };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '分析失败';
+    return { success: false, error: errorMessage };
+  }
+}
+
+/**
+ * 执行单步分析（Agent 使用）
+ *
+ * 从 runClientAnalysis 中抽取，支持按步骤调用不同输出模式。
+ * - isTerminal = false：中间步骤，调用模型返回上下文字符串
+ * - isTerminal = true：终端步骤，完整 MCP + 验证 + 报告流程
+ */
+export async function runSingleStep(params: {
+  outputModeId: string;
+  moduleConfig: PageModuleConfig;
+  modelConfig: ModelConfig;
+  controlSelections: ControlSelections;
+  input: EvaluationInput;
+  isTerminal: boolean;
+}): Promise<AgentStepResult> {
+  const { outputModeId, moduleConfig, modelConfig, controlSelections, input: evaluationInput, isTerminal } = params;
+
+  try {
+    // 验证模型配置
+    if (!modelConfig.baseUrl || !modelConfig.apiKey || !modelConfig.selectedModel) {
+      return { success: false, error: '模型配置不完整' };
+    }
+
+    // 获取服务端资源（使用指定的 outputModeId）
+    const resources = await getStepResources({
+      outputModeId,
+      moduleConfig,
+      controlSelections,
+    });
+
+    clientLog('runSingleStep: resources loaded', {
+      outputModeId,
+      hasSystemPrompt: !!resources?.systemPrompt,
+    });
+
+    // 构建消息
+    const { messages } = buildAnalysisMessages({
+      input: evaluationInput,
+      systemPrompt: resources.systemPrompt,
+      instructionText: resources.instructionText,
+      mcpToolText: resources.mcpToolText,
+      containers: moduleConfig.manifest.containers,
+    });
+
+    if (isTerminal) {
+      // === 终端步骤：完整 MCP + 验证 + 报告流程 ===
+      const mcpToolDefinitions = getOutputModeMcpTools(outputModeId);
+      clientLog('runSingleStep [terminal]: MCP tools loaded', { toolCount: mcpToolDefinitions.length });
+
+      const result = await modelClient.call({
+        baseUrl: modelConfig.baseUrl,
+        apiKey: modelConfig.apiKey,
+        model: modelConfig.selectedModel,
+        messages,
+        temperature: 0.7,
+        mcpToolDefinitions,
+      });
+
+      const toolCall = result.toolCall;
+      if (!toolCall) {
+        return { success: false, error: '未检测到有效的 MCP 工具调用' };
+      }
+
+      // 验证
+      const validation = await validateAnalysisOutput({
+        outputModeId,
+        toolName: toolCall.name,
+        toolParams: toolCall.params,
+      });
+
+      if (!validation.success) {
+        const errorSummary = validation.errors?.map((e) => `${e.path}: ${e.message}`).join(', ') || '未知错误';
+        return { success: false, error: `输出验证失败: ${errorSummary}` };
+      }
+
+      // 构建报告
+      const createdAt = new Date().toISOString();
+      const { scoringContext } = await buildScoringContext({
+        outputModeId,
+        moduleConfig,
+        controlSelections,
+      });
+
+      const report: PersistedAnalysisReport = {
+        reportId: `${moduleConfig.manifest.slug}-${Date.now()}`,
+        moduleId: moduleConfig.manifest.slug,
+        outputMode: outputModeId,
+        createdAt,
+        rawJson: validation.data as Record<string, unknown>,
+        metadata: {
+          model: modelConfig.selectedModel,
+          baseUrl: modelConfig.baseUrl,
+          outputMode: outputModeId,
+          moduleId: moduleConfig.manifest.slug,
+        },
+        scoringContext: scoringContext ?? { multipliers: {}, defaultMultiplier: 1 },
+      };
+
+      return { success: true, report };
+    }
+
+    // === 中间步骤：仅获取模型文本响应 ===
+    const result = await modelClient.call({
+      baseUrl: modelConfig.baseUrl,
+      apiKey: modelConfig.apiKey,
+      model: modelConfig.selectedModel,
+      messages,
+      temperature: 0.7,
+    });
+
+    clientLog('runSingleStep [intermediate]: model responded', {
+      contentLength: result.content?.length ?? 0,
+    });
+
+    return { success: true, contextText: result.content };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '步骤执行失败';
     return { success: false, error: errorMessage };
   }
 }

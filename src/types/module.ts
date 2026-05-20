@@ -49,6 +49,36 @@ export type PageModuleEntry = {
   icon?: string;
 };
 
+// ============================================================
+// Agent 系统类型
+// ============================================================
+
+/**
+ * Agent 管线步骤定义
+ */
+export type AgentStep = {
+  /** 调用的输出模式 ID */
+  outputMode: string;
+  /** 步骤显示标签（用于进度指示器） */
+  label: string;
+  /** 上下文来源策略 */
+  inputSource: 'user' | 'previous' | 'accumulated';
+};
+
+/**
+ * Agent 管线配置
+ */
+export type AgentPipeline = {
+  /** 是否启用 Agent 模式 */
+  enabled: boolean;
+  /** 最大迭代次数（防止无限循环） */
+  maxIterations: number;
+  /** 可用中间步骤池（Agent 可从中自主选择） */
+  steps: AgentStep[];
+  /** 最终步骤（必须有渲染器，产出用户可见报告） */
+  terminalStep: AgentStep;
+};
+
 /**
  * 页面模块注册配置（main.json）
  */
@@ -65,6 +95,8 @@ export type PageModuleManifest = {
   containers: ContainerConfig[];
   /** 输出模式标识 */
   outputMode: string;
+  /** Agent 管线配置（不配置则使用传统一次性分析流程） */
+  agent?: AgentPipeline;
   /** 页面入口配置（内部配置） */
   entry: PageModuleEntry;
   /**

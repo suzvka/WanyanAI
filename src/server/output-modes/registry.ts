@@ -33,6 +33,14 @@ class OutputModeRegistryImpl extends BaseRegistry<OutputModeModule> implements I
     return this.modules.get(id)?.prompt;
   }
 
+  getName(id: string): string | undefined {
+    return this.modules.get(id)?.name;
+  }
+
+  getDescription(id: string): string | undefined {
+    return this.modules.get(id)?.description;
+  }
+
   validate(id: string, data: unknown): ValidationResult {
     const outputMode = this.modules.get(id);
     if (!outputMode) {

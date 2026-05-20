@@ -16,8 +16,10 @@ type OutputModeRendererComponent = ComponentType<RendererProps<unknown>>;
  */
 const RENDERER_MAP: Record<string, OutputModeRendererComponent> = {
   ...Object.fromEntries(
-    getOutputModeManifest().map((item) => [item.id, item.renderer]),
-  ) as Record<string, OutputModeRendererComponent>,
+    getOutputModeManifest()
+      .filter((item): item is typeof item & { renderer: OutputModeRendererComponent } => item.renderer !== null)
+      .map((item) => [item.id, item.renderer]),
+  ),
 };
 
 /**
@@ -28,6 +30,14 @@ const RENDERER_MAP: Record<string, OutputModeRendererComponent> = {
  */
 export function getOutputModeRenderer(outputModeId: string): OutputModeRendererComponent | undefined {
   return RENDERER_MAP[outputModeId];
+}
+
+/**
+ * 检查输出模式是否有渲染器（是否为终端模式）
+ */
+export function hasOutputModeRenderer(outputModeId: string): boolean {
+  const item = getOutputModeManifest().find((m) => m.id === outputModeId);
+  return item?.renderer !== null && item?.renderer !== undefined;
 }
 
 export function renderOutputMode(

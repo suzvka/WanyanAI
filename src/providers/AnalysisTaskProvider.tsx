@@ -11,6 +11,8 @@ import type {
   TaskSubscriptionListener,
 } from '@/features/analysis-tasks/types';
 import { runClientAnalysis, DEFAULT_PROGRESS_STAGES } from '@/features/analysis-tasks/clientAnalysisRunner';
+import { runAgent } from '@/features/agent/AgentRunner';
+import type { AgentProgressSnapshot } from '@/features/agent/types';
 
 const logger = createLogger('AnalysisTaskProvider');
 
@@ -128,7 +130,86 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
       notifyTaskListeners(nextTaskId);
     });
 
-    // 使用客户端分析执行器（不传递敏感信息给服务端）
+    // 判断是否使用 Agent 模式
+    const agentPipeline = taskInput.moduleConfig.manifest.agent;
+    const useAgentMode = agentPipeline?.enabled === true && agentPipeline.steps.length > 0;
+
+    if (useAgentMode) {
+      // === Agent 模式 ===
+      logger.info('Starting agent task', { taskId: nextTaskId, pipeline: agentPipeline.steps.map(s => s.outputMode) });
+
+      const agentProgressHandler = (snapshot: AgentProgressSnapshot) => {
+        const label = snapshot.phase === 'agent-final'
+          ? `最终步骤：${snapshot.stepLabel}`
+          : `步骤 ${snapshot.stepIndex + 1}/${snapshot.totalSteps}：${snapshot.stepLabel}`;
+
+        progressController.handleEvent({
+          type: 'workflow-stage',
+          stage: 'request-model',
+          timestamp: Date.now(),
+        });
+
+        const currentRecord = reportHistoryStore.getRecord(nextTaskId);
+        if (currentRecord) {
+          reportHistoryStore.updateTaskRecord(nextTaskId, {
+            status: 'running',
+            progressSnapshot: {
+              ...progressController.getSnapshot(),
+              currentLabel: label,
+              currentEventLabel: snapshot.phase === 'agent-final' ? '正在生成最终报告...' : '正在分析中...',
+            },
+            taskMeta: {
+              ...currentRecord.taskMeta,
+              phase: 'request-model',
+              message: label,
+            },
+          });
+          notifyTaskListeners(nextTaskId);
+        }
+      };
+
+      void runAgent(
+        {
+          taskId: nextTaskId,
+          moduleConfig: taskInput.moduleConfig,
+          modelConfig: taskInput.modelConfig,
+          controlSelections: taskInput.controlSelections,
+          input: taskInput.input,
+          pipeline: agentPipeline,
+        },
+        agentProgressHandler,
+      )
+        .then((result) => {
+          if (result.success && result.report) {
+            logger.info('Agent task completed', { taskId: nextTaskId });
+            const completedRecord = reportHistoryStore.completeTask(nextTaskId, result.report);
+            showSuccessWithAction(`分析已完成：${completedRecord.title}`, { duration: 5000 });
+          } else {
+            logger.error('Agent task failed', result.error, { taskId: nextTaskId });
+            progressController.setError(result.error || 'Agent 分析失败');
+            reportHistoryStore.failTask(nextTaskId, result.error || 'Agent 分析失败');
+          }
+          taskInputsRef.current.delete(nextTaskId);
+        })
+        .catch((error) => {
+          logger.error('Agent task failed', error, { taskId: nextTaskId });
+          const message = error instanceof Error ? error.message : 'Agent 分析失败';
+          progressController.setError(message);
+          reportHistoryStore.failTask(nextTaskId, message);
+          taskInputsRef.current.delete(nextTaskId);
+        })
+        .finally(() => {
+          logger.debug('Agent task cleanup', { taskId: nextTaskId });
+          unsubscribe();
+          runningTasksRef.current.delete(schedulerKey);
+          notifyTaskListeners(nextTaskId);
+          processQueue(schedulerKey);
+        });
+
+      return;
+    }
+
+    // === 传统分析模式 ===
     void runClientAnalysis(
       {
         taskId: nextTaskId,

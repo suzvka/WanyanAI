@@ -16,6 +16,8 @@ import {
 } from '@/features/analysis-flow/lib';
 import {
   getServerOutputModePrompt,
+  getServerOutputModeName,
+  getServerOutputModeDescription,
   validateOutputModeData,
   buildOutputModeScoringContext,
   assembleOutputModeData,
@@ -23,6 +25,60 @@ import {
 } from '@/server/output-modes';
 import type { ControlSelections } from '@/providers/PageContext';
 import type { PageModuleConfig } from '@/types/module';
+
+/**
+ * 获取单个步骤的分析资源（Agent 使用）
+ *
+ * 与 getAnalysisResources 类似，但接受显式的 outputModeId 参数，
+ * 使 Agent 编排器可以为中间步骤请求不同输出模式的资源。
+ */
+export async function getStepResources(input: {
+  outputModeId: string;
+  moduleConfig: PageModuleConfig;
+  controlSelections: ControlSelections;
+}): Promise<{
+  systemPrompt: string;
+  instructionText: string;
+  mcpToolText: string;
+}> {
+  const { outputModeId, moduleConfig, controlSelections } = input;
+
+  const systemPrompt = getServerOutputModePrompt(outputModeId);
+  if (!systemPrompt) {
+    throw new Error(`Output mode "${outputModeId}" not found or has no prompt`);
+  }
+
+  const compiledInstructions = await requestCompiledInstructions({
+    controlSelections,
+    configVersion: moduleConfig.manifest.slug,
+  });
+
+  const compiledMcpPrompt = await requestCompiledMcpPrompt({
+    outputModeId,
+  });
+
+  return {
+    systemPrompt,
+    instructionText: compiledInstructions.instructionText,
+    mcpToolText: compiledMcpPrompt.toolPromptText,
+  };
+}
+
+/**
+ * 批量获取输出模式的元数据（名称 + 功能描述）
+ *
+ * Agent 编排器使用此接口获取各模式的描述信息，用于构建 tool 的 description 字段，
+ * 帮助 Agent LLM 决策调用哪个输出模式。
+ */
+export async function getOutputModeMetas(ids: string[]): Promise<
+  Array<{ id: string; name: string; description: string }>
+> {
+  return ids.map((id) => ({
+    id,
+    name: getServerOutputModeName(id) ?? id,
+    description: getServerOutputModeDescription(id) ?? '',
+  }));
+}
 
 /**
  * 获取分析任务所需的资源

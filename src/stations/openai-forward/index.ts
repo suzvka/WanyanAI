@@ -155,8 +155,8 @@ export const openaiForwardStation: Station = {
       );
     }
 
-    // 优先使用用户自己的 key，回退到配置文件中的 key
-    const apiKey = authKey || modelConfig.targetApiKey;
+    // 始终使用配置文件中的 key（keys/*.json），用户的 UI key 仅用于本地鉴权
+    const apiKey = modelConfig.targetApiKey;
 
     logger.info('开始转发请求', {
       requestId,
@@ -164,7 +164,6 @@ export const openaiForwardStation: Station = {
       targetModel: modelConfig.targetModel,
       targetBaseUrl: modelConfig.targetBaseUrl,
       stream,
-      usingUserKey: Boolean(authKey),
     });
 
     const result = await modelConfigProvider.chatCompletions(

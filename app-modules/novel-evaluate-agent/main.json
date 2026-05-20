@@ -1,0 +1,63 @@
+{
+  "slug": "novel-evaluate-agent",
+  "title": "小说点评（Agent）",
+  "description": "AI Agent 驱动的多步骤小说深度诊断",
+  "route": "/evaluate/novel-evaluate-agent",
+  "containers": [
+    {
+      "type": "analysis-controls"
+    },
+    {
+      "type": "text-blocks",
+      "params": {
+        "id": "main-text",
+        "title": "正文",
+        "subtitle": "待评文本",
+        "prompt": "只有这部分需要评分",
+        "defaultExpanded": true,
+        "initialBlockCount": 1
+      }
+    },
+    {
+      "type": "text-blocks",
+      "params": {
+        "id": "reference-material",
+        "title": "参考内容",
+        "defaultExpanded": false,
+        "initialBlockCount": 0
+      }
+    },
+    {
+      "type": "text-blocks",
+      "params": {
+        "id": "reference-review",
+        "title": "参考评价",
+        "defaultExpanded": false,
+        "initialBlockCount": 0
+      }
+    }
+  ],
+  "outputMode": "literary-review",
+  "agent": {
+    "enabled": true,
+    "maxIterations": 5,
+    "steps": [
+      {
+        "outputMode": "checklist",
+        "label": "生成评审清单",
+        "inputSource": "accumulated"
+      }
+    ],
+    "terminalStep": {
+      "outputMode": "literary-review",
+      "label": "文学评审",
+      "inputSource": "accumulated"
+    }
+  },
+  "controlsConfig": "./controls.json",
+  "entry": {
+    "enabled": true,
+    "icon": "BookOpen",
+    "order": 2
+  }
+}

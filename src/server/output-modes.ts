@@ -21,6 +21,14 @@ export function getServerOutputModePrompt(id: string): string | undefined {
   return outputModeRegistry.getPrompt(id);
 }
 
+export function getServerOutputModeName(id: string): string | undefined {
+  return outputModeRegistry.getName(id);
+}
+
+export function getServerOutputModeDescription(id: string): string | undefined {
+  return outputModeRegistry.getDescription(id);
+}
+
 export function getServerOutputModeIds(): string[] {
   return outputModeRegistry.getIds();
 }

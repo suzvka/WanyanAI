@@ -10,7 +10,8 @@ export type OutputModeRendererComponent = ComponentType<RendererProps<unknown>>;
 
 export type OutputModeManifestItem = {
   id: string;
-  renderer: OutputModeRendererComponent;
+  /** 渲染器组件，null 表示中间模式（不呈递给用户） */
+  renderer: OutputModeRendererComponent | null;
   getMcpTools?: () => McpToolDefinition[];
 };
 
@@ -24,6 +25,14 @@ export const OUTPUT_MODE_MANIFEST: OutputModeManifestItem[] = [
     id: 'gaokao-essay',
     renderer: GaokaoEssayRenderer as OutputModeRendererComponent,
     getMcpTools: getGaokaoEssayMcpTools,
+  },
+  {
+    id: 'text-segmentation',
+    renderer: null,
+  },
+  {
+    id: 'checklist',
+    renderer: null,
   },
 ];
 

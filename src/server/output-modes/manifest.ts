@@ -12,6 +12,8 @@ import type { OutputModeRegistry as IOutputModeRegistry } from './types';
 
 import { register as registerLiteraryReview } from '@/features/output-modes/literary-review/module';
 import { register as registerGaokaoEssay } from '@/features/output-modes/gaokao-essay/module';
+import { register as registerTextSegmentation } from '@/features/output-modes/text-segmentation/module';
+import { register as registerChecklist } from '@/features/output-modes/checklist/module';
 
 type ServerOutputModeEntry = {
   id: string;
@@ -21,6 +23,8 @@ type ServerOutputModeEntry = {
 const SERVER_OUTPUT_MODE_MANIFEST: ServerOutputModeEntry[] = [
   { id: 'literary-review', register: registerLiteraryReview },
   { id: 'gaokao-essay', register: registerGaokaoEssay },
+  { id: 'text-segmentation', register: registerTextSegmentation },
+  { id: 'checklist', register: registerChecklist },
 ];
 
 export function registerBuiltinOutputModes(registry: IOutputModeRegistry): void {

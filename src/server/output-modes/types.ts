@@ -45,7 +45,14 @@ export interface ToolCallResolutionResult {
 export interface OutputModeModule {
   id: string;
 
+  /** 显示名称，如"文学作品"、"高考作文" */
   name: string;
+
+  /**
+   * 功能描述，用于 Agent 编排时向 LLM 说明该模式的用途。
+   * 类似 MCP 工具的 description 字段，帮助 Agent 决定何时调用此模式。
+   */
+  description: string;
 
   /**
    * 提示词模板，定义 MCP 工具使用方式、子维度与评级标准。
@@ -94,6 +101,8 @@ export interface OutputModeRegistry {
   register(module: OutputModeModule): void;
   get(id: string): OutputModeModule | undefined;
   getIds(): string[];
+  getName(id: string): string | undefined;
+  getDescription(id: string): string | undefined;
   validate(id: string, data: unknown): ValidationResult;
   buildScoringContext(id: string, params: BuildScoringContextParams): ReportScoringContext;
   assemble(id: string, collectedData: CollectedToolData): { success: boolean; data?: Record<string, unknown>; error?: string };
