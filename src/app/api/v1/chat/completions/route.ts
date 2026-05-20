@@ -5,7 +5,8 @@ import { checkRateLimit } from '@/lib/api-station/rateLimit';
 import { executeHooks, HookContext } from '@/lib/api-station/hooks';
 import { createErrorResponse } from '@/lib/api-station/mockResponse';
 import { logInfo, logError, logWarn, generateRequestId } from '@/lib/api-station/logger';
-import { stationRegistry, initializeStations } from '@/stations';
+import { stationRegistry } from '@/stations/registry';
+import { initializeStations } from '@/stations/loader';
 
 /**
  * POST /api/v1/chat/completions
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
           'MISSING_MODEL',
           { requestId },
         ),
-        { status: 400 },
+        { status: 400 }, 
       );
     }
 

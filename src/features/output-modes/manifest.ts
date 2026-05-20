@@ -1,39 +1,27 @@
-import type { ComponentType } from 'react';
-import type { RendererProps } from './renderer';
 import type { McpToolDefinition } from '@/mcp/types';
-import { LiteraryReviewRenderer } from './literary-review/renderer';
-import { GaokaoEssayRenderer } from './gaokao-essay/renderer';
 import { getLiteraryReviewMcpTools } from './literary-review/mcp-tools';
 import { getGaokaoEssayMcpTools } from './gaokao-essay/mcp-tools';
 
-export type OutputModeRendererComponent = ComponentType<RendererProps<unknown>>;
-
 export type OutputModeManifestItem = {
   id: string;
-  /** 渲染器组件，null 表示中间模式（不呈递给用户） */
-  renderer: OutputModeRendererComponent | null;
+  /** 是否为终端模式（有渲染器可呈递给用户） */
+  hasRenderer: boolean;
   getMcpTools?: () => McpToolDefinition[];
 };
 
 export const OUTPUT_MODE_MANIFEST: OutputModeManifestItem[] = [
   {
     id: 'literary-review',
-    renderer: LiteraryReviewRenderer as OutputModeRendererComponent,
+    hasRenderer: true,
     getMcpTools: getLiteraryReviewMcpTools,
   },
   {
     id: 'gaokao-essay',
-    renderer: GaokaoEssayRenderer as OutputModeRendererComponent,
+    hasRenderer: true,
     getMcpTools: getGaokaoEssayMcpTools,
   },
-  {
-    id: 'text-segmentation',
-    renderer: null,
-  },
-  {
-    id: 'checklist',
-    renderer: null,
-  },
+  { id: 'text-segmentation', hasRenderer: false },
+  { id: 'checklist', hasRenderer: false },
 ];
 
 export function getOutputModeManifest(): OutputModeManifestItem[] {

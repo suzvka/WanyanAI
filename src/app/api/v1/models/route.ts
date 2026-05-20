@@ -1,4 +1,5 @@
-import { stationRegistry, initializeStations } from '@/stations';
+import { stationRegistry } from '@/stations/registry';
+import { initializeStations } from '@/stations/loader';
 import { logInfo, logError } from '@/lib/api-station/logger';
 
 /**
