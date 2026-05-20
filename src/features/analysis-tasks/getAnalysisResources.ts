@@ -25,6 +25,7 @@ import {
 } from '@/server/output-modes';
 import type { ControlSelections } from '@/providers/PageContext';
 import type { PageModuleConfig } from '@/types/module';
+import { DEFAULT_SCORING_CONTEXT } from '@/types/analysis';
 
 /**
  * 获取单个步骤的分析资源（Agent 使用）
@@ -136,13 +137,6 @@ export async function validateAnalysisOutput(input: {
 }> {
   const { outputModeId, toolName, toolParams } = input;
 
-  // 调试日志
-  console.log('[validateAnalysisOutput] Input:', {
-    outputModeId,
-    toolName,
-    toolParamsKeys: Object.keys(toolParams),
-  });
-
   // 1. 解析工具调用
   const resolution = resolveOutputModeToolCall(outputModeId, toolName, toolParams);
 
@@ -173,11 +167,6 @@ export async function validateAnalysisOutput(input: {
       key.startsWith('collect_') && Array.isArray(toolParams[key])
     );
     
-    console.log('[validateAnalysisOutput] Finalize branch:', {
-      hasCollectedData,
-      toolParamsKeys: Object.keys(toolParams),
-    });
-    
     if (hasCollectedData) {
       // 使用传入的收集数据
       const assembledData = assembleOutputModeData(outputModeId, toolParams as Record<string, unknown[]>);
@@ -205,9 +194,6 @@ export async function validateAnalysisOutput(input: {
       errors: [{ path: '(root)', message: `未知工具调用: ${toolName}` }],
     };
   }
-
-  // 调试日志：打印组装后的数据
-  console.log('[validateAnalysisOutput] Assembled toolData:', JSON.stringify(toolData, null, 2));
 
   // 2. 验证数据结构
   const validation = validateOutputModeData(outputModeId, toolData);
@@ -239,7 +225,7 @@ export async function buildScoringContext(input: {
   });
 
   return {
-    scoringContext: scoringContext ?? { multipliers: {}, defaultMultiplier: 1 },
+    scoringContext: scoringContext ?? DEFAULT_SCORING_CONTEXT,
   };
 }
 

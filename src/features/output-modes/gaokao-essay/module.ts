@@ -9,25 +9,12 @@ import 'server-only';
 
 import type { OutputModeModule, OutputModeRegistry, BuildScoringContextParams, CollectedToolData } from '@/server/output-modes/types';
 import type { ReportScoringContext } from '@/types/analysis';
-import type { ReportRating } from '@/config/reportScoring';
 import { reportNeutralMultiplier } from '@/config/reportScoring';
-import { createAppError } from '@/types/errors';
 
 import { GAOKAO_ESSAY_PROMPT } from './prompt';
 import { getGaokaoEssayMcpTools } from './mcp-tools';
-import { gaokaoSubscoreDefinitions, gaokaoSubscoreIds } from './subscores';
-import { calculate } from './scoring';
 import { calculateMultipliers, extractAllOptions, getSelectedValues } from './multiplierCalculator';
 import { modelMinimalReportSchema } from './validate';
-import type { GaokaoEssayData, GaokaoSectionGroup, GaokaoSection } from './types';
-
-function getProviderHost(baseUrl: string): string {
-  try {
-    return new URL(baseUrl).host;
-  } catch {
-    return 'remote-openai-compatible';
-  }
-}
 
 export const gaokaoEssayModule: OutputModeModule = {
   id: 'gaokao-essay',
@@ -39,9 +26,6 @@ export const gaokaoEssayModule: OutputModeModule = {
   mcpToolDefinitions: getGaokaoEssayMcpTools(),
 
   validate: (data: unknown) => {
-    // 调试日志
-    console.log('[gaokao-essay validate] Raw data:', JSON.stringify(data, null, 2));
-    
     if (!data || typeof data !== 'object') {
       return {
         success: false,
@@ -51,15 +35,6 @@ export const gaokaoEssayModule: OutputModeModule = {
 
     const parsed = modelMinimalReportSchema.safeParse(data);
     if (!parsed.success) {
-      // 调试日志：打印详细错误
-      console.error('[gaokao-essay validate] Validation failed:', {
-        issues: parsed.error.issues.map((issue) => ({
-          path: issue.path.join('.'),
-          message: issue.message,
-          code: issue.code,
-        })),
-      });
-      
       const errors: Array<{ path: string; message: string }> = [];
       for (const issue of parsed.error.issues as Array<{ path: Array<string | number>; message: string }>) {
         errors.push({

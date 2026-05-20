@@ -36,6 +36,11 @@ export type ReportScoringContext = {
   defaultMultiplier: number;
 };
 
+export const DEFAULT_SCORING_CONTEXT: ReportScoringContext = {
+  multipliers: {},
+  defaultMultiplier: 1,
+};
+
 export type AnalysisReportMetadata = {
   model: string;
   baseUrl: string;

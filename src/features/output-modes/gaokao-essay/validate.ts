@@ -170,25 +170,11 @@ export type ValidationDiagnostics = {
  * 验证模型输出数据
  */
 export function validate(data: unknown): ValidationResult {
-  // 调试日志：打印原始数据
-  console.log('[validate] Raw data:', JSON.stringify(data, null, 2));
-  
   const result = modelMinimalReportSchema.safeParse(data);
   
   if (result.success) {
     return { success: true, data: result.data };
   }
-  
-  // 调试日志：打印详细错误
-  console.error('[validate] Validation failed:', {
-    issues: result.error.issues.map((issue) => ({
-      path: issue.path.join('.'),
-      message: issue.message,
-      code: issue.code,
-      expected: 'expected' in issue ? issue.expected : undefined,
-      received: 'received' in issue ? issue.received : undefined,
-    })),
-  });
   
   const errors = result.error.issues.map((issue) => ({
     path: issue.path.join('.'),

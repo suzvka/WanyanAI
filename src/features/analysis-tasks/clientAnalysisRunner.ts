@@ -26,7 +26,8 @@ import type { ModelConfig } from '@/types/modelConfig';
 import type { PageModuleConfig } from '@/types/module';
 import type { ControlSelections } from '@/providers/PageContext';
 import type { EvaluationInput } from '@/types/report';
-import type { PersistedAnalysisReport } from '@/types/analysis';
+import type { PersistedAnalysisReport, ReportScoringContext } from '@/types/analysis';
+import { DEFAULT_SCORING_CONTEXT } from '@/types/analysis';
 import type { ProgressStage } from '@/features/analysis-progress';
 import type { AgentStepResult } from '@/features/agent/types';
 
@@ -108,6 +109,33 @@ export interface ClientAnalysisResult {
   success: boolean;
   report?: PersistedAnalysisReport;
   error?: string;
+}
+
+/**
+ * 构建分析报告
+ */
+function buildReport(params: {
+  reportId: string;
+  moduleId: string;
+  outputMode: string;
+  data: unknown;
+  modelConfig: ModelConfig;
+  scoringContext: ReportScoringContext | undefined;
+}): PersistedAnalysisReport {
+  return {
+    reportId: params.reportId,
+    moduleId: params.moduleId,
+    outputMode: params.outputMode,
+    createdAt: new Date().toISOString(),
+    rawJson: params.data as Record<string, unknown>,
+    metadata: {
+      model: params.modelConfig.selectedModel,
+      baseUrl: params.modelConfig.baseUrl,
+      outputMode: params.outputMode,
+      moduleId: params.moduleId,
+    },
+    scoringContext: params.scoringContext ?? DEFAULT_SCORING_CONTEXT,
+  };
 }
 
 /**
@@ -246,27 +274,20 @@ export async function runClientAnalysis(
     // === 阶段 6: 生成报告 ===
     progressController.handleEvent({ type: 'workflow-stage', stage: 'normalize', timestamp: Date.now() });
 
-    const createdAt = new Date().toISOString();
     const { scoringContext } = await buildScoringContext({
       outputModeId: moduleConfig.manifest.outputMode,
       moduleConfig,
       controlSelections,
     });
 
-    const report: PersistedAnalysisReport = {
+    const report = buildReport({
       reportId: taskId,
       moduleId: moduleConfig.manifest.slug,
       outputMode: moduleConfig.manifest.outputMode,
-      createdAt,
-      rawJson: finalValidationData as Record<string, unknown>,
-      metadata: {
-        model: modelConfig.selectedModel,
-        baseUrl: modelConfig.baseUrl,
-        outputMode: moduleConfig.manifest.outputMode,
-        moduleId: moduleConfig.manifest.slug,
-      },
-      scoringContext: scoringContext ?? { multipliers: {}, defaultMultiplier: 1 },
-    };
+      data: finalValidationData,
+      modelConfig,
+      scoringContext,
+    });
 
     return { success: true, report };
   } catch (error) {
@@ -351,27 +372,20 @@ export async function runSingleStep(params: {
       }
 
       // 构建报告
-      const createdAt = new Date().toISOString();
       const { scoringContext } = await buildScoringContext({
         outputModeId,
         moduleConfig,
         controlSelections,
       });
 
-      const report: PersistedAnalysisReport = {
+      const report = buildReport({
         reportId: `${moduleConfig.manifest.slug}-${Date.now()}`,
         moduleId: moduleConfig.manifest.slug,
         outputMode: outputModeId,
-        createdAt,
-        rawJson: validation.data as Record<string, unknown>,
-        metadata: {
-          model: modelConfig.selectedModel,
-          baseUrl: modelConfig.baseUrl,
-          outputMode: outputModeId,
-          moduleId: moduleConfig.manifest.slug,
-        },
-        scoringContext: scoringContext ?? { multipliers: {}, defaultMultiplier: 1 },
-      };
+        data: validation.data,
+        modelConfig,
+        scoringContext,
+      });
 
       return { success: true, report };
     }
