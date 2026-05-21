@@ -1,17 +1,9 @@
 /**
- * Agent Runner — 基于标准 OpenAI tool calling 协议的 Agent 编排器
+ * Agent 编排器
  *
- * 架构：
- *   Agent LLM (modelClient.callWithTools)  ←→  tools（每个输出模式 = 一个 tool）
- *                                                    │
- *                                                    └── tool.execute() → executeOutputMode()
- *
- * Agent LLM 自主决定调用哪些中间步骤以及调用顺序，
- * 最后必须调用终端步骤产出最终报告。
- *
- * AgentRunner 不直接调用 LLM，所有 LLM 调用走框架层统一入口：
- * - 编排 LLM：modelClient.callWithTools（OpenAI 原生 tool_calling 协议）
- * - 步骤执行：executeOutputMode（框架层统一入口）
+ * 基于 OpenAI tool calling 协议驱动多步骤分析管线：
+ * Agent LLM 自主选择中间步骤的顺序和次数，最后调用终端步骤产出报告。
+ * 所有 LLM 调用均通过框架层统一入口（modelClient.chat / executeOutputMode）。
  */
 
 import type { AgentRunInput, AgentRunResult, AgentProgressSnapshot } from './types';
@@ -24,22 +16,18 @@ import type { PersistedAnalysisReport } from '@/types/analysis';
 import { renderTextBlocksForModel, renderTextBlockMetadataForModel } from '@/lib/textBlocks';
 import { executeOutputMode } from '@/features/analysis-flow/lib/executeOutputMode';
 import { modelClient } from '@/services/model-client';
+import { ensureBuiltInApiKey } from '@/lib/api-station/builtInConfig';
 import { getOutputModeMetas } from '@/features/analysis-tasks/getAnalysisResources';
 
-// ---- 日志 ----
 const log = (message: string, data?: unknown) => {
   console.log(`[AgentRunner] ${message}`, data !== undefined ? data : '');
 };
 
-// ---- 工具注册表中的结果捕获 ----
 interface ToolResultCapture {
   terminalReport: PersistedAnalysisReport | null;
   currentStepIndex: number;
 }
 
-/**
- * OpenAI 原生 tool calling 的 tool 定义格式
- */
 interface OpenAIToolDef {
   type: 'function';
   function: {
@@ -53,9 +41,6 @@ interface OpenAIToolDef {
   };
 }
 
-/**
- * Tool 执行函数类型
- */
 type ToolExecutor = () => Promise<string>;
 
 /**
@@ -77,7 +62,6 @@ function buildToolDefinitions(
   const executeMap = new Map<string, ToolExecutor>();
   const stepCount = pipeline.steps.length;
 
-  // ---- 中间步骤 tools ----
   for (const step of pipeline.steps) {
     const meta = descriptions.get(step.outputMode);
     const toolName = step.outputMode;
@@ -131,7 +115,6 @@ function buildToolDefinitions(
     });
   }
 
-  // ---- 终端步骤 tool ----
   const terminalStep = pipeline.terminalStep;
   const terminalMeta = descriptions.get(terminalStep.outputMode);
   const terminalName = terminalStep.outputMode;
@@ -247,11 +230,8 @@ function buildUserPrompt(input: EvaluationInput): string {
 /**
  * 运行 Agent 管线
  *
- * 使用原生 fetch() 调用标准 OpenAI tool calling 协议作为 agent 编排引擎：
- * - Agent LLM 自主决定调用哪些中间步骤
- * - 每个步骤的结果自动注入 agent 上下文
- * - 最后必须调用终端步骤产出报告
- * - reasoning_content 等第三方字段通过 JSON 原生序列化无损保留
+ * Agent LLM 自主决定中间步骤的调用顺序，每个步骤结果自动注入上下文，
+ * 最后调用终端步骤产出报告。
  */
 export async function runAgent(
   input: AgentRunInput,
@@ -265,6 +245,11 @@ export async function runAgent(
     terminalStep: pipeline.terminalStep.outputMode,
     maxIterations: pipeline.maxIterations,
   });
+
+  // 配置模型客户端
+  const baseUrl = modelConfig.baseUrl || '/api/v1';
+  const apiKey = modelConfig.apiKey || ensureBuiltInApiKey();
+  modelClient.configure({ baseUrl, apiKey });
 
   // 工具结果捕获
   const capture: ToolResultCapture = {
@@ -307,7 +292,7 @@ export async function runAgent(
 
   const maxSteps = pipeline.maxIterations + 1; // +1 for terminal step
 
-  // 消息历史（OpenAI 格式），assistant 消息中的 reasoning_content 会自然保留
+  // 消息历史（OpenAI 格式）
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const messages: any[] = [
     { role: 'system', content: systemPrompt },
@@ -320,23 +305,28 @@ export async function runAgent(
     while (iteration < maxSteps + 2) {
       log(`Agent iteration ${iteration}`);
 
-      // 通过框架层 modelClient 调用编排 LLM（OpenAI 原生 tool_calling 协议）
-      const toolCallResult = await modelClient.callWithTools({
-        baseUrl: modelConfig.baseUrl,
-        apiKey: modelConfig.apiKey,
+      // 迭代即将耗尽时强制 tool_choice=none，迫使模型直接输出文本而非继续调用工具
+      const toolChoice = iteration >= maxSteps + 1 ? 'none' as const : 'auto' as const;
+      const response = await modelClient.chat({
         model: modelConfig.selectedModel,
         messages,
         tools,
+        tool_choice: toolChoice,
         temperature: 0.3,
-        maxIterations: maxSteps,
-        currentIteration: iteration,
       });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const choice = (response as any).choices?.[0];
+      if (!choice) {
+        log('No choices in response');
+        throw new Error('模型未返回有效响应');
+      }
 
       // 将 assistant 消息加入历史（reasoning_content 等字段完整保留）
       const assistantMessage = {
         role: 'assistant' as const,
-        content: toolCallResult.content,
-        tool_calls: toolCallResult.toolCalls,
+        content: choice.message?.content ?? null,
+        tool_calls: choice.message?.tool_calls,
       };
       messages.push(assistantMessage);
 

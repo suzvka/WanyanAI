@@ -423,6 +423,41 @@ export class StreamingMCPClient {
     }
   }
 
+  /**
+   * 从外部文本流中解析工具调用。
+   *
+   * 接收一个 AsyncIterable<string>（通常来自 modelClient.chatStream()），
+   * 逐 chunk 解析 <call> 标签并执行工具。
+   *
+   * @param chunks 文本流（每个 chunk 是 SSE delta content）
+   */
+  async *processStream(chunks: AsyncIterable<string>): AsyncGenerator<StreamEvent> {
+    this.textBuffer = '';
+    this.generatingTool = null;
+    this.shouldTerminate = false;
+
+    for await (const chunk of chunks) {
+      yield* this.processTextChunk(chunk);
+    }
+
+    // 处理残留 buffer（未闭合标签场景）
+    if (this.textBuffer) {
+      const toolInfo = this.getGeneratingToolInfo();
+      if (toolInfo) {
+        logger.warn('Stream ended mid-tool-call', {
+          toolName: toolInfo.name,
+          callId: toolInfo.callId,
+        });
+        const incompleteText = toolInfo.startTagContent + toolInfo.raw;
+        if (incompleteText) {
+          yield { type: 'assistant', content: incompleteText };
+        }
+      } else {
+        yield { type: 'assistant', content: this.textBuffer };
+      }
+    }
+  }
+
   private getGeneratingToolInfo(): {
     callId: string;
     name: string;

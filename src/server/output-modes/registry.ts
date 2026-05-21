@@ -25,6 +25,9 @@ import { createLogger } from '@/lib/api-station/logger';
 const logger = createLogger('OutputModeRegistry');
 
 class OutputModeRegistryImpl extends BaseRegistry<OutputModeModule> implements IOutputModeRegistry {
+  /** 框架注入的工具名集合（运行时由 getTools() 动态维护），用于 resolveToolCall 分源分派 */
+  private frameworkToolNames = new Set<string>();
+
   constructor() {
     super('OutputModeRegistry');
   }
@@ -101,12 +104,12 @@ class OutputModeRegistryImpl extends BaseRegistry<OutputModeModule> implements I
 
     const moduleTools = outputMode.mcpToolDefinitions ?? [];
 
-    const frameworkToolNames = outputMode.getFrameworkToolNames
+    const moduleFrameworkRequests = outputMode.getFrameworkToolNames
       ? outputMode.getFrameworkToolNames()
       : ['abort_workflow'];
 
     const filteredModuleTools = moduleTools.filter((tool) => {
-      if (frameworkToolNames.includes(tool.name)) {
+      if (moduleFrameworkRequests.includes(tool.name)) {
         logger.warn('Module should not declare framework tool', {
           moduleId: id,
           toolName: tool.name,
@@ -117,8 +120,9 @@ class OutputModeRegistryImpl extends BaseRegistry<OutputModeModule> implements I
     });
 
     const frameworkTools: McpToolDefinition[] = [];
-    if (frameworkToolNames.includes('abort_workflow')) {
+    if (moduleFrameworkRequests.includes('abort_workflow')) {
       frameworkTools.push(abortWorkflowTool);
+      this.frameworkToolNames.add('abort_workflow');
     }
 
     return [...filteredModuleTools, ...frameworkTools];
@@ -129,46 +133,40 @@ class OutputModeRegistryImpl extends BaseRegistry<OutputModeModule> implements I
     toolName: string,
     params: Record<string, unknown>
   ): ToolCallResolutionResult {
-    const outputMode = this.modules.get(id);
-    if (!outputMode) {
-      return { type: 'unknown' };
+    // 1. 框架注入的工具：框架自己消化，模块完全无感知
+    if (this.frameworkToolNames.has(toolName)) {
+      return this.resolveFrameworkTool(toolName, params);
     }
 
-    if (outputMode.resolveToolCall) {
+    // 2. 模块业务工具：完全交给模块解释含义
+    const outputMode = this.modules.get(id);
+    if (outputMode?.resolveToolCall) {
       return outputMode.resolveToolCall(toolName, params);
     }
 
-    return createDefaultResolveToolCall(toolName, params);
-  }
-}
-
-/**
- * 默认工具调用解析。
- *
- * 将常见业务工具名映射为框架语义动作，保持向后兼容。
- * 模块可通过实现 resolveToolCall 覆盖此默认行为。
- */
-function createDefaultResolveToolCall(
-  toolName: string,
-  params: Record<string, unknown>
-): ToolCallResolutionResult {
-  if (toolName === 'abort_workflow') {
-    return {
-      type: 'abort',
-      reason: params.reason as string,
-      message: params.message as string,
-    };
+    // 3. 无法识别的工具：不再靠硬编码猜测
+    return { type: 'unknown' };
   }
 
-  if (toolName === 'finalize_report') {
-    return { type: 'finalize' };
+  /**
+   * 解析框架工具调用。
+   *
+   * 框架自己注入的工具，名字自己控制，按名解析是合理的——
+   * 外部模块永远不会看到这些工具名，也不应该声明同名的业务工具。
+   */
+  private resolveFrameworkTool(
+    toolName: string,
+    params: Record<string, unknown>
+  ): ToolCallResolutionResult {
+    if (toolName === 'abort_workflow') {
+      return {
+        type: 'abort',
+        reason: params.reason as string,
+        message: params.message as string,
+      };
+    }
+    return { type: 'unknown' };
   }
-
-  if (toolName === 'submit_report') {
-    return { type: 'data', data: params };
-  }
-
-  return { type: 'unknown' };
 }
 
 export const outputModeRegistry = new OutputModeRegistryImpl();

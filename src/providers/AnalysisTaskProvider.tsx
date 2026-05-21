@@ -130,7 +130,7 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
       notifyTaskListeners(nextTaskId);
     });
 
-    // Pipeline 激活由 agent.steps.length > 0 决定（不再使用 enabled 标志）
+    // Pipeline 模式由 agent.steps 配置决定
     const shouldUsePipeline = (taskInput.moduleConfig.manifest.agent?.steps?.length ?? 0) > 0;
 
     if (shouldUsePipeline) {

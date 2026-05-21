@@ -7,7 +7,7 @@
 
 import 'server-only';
 
-import type { OutputModeModule, OutputModeRegistry, BuildScoringContextParams, CollectedToolData } from '@/server/output-modes/types';
+import type { OutputModeModule, OutputModeRegistry, BuildScoringContextParams, CollectedToolData, ToolCallResolutionResult } from '@/server/output-modes/types';
 import type { ReportScoringContext } from '@/types/analysis';
 import { reportNeutralMultiplier } from '@/config/reportScoring';
 
@@ -56,6 +56,17 @@ export const literaryReviewModule: OutputModeModule = {
       multipliers: calculateMultipliers(allOptions, selectedValues, reportNeutralMultiplier),
       defaultMultiplier: reportNeutralMultiplier,
     };
+  },
+
+  resolveToolCall: (toolName: string, _params: Record<string, unknown>): ToolCallResolutionResult => {
+    // 模块自己声明业务工具的框架语义
+    // finalize_report：提示词约定，给 LLM 一个明确的结束信号；
+    // 即使 LLM 遗漏，流结束时的 autoFinalized 机制也会兜底触发 assemble
+    if (toolName === 'finalize_report') {
+      return { type: 'finalize' };
+    }
+    // collect_summary / collect_subscore 等 → 默认收集，无特殊语义
+    return { type: 'unknown' };
   },
 
   assemble: (collectedData: CollectedToolData): unknown => {

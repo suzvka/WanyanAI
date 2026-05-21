@@ -2,13 +2,14 @@
  * 输出模式统一执行入口
  *
  * 框架层提供给输出模式的运行时能力：接受输入，调用 LLM（走框架的模型通道），
- * 返回结果。AgentRunner 和传统单步流程都通过此函数执行。
  *
  * - isTerminal = true：完整 MCP 流式链路 → 验证 → 报告
  * - isTerminal = false：纯文本调用 → 返回上下文字符串
  */
 
 import { modelClient } from '@/services/model-client';
+import { StreamingMCPAdapter } from '@/mcp/streamingAdapter';
+import { ensureBuiltInApiKey } from '@/lib/api-station/builtInConfig';
 import {
   getStepResources,
   validateAnalysisOutput,
@@ -44,10 +45,8 @@ export interface ExecuteResult {
 
 const MAX_VALIDATION_REPAIR_ATTEMPTS = 1;
 
-/** 验证模型配置 */
+/** 验证模型配置（baseUrl/apiKey 可选：中转站模式由 modelClient.configure 补齐） */
 function validateModelConfig(modelConfig: ModelConfig): string | null {
-  if (!modelConfig.baseUrl) return '模型配置缺少 baseUrl';
-  if (!modelConfig.apiKey) return '模型配置缺少 apiKey';
   if (!modelConfig.selectedModel) return '未选择模型';
   return null;
 }
@@ -93,6 +92,11 @@ async function executeTerminal(params: {
   const configError = validateModelConfig(modelConfig);
   if (configError) return { success: false, error: configError };
 
+  // 配置 modelClient（纯透传访问器）
+  const baseUrl = modelConfig.baseUrl || '/api/v1';
+  const apiKey = modelConfig.apiKey || ensureBuiltInApiKey();
+  modelClient.configure({ baseUrl, apiKey });
+
   // 获取服务端资源
   const resources = await getStepResources({
     outputModeId,
@@ -117,14 +121,49 @@ async function executeTerminal(params: {
   let finalValidationData: unknown;
 
   for (let attempt = 0; attempt <= MAX_VALIDATION_REPAIR_ATTEMPTS; attempt += 1) {
-    const result = await modelClient.call({
-      baseUrl: modelConfig.baseUrl,
-      apiKey: modelConfig.apiKey,
+    const adapter = new StreamingMCPAdapter(
+      modelConfig.selectedModel,
+      0.7,
+      undefined,
+      mcpToolDefinitions,
+    );
+
+    const result = await adapter.sendMessage({
       model: modelConfig.selectedModel,
       messages: attemptMessages,
-      temperature: 0.7,
-      mcpToolDefinitions,
     });
+
+    // autoFinalized：流结束时收集了数据但无显式终止工具调用
+    if (result.autoFinalized) {
+      const validation = await validateAnalysisOutput({
+        outputModeId,
+        toolName: '',
+        toolParams: result.collectedData as Record<string, unknown>,
+        isAutoFinalized: true,
+      });
+
+      if (validation.success) {
+        finalValidationData = validation.data;
+        break;
+      }
+
+      const canRetry = attempt < MAX_VALIDATION_REPAIR_ATTEMPTS;
+      if (!canRetry) {
+        const errorSummary = validation.errors?.map((e) => `${e.path}: ${e.message}`).join(', ') || '未知错误';
+        return { success: false, error: `输出验证失败: ${errorSummary}` };
+      }
+
+      const retryMessage = await buildRetryMessage({
+        outputModeId,
+        issues: validation.errors ?? [],
+        previousData: result.collectedData as Record<string, unknown>,
+        attempt,
+        maxAttempts: MAX_VALIDATION_REPAIR_ATTEMPTS,
+      });
+
+      attemptMessages = [...attemptMessages, { role: 'user', content: retryMessage }];
+      continue;
+    }
 
     const toolCall = result.toolCall;
     if (!toolCall) {
@@ -198,6 +237,11 @@ async function executeIntermediate(params: {
   const configError = validateModelConfig(modelConfig);
   if (configError) return { success: false, error: configError };
 
+  // 配置 modelClient
+  const baseUrl = modelConfig.baseUrl || '/api/v1';
+  const apiKey = modelConfig.apiKey || ensureBuiltInApiKey();
+  modelClient.configure({ baseUrl, apiKey });
+
   const resources = await getStepResources({
     outputModeId,
     moduleConfig,
@@ -212,20 +256,21 @@ async function executeIntermediate(params: {
     containers: moduleConfig.manifest.containers,
   });
 
-  const result = await modelClient.call({
-    baseUrl: modelConfig.baseUrl,
-    apiKey: modelConfig.apiKey,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await modelClient.chat({
     model: modelConfig.selectedModel,
     messages,
     temperature: 0.7,
-  });
+  }) as any;
+
+  const content: string = result?.choices?.[0]?.message?.content ?? '';
 
   log('Intermediate step completed', {
     outputModeId,
-    contentLength: result.content?.length ?? 0,
+    contentLength: content.length,
   });
 
-  return { success: true, contextText: result.content };
+  return { success: true, contextText: content };
 }
 
 /**

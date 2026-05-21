@@ -130,27 +130,22 @@ export async function validateAnalysisOutput(input: {
   outputModeId: string;
   toolName: string;
   toolParams: Record<string, unknown>;
+  /**
+   * 流自动结束（无显式 terminate 工具调用），已收集数据需由框架触发 assemble。
+   * 当此标志为 true 时，跳过 resolveToolCall，直接用 toolParams 作为收集数据调用 assemble。
+   */
+  isAutoFinalized?: boolean;
 }): Promise<{
   success: boolean;
   data?: unknown;
   errors?: Array<{ path: string; message: string }>;
 }> {
-  const { outputModeId, toolName, toolParams } = input;
-
-  // 1. 解析工具调用
-  const resolution = resolveOutputModeToolCall(outputModeId, toolName, toolParams);
-
-  if (resolution.type === 'abort') {
-    return {
-      success: false,
-      errors: [{ path: '(root)', message: `${resolution.reason}: ${resolution.message}` }],
-    };
-  }
+  const { outputModeId, toolName, toolParams, isAutoFinalized } = input;
 
   let toolData: Record<string, unknown>;
 
-  if (toolName === 'multi_collect_complete') {
-    // 多工具收集模式
+  if (isAutoFinalized) {
+    // 流自动结束：直接用收集数据触发 assemble，不走 resolveToolCall
     const assembledData = assembleOutputModeData(outputModeId, toolParams as Record<string, unknown[]>);
     if (!assembledData.success) {
       return {
@@ -159,40 +154,53 @@ export async function validateAnalysisOutput(input: {
       };
     }
     toolData = assembledData.data!;
-  } else if (resolution.type === 'data') {
-    toolData = resolution.data ?? {};
-  } else if (resolution.type === 'finalize') {
-    // 检查 toolParams 是否包含收集的数据（来自 streamingAdapter 的合并）
-    const hasCollectedData = Object.keys(toolParams).some(key => 
-      key.startsWith('collect_') && Array.isArray(toolParams[key])
-    );
-    
-    if (hasCollectedData) {
-      // 使用传入的收集数据
-      const assembledData = assembleOutputModeData(outputModeId, toolParams as Record<string, unknown[]>);
-      if (!assembledData.success) {
-        return {
-          success: false,
-          errors: [{ path: '(root)', message: assembledData.error || '数据拼装失败' }],
-        };
-      }
-      toolData = assembledData.data ?? {};
-    } else {
-      // 兼容旧逻辑：传入空对象
-      const assembledData = assembleOutputModeData(outputModeId, {} as Record<string, unknown[]>);
-      if (!assembledData.success) {
-        return {
-          success: false,
-          errors: [{ path: '(root)', message: assembledData.error || '数据拼装失败' }],
-        };
-      }
-      toolData = assembledData.data ?? {};
-    }
   } else {
-    return {
-      success: false,
-      errors: [{ path: '(root)', message: `未知工具调用: ${toolName}` }],
-    };
+    // 显式工具调用：正常解析
+    // 1. 解析工具调用
+    const resolution = resolveOutputModeToolCall(outputModeId, toolName, toolParams);
+
+    if (resolution.type === 'abort') {
+      return {
+        success: false,
+        errors: [{ path: '(root)', message: `${resolution.reason}: ${resolution.message}` }],
+      };
+    }
+
+    if (resolution.type === 'data') {
+      toolData = resolution.data ?? {};
+    } else if (resolution.type === 'finalize') {
+      // 检查 toolParams 是否包含收集的数据（来自 streamingAdapter 的合并）
+      const hasCollectedData = Object.keys(toolParams).some(key =>
+        key.startsWith('collect_') && Array.isArray(toolParams[key])
+      );
+
+      if (hasCollectedData) {
+        // 使用传入的收集数据
+        const assembledData = assembleOutputModeData(outputModeId, toolParams as Record<string, unknown[]>);
+        if (!assembledData.success) {
+          return {
+            success: false,
+            errors: [{ path: '(root)', message: assembledData.error || '数据拼装失败' }],
+          };
+        }
+        toolData = assembledData.data ?? {};
+      } else {
+        // 兼容旧逻辑：传入空对象
+        const assembledData = assembleOutputModeData(outputModeId, {} as Record<string, unknown[]>);
+        if (!assembledData.success) {
+          return {
+            success: false,
+            errors: [{ path: '(root)', message: assembledData.error || '数据拼装失败' }],
+          };
+        }
+        toolData = assembledData.data ?? {};
+      }
+    } else {
+      return {
+        success: false,
+        errors: [{ path: '(root)', message: `未知工具调用: ${toolName}` }],
+      };
+    }
   }
 
   // 2. 验证数据结构

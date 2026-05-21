@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { extractKey } from '@/lib/api-station/auth';
 import { verifyKey } from '@/lib/api-station/authClient';
 import { checkRateLimit } from '@/lib/api-station/rateLimit';
 import { executeHooks, HookContext } from '@/lib/api-station/hooks';
@@ -49,6 +48,16 @@ export async function POST(request: NextRequest) {
     }
 
     // === 提取 key ===
+    function extractKey(request: Request): string | null {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader) {
+        return null;
+      }
+
+      // Bearer <key>
+      const match = authHeader.match(/^Bearer\s+(.+)$/i);
+      return match ? match[1].trim() : null;
+    }
     const key = extractKey(request);
 
     logInfo('[API:Chat] 请求参数解析', {

@@ -24,8 +24,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Server Actions 使用默认同源校验，不再放宽安全策略
-  // 中转站 API 通过 Route Handler 独立暴露，与 Server Actions 路由隔离
   async headers() {
     return [
       {

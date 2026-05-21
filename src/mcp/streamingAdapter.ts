@@ -1,17 +1,16 @@
 /**
  * 流式 MCP 适配器
  *
- * 基于 StreamingMCPClient 封装 LLM 调用，在单次 SSE 流中完成
- * 工具注册、响应解析和事件分发。不感知工具的业务含义。
+ * 依赖 modelClient 获取流式文本，基于 StreamingMCPClient 解析 <call> 标签、
+ * 执行工具并分发事件。HTTP 请求由 modelClient 负责，Adapter 不触碰网络。
  */
 
 import { StreamingMCPClient, type StreamEvent } from './streamingClient';
 import type { McpToolDefinition } from './types';
-import { requestResponse } from '@/lib/client-request';
 import type { ModelAnalysisRequest } from '@/types/analysis';
 import type { AnalysisEventHandlers } from '@/types/streamEvents';
 import { createLogger } from '@/lib/api-station/logger';
-import { ensureBuiltInApiKey } from '@/lib/api-station/builtInConfig';
+import { modelClient } from '@/services/model-client';
 
 const logger = createLogger('StreamingMCPAdapter');
 
@@ -23,19 +22,14 @@ export class StreamingMCPAdapter {
     params: Record<string, unknown>;
   } | null = null;
   private collectedData: Record<string, unknown[]> = {};
-  private cachedProxyKey: string | null = null;
   private model: string;
   private temperature?: number;
-  private baseUrl?: string;
-  private apiKey?: string;
 
   constructor(
     model: string,
     temperature?: number,
     eventHandlers?: AnalysisEventHandlers,
     mcpToolDefinitions?: McpToolDefinition[],
-    baseUrl?: string,
-    apiKey?: string
   ) {
     if (!model || typeof model !== 'string') {
       throw new Error('StreamingMCPAdapter: model 不能为空');
@@ -44,48 +38,28 @@ export class StreamingMCPAdapter {
     this.model = model;
     this.temperature = temperature;
     this.eventHandlers = eventHandlers || {};
-    this.baseUrl = baseUrl;
-    this.apiKey = apiKey;
 
     this.client = new StreamingMCPClient();
 
-    // 工具列表由调用方（框架注册表）组装后传入，Adapter 只做纯执行。
     const tools = mcpToolDefinitions ?? [];
-
     logger.debug('注册工具', { tools: tools.map(t => t.name) });
     this.client.registerTools(tools);
-    logger.info('工具注册完成', { 
-      hasCustomEndpoint: !!baseUrl,
-      endpoint: baseUrl || '/api/v1/chat/completions (站内代理)'
-    });
   }
 
   /**
-   * 获取代理 key
+   * 发送消息并处理流式响应。
    *
-   * 直接使用本地生成的 key。
-   * 因为认证服务不可用时，任意 key 都能通过验证并获取默认权限。
-   */
-  private getProxyKey(): string {
-    if (this.cachedProxyKey) {
-      return this.cachedProxyKey;
-    }
-
-    this.cachedProxyKey = ensureBuiltInApiKey();
-    return this.cachedProxyKey;
-  }
-
-  /**
-   * 发送消息并处理流式响应
-   *
-   * @param payload 模型请求参数
-   * @returns 完整内容和捕获的工具调用
+   * 通过 modelClient.chatStream() 获取文本流，
+   * 交由 StreamingMCPClient.processStream() 解析 <call> 标签。
    */
   async sendMessage(payload: ModelAnalysisRequest): Promise<{
     fullContent: string;
     toolCall: { name: string; params: Record<string, unknown> } | null;
+    /** 流结束且已收集数据但无显式终止——由调用方触发 assemble */
+    autoFinalized: boolean;
+    /** 收集的数据（toolName → 调用结果数组） */
+    collectedData: Record<string, unknown[]>;
   }> {
-    // 重置状态
     this.client.reset();
     this.capturedToolCall = null;
     this.collectedData = {};
@@ -95,52 +69,14 @@ export class StreamingMCPAdapter {
     let hasEmittedThinkStart = false;
     let hasEmittedContentStart = false;
 
-    // 创建 LLM 回调函数
-    const llmCallback = async (messages: Array<{ role: string; content: unknown }>) => {
-      const endpoint = this.baseUrl
-        ? `${this.baseUrl.replace(/\/$/, '')}/chat/completions`
-        : `/api/v1/chat/completions`;
+    // 从 modelClient 获取文本流（modelClient 需由调用方预先 configure）
+    const chunks = modelClient.chatStream({
+      model: this.model,
+      messages: payload.messages,
+      temperature: this.temperature,
+    });
 
-      const authHeader = this.apiKey
-        ? `Bearer ${this.apiKey}`
-        : `Bearer ${this.getProxyKey()}`;
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader,
-      };
-
-      const requestBody: Record<string, unknown> = {
-        model: this.model,
-        messages,
-        stream: true,
-      };
-
-      if (this.temperature !== undefined) {
-        requestBody.temperature = this.temperature;
-      }
-
-      return requestResponse(endpoint, {
-        method: 'POST',
-        headers,
-        credentials: 'same-origin',
-        body: JSON.stringify(requestBody),
-        errorCode: 'provider_request_failed',
-        errorMessage: '模型请求失败',
-        networkErrorMessage: '模型请求失败，请检查网络连接或服务配置后重试',
-        mapErrorMessage: (message) => (
-          message.includes('rate limit exceeded')
-            ? '请求过于频繁，请稍后再试（每分钟最多 3 次请求）'
-            : message
-        ),
-      });
-    };
-
-    const events = this.client.stream(
-      llmCallback,
-      payload.messages,
-      undefined
-    );
+    const events = this.client.processStream(chunks);
 
     try {
       for await (const event of events) {
@@ -252,18 +188,17 @@ export class StreamingMCPAdapter {
       throw error;
     }
 
-    // 流结束且无显式终止时，若已收集数据则自动完成，避免多工具模式下挂起。
-    if (!this.capturedToolCall && Object.keys(this.collectedData).length > 0) {
+    // 流结束且无显式终止时，若已收集数据则标记 autoFinalized
+    const autoFinalized = !this.capturedToolCall && Object.keys(this.collectedData).length > 0;
+    if (autoFinalized) {
       logger.info('流结束，自动完成数据收集', { tools: Object.keys(this.collectedData) });
-      this.capturedToolCall = {
-        name: 'multi_collect_complete',
-        params: this.collectedData,
-      };
     }
 
     return {
       fullContent,
       toolCall: this.capturedToolCall,
+      autoFinalized,
+      collectedData: this.collectedData,
     };
   }
 
@@ -276,12 +211,4 @@ export class StreamingMCPAdapter {
     this.collectedData = {};
     this.client.reset();
   }
-}
-
-export function createStreamingMCPAdapter(
-  model: string,
-  temperature?: number,
-  eventHandlers?: AnalysisEventHandlers
-): StreamingMCPAdapter {
-  return new StreamingMCPAdapter(model, temperature, eventHandlers);
 }
