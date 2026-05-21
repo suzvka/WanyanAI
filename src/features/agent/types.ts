@@ -1,7 +1,8 @@
 /**
  * Agent 系统类型定义
  *
- * 基于 OpenAI tool calling 协议，每个输出模式封装为 function tool，
+ * 编排层使用 LangChain（ChatOpenAI.bindTools + DynamicStructuredTool），
+ * 每个输出模式通过薄适配器封装为 LangChain Tool，
  * 由 Agent LLM 自主决定调用顺序。步骤执行统一走 executeOutputMode()。
  */
 

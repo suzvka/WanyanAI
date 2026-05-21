@@ -86,8 +86,10 @@ async function executeTerminal(params: {
   controlSelections: ControlSelections;
   input: EvaluationInput;
   taskId: string;
+  /** Agent 工作区上下文（可选，仅 Agent 模式使用） */
+  additionalContext?: string;
 }): Promise<ExecuteResult> {
-  const { outputModeId, moduleConfig, modelConfig, controlSelections, input: evalInput, taskId } = params;
+  const { outputModeId, moduleConfig, modelConfig, controlSelections, input: evalInput, taskId, additionalContext } = params;
 
   const configError = validateModelConfig(modelConfig);
   if (configError) return { success: false, error: configError };
@@ -104,10 +106,14 @@ async function executeTerminal(params: {
     controlSelections,
   });
 
-  // 构建初始消息
+  // 构建初始消息（如有 Agent workspace 上下文则 prepend 到 system prompt）
+  const effectiveSystemPrompt = additionalContext
+    ? `${additionalContext}\n\n---\n\n${resources.systemPrompt}`
+    : resources.systemPrompt;
+
   const { messages: initialMessages } = buildAnalysisMessages({
     input: evalInput,
-    systemPrompt: resources.systemPrompt,
+    systemPrompt: effectiveSystemPrompt,
     instructionText: resources.instructionText,
     mcpToolText: resources.mcpToolText,
     containers: moduleConfig.manifest.containers,
@@ -287,13 +293,16 @@ export async function executeOutputMode(params: {
   isTerminal: boolean;
   /** 终端步骤需要 taskId 用于报告 ID */
   taskId?: string;
+  /** Agent 工作区上下文（可选，仅终端步骤使用） */
+  additionalContext?: string;
 }): Promise<ExecuteResult> {
-  const { outputModeId, isTerminal, taskId, ...rest } = params;
+  const { outputModeId, isTerminal, taskId, additionalContext, ...rest } = params;
 
   if (isTerminal) {
     return executeTerminal({
       outputModeId,
       taskId: taskId ?? `${rest.moduleConfig.manifest.slug}-${Date.now()}`,
+      additionalContext,
       ...rest,
     });
   }

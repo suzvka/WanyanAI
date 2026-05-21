@@ -1,221 +1,35 @@
 /**
  * Agent 编排器
  *
- * 基于 OpenAI tool calling 协议驱动多步骤分析管线：
- * Agent LLM 自主选择中间步骤的顺序和次数，最后调用终端步骤产出报告。
- * 所有 LLM 调用均通过框架层统一入口（modelClient.chat / executeOutputMode）。
+ * 基于 LangChain 编排层驱动多步骤分析管线：
+ * - Agent LLM（ChatOpenAI.bindTools）自主选择中间步骤的顺序和次数
+ * - 步骤执行通过现有 executeOutputMode()（零改动）
+ * - 中间产物存入 AgentWorkspace，Agent LLM 通过 workspace_list/workspace_read 按需浏览
+ * - 终端步骤接受 artifact_ids 参数，仅注入选中的产物
+ * - AgentToolRegistry 管理所有工具注册
+ *
+ * 分层架构：
+ *   AgentRunner（入口）→ langchain/agent.ts（编排循环）→ tools.ts（适配器）→ executeOutputMode（步骤执行）
  */
 
 import type { AgentRunInput, AgentRunResult, AgentProgressSnapshot } from './types';
-import type { AgentPipeline, AgentStep } from '@/types/module';
 import type { EvaluationInput } from '@/types/report';
-import type { PageModuleConfig } from '@/types/module';
-import type { ModelConfig } from '@/types/modelConfig';
-import type { ControlSelections } from '@/providers/PageContext';
-import type { PersistedAnalysisReport } from '@/types/analysis';
 import { renderTextBlocksForModel, renderTextBlockMetadataForModel } from '@/lib/textBlocks';
-import { executeOutputMode } from '@/features/analysis-flow/lib/executeOutputMode';
 import { modelClient } from '@/services/model-client';
 import { ensureBuiltInApiKey } from '@/lib/api-station/builtInConfig';
 import { getOutputModeMetas } from '@/features/analysis-tasks/getAnalysisResources';
+import { AgentWorkspace } from './workspace';
+import { AgentToolRegistry } from './registry';
+import {
+  createAgentChatModel,
+  buildAllStepTools,
+  runAgentLoop,
+} from './langchain';
+import type { TerminalCapture } from './langchain';
 
 const log = (message: string, data?: unknown) => {
   console.log(`[AgentRunner] ${message}`, data !== undefined ? data : '');
 };
-
-interface ToolResultCapture {
-  terminalReport: PersistedAnalysisReport | null;
-  currentStepIndex: number;
-}
-
-interface OpenAIToolDef {
-  type: 'function';
-  function: {
-    name: string;
-    description: string;
-    parameters: {
-      type: 'object';
-      properties: Record<string, unknown>;
-      required: string[];
-    };
-  };
-}
-
-type ToolExecutor = () => Promise<string>;
-
-/**
- * 为管线中的所有步骤构建 OpenAI 原生 tool 定义和执行器映射
- */
-function buildToolDefinitions(
-  pipeline: AgentPipeline,
-  runInput: {
-    moduleConfig: PageModuleConfig;
-    modelConfig: ModelConfig;
-    controlSelections: ControlSelections;
-    input: EvaluationInput;
-  },
-  capture: ToolResultCapture,
-  onProgress: (snapshot: AgentProgressSnapshot) => void,
-  descriptions: Map<string, { name: string; description: string }>,
-): { tools: OpenAIToolDef[]; executeMap: Map<string, ToolExecutor> } {
-  const tools: OpenAIToolDef[] = [];
-  const executeMap = new Map<string, ToolExecutor>();
-  const stepCount = pipeline.steps.length;
-
-  for (const step of pipeline.steps) {
-    const meta = descriptions.get(step.outputMode);
-    const toolName = step.outputMode;
-
-    tools.push({
-      type: 'function',
-      function: {
-        name: toolName,
-        description: buildToolDescription(step, stepCount, false, meta),
-        parameters: {
-          type: 'object',
-          properties: {},
-          required: [],
-        },
-      },
-    });
-
-    executeMap.set(toolName, async () => {
-      const idx = capture.currentStepIndex;
-      capture.currentStepIndex += 1;
-
-      onProgress({
-        stepIndex: idx,
-        totalSteps: stepCount,
-        stepLabel: step.label,
-        phase: 'agent-step',
-      });
-
-      log(`Running intermediate step: ${step.outputMode} (${step.label})`);
-
-      const result = await executeOutputMode({
-        outputModeId: step.outputMode,
-        moduleConfig: runInput.moduleConfig,
-        modelConfig: runInput.modelConfig,
-        controlSelections: runInput.controlSelections,
-        input: runInput.input,
-        isTerminal: false,
-      });
-
-      if (!result.success) {
-        const errMsg = `Step "${step.label}" failed: ${result.error}`;
-        log(errMsg);
-        return `ERROR: ${errMsg}`;
-      }
-
-      log(`Step "${step.label}" completed`, {
-        contextTextLength: result.contextText?.length ?? 0,
-      });
-
-      return result.contextText ?? '(no output)';
-    });
-  }
-
-  const terminalStep = pipeline.terminalStep;
-  const terminalMeta = descriptions.get(terminalStep.outputMode);
-  const terminalName = terminalStep.outputMode;
-
-  tools.push({
-    type: 'function',
-    function: {
-      name: terminalName,
-      description: buildToolDescription(terminalStep, stepCount, true, terminalMeta),
-      parameters: {
-        type: 'object',
-        properties: {},
-        required: [],
-      },
-    },
-  });
-
-  executeMap.set(terminalName, async () => {
-    onProgress({
-      stepIndex: stepCount,
-      totalSteps: stepCount,
-      stepLabel: terminalStep.label,
-      phase: 'agent-final',
-    });
-
-    log(`Running terminal step: ${terminalStep.outputMode} (${terminalStep.label})`);
-
-    const result = await executeOutputMode({
-      outputModeId: terminalStep.outputMode,
-      moduleConfig: runInput.moduleConfig,
-      modelConfig: runInput.modelConfig,
-      controlSelections: runInput.controlSelections,
-      input: runInput.input,
-      isTerminal: true,
-    });
-
-    if (!result.success || !result.report) {
-      const errMsg = `Terminal step "${terminalStep.label}" failed: ${result.error}`;
-      log(errMsg);
-      return `ERROR: ${errMsg}`;
-    }
-
-    capture.terminalReport = result.report;
-    log('Terminal step completed', { reportId: result.report.reportId });
-    return `Report generated. ID: ${result.report.reportId}`;
-  });
-
-  return { tools, executeMap };
-}
-
-/**
- * 构建 tool 描述文本（供 agent LLM 决策用）
- */
-function buildToolDescription(
-  step: AgentStep,
-  totalSteps: number,
-  isTerminal: boolean,
-  meta?: { name: string; description: string },
-): string {
-  const name = meta?.name ?? step.label;
-  const desc = meta?.description ?? `执行「${step.label}」分析`;
-
-  if (isTerminal) {
-    return `[FINAL - MUST BE LAST] ${name} — ${desc}`;
-  }
-  return `[TOOL] ${name} — ${desc} (intermediate step, 共 ${totalSteps} 个可用)`;
-}
-
-/**
- * 构建 Agent 系统提示词
- */
-function buildAgentSystemPrompt(
-  pipeline: AgentPipeline,
-  descriptions: Map<string, { name: string; description: string }>,
-): string {
-  const stepList = pipeline.steps
-    .map((s, i) => {
-      const meta = descriptions.get(s.outputMode);
-      return `${i + 1}. **${meta?.name ?? s.label}** (\`${s.outputMode}\`): ${meta?.description ?? s.label}`;
-    })
-    .join('\n');
-
-  const terminalMeta = descriptions.get(pipeline.terminalStep.outputMode);
-
-  return `You are an AI analysis coordinator. Your job is to orchestrate a multi-step text analysis pipeline.
-
-## Available Analysis Steps
-You may call any of these intermediate steps, in any order, as needed:
-
-${stepList}
-
-## Final Step (MUST BE LAST)
-- **${terminalMeta?.name ?? pipeline.terminalStep.label}** (\`${pipeline.terminalStep.outputMode}\`): ${terminalMeta?.description ?? pipeline.terminalStep.label}
-
-## Instructions
-1. Analyze the input text by calling one or more intermediate analysis steps
-2. You may skip steps that are not relevant and call steps multiple times if needed
-3. After you have sufficient analysis, call the final step to produce the report
-4. The final step MUST be the last tool you call — do not call any tools after it
-5. Do not exceed ${pipeline.maxIterations} intermediate steps`;
-}
 
 /**
  * 构建初始用户提示
@@ -230,8 +44,8 @@ function buildUserPrompt(input: EvaluationInput): string {
 /**
  * 运行 Agent 管线
  *
- * Agent LLM 自主决定中间步骤的调用顺序，每个步骤结果自动注入上下文，
- * 最后调用终端步骤产出报告。
+ * Agent LLM 自主决定中间步骤的调用顺序，中间产物存入 workspace，
+ * 终端步骤仅注入选中的产物上下文。
  */
 export async function runAgent(
   input: AgentRunInput,
@@ -246,16 +60,16 @@ export async function runAgent(
     maxIterations: pipeline.maxIterations,
   });
 
-  // 配置模型客户端
+  // 配置 modelClient（步骤执行仍走 executeOutputMode → modelClient）
   const baseUrl = modelConfig.baseUrl || '/api/v1';
   const apiKey = modelConfig.apiKey || ensureBuiltInApiKey();
   modelClient.configure({ baseUrl, apiKey });
 
-  // 工具结果捕获
-  const capture: ToolResultCapture = {
-    terminalReport: null,
-    currentStepIndex: 0,
-  };
+  // 创建工作区（客户端内存沙箱，随函数返回自动 GC）
+  const workspace = new AgentWorkspace();
+
+  // 终端报告捕获
+  const capture: TerminalCapture = { report: null };
 
   // 初始进度
   onProgress({
@@ -277,106 +91,59 @@ export async function runAgent(
     modes: modeMetas.map((m) => ({ id: m.id, name: m.name, descLen: m.description.length })),
   });
 
-  // 构建 tool 定义和执行器映射
-  const { tools, executeMap } = buildToolDefinitions(
-    pipeline,
-    { moduleConfig, modelConfig, controlSelections, input: evalInput },
-    capture,
-    onProgress,
+  // 创建 Agent LLM（LangChain ChatOpenAI）
+  const chatModel = createAgentChatModel(modelConfig);
+
+  // 构建 ToolContext（含 workspace）
+  const toolCtx = {
+    moduleConfig,
+    modelConfig,
+    controlSelections,
+    evalInput,
+    taskId: input.taskId,
     descriptions,
+    workspace,
+  };
+
+  // 构建 LangChain Tool 适配器（中间步骤 + 终端步骤 + workspace 工具）
+  const { tools, terminalToolName } = buildAllStepTools(
+    pipeline.steps,
+    pipeline.terminalStep,
+    toolCtx,
+    capture,
   );
 
-  // 构建消息
-  const systemPrompt = buildAgentSystemPrompt(pipeline, descriptions);
-  const userPrompt = buildUserPrompt(evalInput);
-
-  const maxSteps = pipeline.maxIterations + 1; // +1 for terminal step
-
-  // 消息历史（OpenAI 格式）
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const messages: any[] = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt },
-  ];
-
-  try {
-    let iteration = 0;
-
-    while (iteration < maxSteps + 2) {
-      log(`Agent iteration ${iteration}`);
-
-      // 迭代即将耗尽时强制 tool_choice=none，迫使模型直接输出文本而非继续调用工具
-      const toolChoice = iteration >= maxSteps + 1 ? 'none' as const : 'auto' as const;
-      const response = await modelClient.chat({
-        model: modelConfig.selectedModel,
-        messages,
-        tools,
-        tool_choice: toolChoice,
-        temperature: 0.3,
-      });
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const choice = (response as any).choices?.[0];
-      if (!choice) {
-        log('No choices in response');
-        throw new Error('模型未返回有效响应');
-      }
-
-      // 将 assistant 消息加入历史（reasoning_content 等字段完整保留）
-      const assistantMessage = {
-        role: 'assistant' as const,
-        content: choice.message?.content ?? null,
-        tool_calls: choice.message?.tool_calls,
-      };
-      messages.push(assistantMessage);
-
-      // 检查是否有 tool calls
-      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        for (const toolCall of assistantMessage.tool_calls) {
-          if (toolCall.type !== 'function') continue;
-
-          const toolName = toolCall.function.name;
-          const executor = executeMap.get(toolName);
-
-          if (!executor) {
-            log(`Unknown tool called: ${toolName}`);
-            messages.push({
-              role: 'tool',
-              tool_call_id: toolCall.id,
-              content: `ERROR: Unknown tool "${toolName}"`,
-            });
-            continue;
-          }
-
-          const toolResult = await executor();
-
-          messages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: toolResult,
-          });
-        }
-      } else {
-        // 没有 tool calls，模型直接回复文本，结束循环
-        log('Agent finished without tool calls', {
-          content: typeof assistantMessage.content === 'string'
-            ? assistantMessage.content.slice(0, 200)
-            : undefined,
-        });
-        break;
-      }
-
-      iteration += 1;
-    }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Agent run failed';
-    log('Agent run failed', { error: errorMessage });
-    return { success: false, error: errorMessage };
+  // 工具注册表（统一管理，便于后续扩展）
+  const toolRegistry = new AgentToolRegistry();
+  for (const tool of tools) {
+    toolRegistry.register({ id: tool.name, tool });
   }
 
-  if (capture.terminalReport) {
-    log('Agent completed successfully', { reportId: capture.terminalReport.reportId });
-    return { success: true, report: capture.terminalReport };
+  log('Tools registered', { count: toolRegistry.getIds().length });
+
+  // 构建用户提示词
+  const userPrompt = buildUserPrompt(evalInput);
+
+  // 委托 LangChain 编排层执行
+  const loopResult = await runAgentLoop({
+    chatModel,
+    tools: toolRegistry.getAllTools(),
+    terminalToolName,
+    pipeline,
+    descriptions,
+    userPrompt,
+    onProgress,
+  });
+
+  // 检查结果
+  if (!loopResult.success) {
+    log('Agent run failed', { error: loopResult.error });
+    return { success: false, error: loopResult.error ?? 'Agent run failed' };
+  }
+
+  if (capture.report) {
+    log('Agent completed successfully', { reportId: capture.report.reportId });
+    return { success: true, report: capture.report };
   }
 
   log('Agent completed without producing a terminal report');
