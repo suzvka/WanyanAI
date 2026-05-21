@@ -3,6 +3,9 @@
  *
  * Agent 编排基于标准 OpenAI tool calling 协议实现，
  * 每个输出模式封装为 OpenAI function tool，由 agent LLM 自主决定调用顺序。
+ *
+ * 步骤执行统一走框架层 executeOutputMode()（ExecuteResult），
+ * 不再暴露独立的 AgentStepResult 类型。
  */
 
 import type { EvaluationInput } from '@/types/report';
@@ -10,19 +13,6 @@ import type { PageModuleConfig, AgentStep, AgentPipeline } from '@/types/module'
 import type { ModelConfig } from '@/types/modelConfig';
 import type { ControlSelections } from '@/providers/PageContext';
 import type { PersistedAnalysisReport } from '@/types/analysis';
-
-/**
- * 单步分析输出结果
- */
-export interface AgentStepResult {
-  success: boolean;
-  /** 终端步骤的报告 */
-  report?: PersistedAnalysisReport;
-  /** 中间步骤的文本结果（回注到 agent 上下文） */
-  contextText?: string;
-  /** 错误信息 */
-  error?: string;
-}
 
 /**
  * Agent 运行进度快照

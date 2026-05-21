@@ -39,7 +39,6 @@
   ],
   "outputMode": "literary-review",
   "agent": {
-    "enabled": true,
     "maxIterations": 5,
     "steps": [
       {

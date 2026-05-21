@@ -2,17 +2,16 @@
  * Agent Runner — 基于标准 OpenAI tool calling 协议的 Agent 编排器
  *
  * 架构：
- *   Agent LLM (fetch → chat/completions)  ←→  tools（每个输出模式 = 一个 tool）
- *                                                │
- *                                                └── tool.execute() → runSingleStep()
+ *   Agent LLM (modelClient.callWithTools)  ←→  tools（每个输出模式 = 一个 tool）
+ *                                                    │
+ *                                                    └── tool.execute() → executeOutputMode()
  *
  * Agent LLM 自主决定调用哪些中间步骤以及调用顺序，
  * 最后必须调用终端步骤产出最终报告。
  *
- * 使用原生 fetch() 直接调用 OpenAI 兼容 API，原因：
- * - 不依赖第三方 SDK（零额外依赖），与项目其他模块的 fetch 策略一致
- * - 原生 JSON 序列化/反序列化，reasoning_content 等第三方字段完整保留
- * - 多轮 tool calling 中，assistant 消息的所有字段在 messages 数组中无损透传
+ * AgentRunner 不直接调用 LLM，所有 LLM 调用走框架层统一入口：
+ * - 编排 LLM：modelClient.callWithTools（OpenAI 原生 tool_calling 协议）
+ * - 步骤执行：executeOutputMode（框架层统一入口）
  */
 
 import type { AgentRunInput, AgentRunResult, AgentProgressSnapshot } from './types';
@@ -23,7 +22,8 @@ import type { ModelConfig } from '@/types/modelConfig';
 import type { ControlSelections } from '@/providers/PageContext';
 import type { PersistedAnalysisReport } from '@/types/analysis';
 import { renderTextBlocksForModel, renderTextBlockMetadataForModel } from '@/lib/textBlocks';
-import { runSingleStep } from '@/features/analysis-tasks/clientAnalysisRunner';
+import { executeOutputMode } from '@/features/analysis-flow/lib/executeOutputMode';
+import { modelClient } from '@/services/model-client';
 import { getOutputModeMetas } from '@/features/analysis-tasks/getAnalysisResources';
 
 // ---- 日志 ----
@@ -108,7 +108,7 @@ function buildToolDefinitions(
 
       log(`Running intermediate step: ${step.outputMode} (${step.label})`);
 
-      const result = await runSingleStep({
+      const result = await executeOutputMode({
         outputModeId: step.outputMode,
         moduleConfig: runInput.moduleConfig,
         modelConfig: runInput.modelConfig,
@@ -159,7 +159,7 @@ function buildToolDefinitions(
 
     log(`Running terminal step: ${terminalStep.outputMode} (${terminalStep.label})`);
 
-    const result = await runSingleStep({
+    const result = await executeOutputMode({
       outputModeId: terminalStep.outputMode,
       moduleConfig: runInput.moduleConfig,
       modelConfig: runInput.modelConfig,
@@ -320,42 +320,24 @@ export async function runAgent(
     while (iteration < maxSteps + 2) {
       log(`Agent iteration ${iteration}`);
 
-      // 使用原生 fetch() 调用 OpenAI 兼容 API
-      // JSON 序列化/反序列化原生保留 reasoning_content 等所有第三方字段
-      const httpResponse = await fetch(
-        `${modelConfig.baseUrl.replace(/\/$/, '')}/chat/completions`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${modelConfig.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: modelConfig.selectedModel,
-            messages,
-            tools,
-            tool_choice: 'auto',
-            temperature: 0.3,
-          }),
-        },
-      );
-
-      if (!httpResponse.ok) {
-        const errorBody = await httpResponse.text();
-        log('Chat completion failed', { status: httpResponse.status, errorBody });
-        return { success: false, error: `模型请求失败 (${httpResponse.status})` };
-      }
-
-      const responseData = await httpResponse.json();
-      const choice = responseData.choices?.[0];
-      if (!choice) {
-        log('No choices in response');
-        return { success: false, error: '模型未返回有效响应' };
-      }
-
-      const assistantMessage = choice.message;
+      // 通过框架层 modelClient 调用编排 LLM（OpenAI 原生 tool_calling 协议）
+      const toolCallResult = await modelClient.callWithTools({
+        baseUrl: modelConfig.baseUrl,
+        apiKey: modelConfig.apiKey,
+        model: modelConfig.selectedModel,
+        messages,
+        tools,
+        temperature: 0.3,
+        maxIterations: maxSteps,
+        currentIteration: iteration,
+      });
 
       // 将 assistant 消息加入历史（reasoning_content 等字段完整保留）
+      const assistantMessage = {
+        role: 'assistant' as const,
+        content: toolCallResult.content,
+        tool_calls: toolCallResult.toolCalls,
+      };
       messages.push(assistantMessage);
 
       // 检查是否有 tool calls

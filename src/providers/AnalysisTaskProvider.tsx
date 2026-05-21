@@ -130,13 +130,13 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
       notifyTaskListeners(nextTaskId);
     });
 
-    // 判断是否使用 Agent 模式
-    const agentPipeline = taskInput.moduleConfig.manifest.agent;
-    const useAgentMode = agentPipeline?.enabled === true && agentPipeline.steps.length > 0;
+    // Pipeline 激活由 agent.steps.length > 0 决定（不再使用 enabled 标志）
+    const shouldUsePipeline = (taskInput.moduleConfig.manifest.agent?.steps?.length ?? 0) > 0;
 
-    if (useAgentMode) {
-      // === Agent 模式 ===
-      logger.info('Starting agent task', { taskId: nextTaskId, pipeline: agentPipeline.steps.map(s => s.outputMode) });
+    if (shouldUsePipeline) {
+      // === Pipeline 编排模式 ===
+      const agentPipeline = taskInput.moduleConfig.manifest.agent!;
+      logger.info('Starting pipeline task', { taskId: nextTaskId, pipeline: agentPipeline.steps.map(s => s.outputMode) });
 
       const agentProgressHandler = (snapshot: AgentProgressSnapshot) => {
         const label = snapshot.phase === 'agent-final'
@@ -181,75 +181,71 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
       )
         .then((result) => {
           if (result.success && result.report) {
-            logger.info('Agent task completed', { taskId: nextTaskId });
+            logger.info('Pipeline task completed', { taskId: nextTaskId });
             const completedRecord = reportHistoryStore.completeTask(nextTaskId, result.report);
             showSuccessWithAction(`分析已完成：${completedRecord.title}`, { duration: 5000 });
           } else {
-            logger.error('Agent task failed', result.error, { taskId: nextTaskId });
-            progressController.setError(result.error || 'Agent 分析失败');
-            reportHistoryStore.failTask(nextTaskId, result.error || 'Agent 分析失败');
+            logger.error('Pipeline task failed', result.error, { taskId: nextTaskId });
+            progressController.setError(result.error || '分析失败');
+            reportHistoryStore.failTask(nextTaskId, result.error || '分析失败');
           }
           taskInputsRef.current.delete(nextTaskId);
         })
         .catch((error) => {
-          logger.error('Agent task failed', error, { taskId: nextTaskId });
-          const message = error instanceof Error ? error.message : 'Agent 分析失败';
+          logger.error('Pipeline task failed', error, { taskId: nextTaskId });
+          const message = error instanceof Error ? error.message : '分析失败';
           progressController.setError(message);
           reportHistoryStore.failTask(nextTaskId, message);
           taskInputsRef.current.delete(nextTaskId);
         })
         .finally(() => {
-          logger.debug('Agent task cleanup', { taskId: nextTaskId });
+          logger.debug('Pipeline task cleanup', { taskId: nextTaskId });
           unsubscribe();
           runningTasksRef.current.delete(schedulerKey);
           notifyTaskListeners(nextTaskId);
           processQueue(schedulerKey);
         });
-
-      return;
+    } else {
+      // === 单步分析模式 ===
+      void runClientAnalysis(
+        {
+          taskId: nextTaskId,
+          moduleConfig: taskInput.moduleConfig,
+          modelConfig: taskInput.modelConfig,
+          controlSelections: taskInput.controlSelections,
+          input: taskInput.input,
+        },
+        progressController
+      )
+        .then((result) => {
+          if (result.success && result.report) {
+            logger.info('Task completed successfully', { taskId: nextTaskId });
+            const completedRecord = reportHistoryStore.completeTask(nextTaskId, result.report);
+            showSuccessWithAction(`分析已完成：${completedRecord.title}`, {
+              duration: 5000,
+            });
+          } else {
+            logger.error('Task failed', result.error, { taskId: nextTaskId });
+            progressController.setError(result.error || '分析失败');
+            reportHistoryStore.failTask(nextTaskId, result.error || '分析失败');
+          }
+          taskInputsRef.current.delete(nextTaskId);
+        })
+        .catch((error) => {
+          logger.error('Task failed', error, { taskId: nextTaskId });
+          const message = error instanceof Error ? error.message : '分析失败';
+          progressController.setError(message);
+          reportHistoryStore.failTask(nextTaskId, message);
+          taskInputsRef.current.delete(nextTaskId);
+        })
+        .finally(() => {
+          logger.debug('Task cleanup', { taskId: nextTaskId });
+          unsubscribe();
+          runningTasksRef.current.delete(schedulerKey);
+          notifyTaskListeners(nextTaskId);
+          processQueue(schedulerKey);
+        });
     }
-
-    // === 传统分析模式 ===
-    void runClientAnalysis(
-      {
-        taskId: nextTaskId,
-        moduleConfig: taskInput.moduleConfig,
-        modelConfig: taskInput.modelConfig,
-        controlSelections: taskInput.controlSelections,
-        input: taskInput.input,
-      },
-      progressController
-    )
-      .then((result) => {
-        if (result.success && result.report) {
-          logger.info('Task completed successfully', { taskId: nextTaskId });
-          const completedRecord = reportHistoryStore.completeTask(nextTaskId, result.report);
-          showSuccessWithAction(`分析已完成：${completedRecord.title}`, {
-            duration: 5000,
-          });
-        } else {
-          logger.error('Task failed', result.error, { taskId: nextTaskId });
-          progressController.setError(result.error || '分析失败');
-          reportHistoryStore.failTask(nextTaskId, result.error || '分析失败');
-        }
-        // 清理任务输入引用
-        taskInputsRef.current.delete(nextTaskId);
-      })
-      .catch((error) => {
-        logger.error('Task failed', error, { taskId: nextTaskId });
-        const message = error instanceof Error ? error.message : '分析失败';
-        progressController.setError(message);
-        reportHistoryStore.failTask(nextTaskId, message);
-        // 清理任务输入引用
-        taskInputsRef.current.delete(nextTaskId);
-      })
-      .finally(() => {
-        logger.debug('Task cleanup', { taskId: nextTaskId });
-        unsubscribe();
-        runningTasksRef.current.delete(schedulerKey);
-        notifyTaskListeners(nextTaskId);
-        processQueue(schedulerKey);
-      });
   }, [notifyTaskListeners]);
 
   const createTask = useCallback(async (input: CreateAnalysisTaskInput): Promise<string | null> => {

@@ -69,8 +69,11 @@ export type AgentStep = {
  * Agent 管线配置
  */
 export type AgentPipeline = {
-  /** 是否启用 Agent 模式 */
-  enabled: boolean;
+  /**
+   * @deprecated 已废弃，Pipeline 激活由 steps.length > 0 决定
+   * 保留字段以兼容现有 main.json，不再用于运行时判断
+   */
+  enabled?: boolean;
   /** 最大迭代次数（防止无限循环） */
   maxIterations: number;
   /** 可用中间步骤池（Agent 可从中自主选择） */
