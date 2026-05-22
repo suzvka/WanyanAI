@@ -1,7 +1,7 @@
 // Hook 上下文
 export interface HookContext {
   request: {
-    browserId: string;
+    browserId: string | null;
     modelId: string;
     messages: Array<{ role: string; content: string }>;
     parameters: Record<string, unknown>;

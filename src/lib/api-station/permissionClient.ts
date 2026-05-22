@@ -11,12 +11,14 @@
  */
 
 import { logInfo, logWarn, logError } from './logger';
+import { verifyAuthResponse } from './authPlugins';
 
 export interface PermissionQueryResult {
-  valid: boolean;
   identityId?: string;
   permissionLevel: number;
   source: 'permission-service' | 'offline-fallback' | 'invalid-key-fallback' | 'no-key';
+  /** 认证服务器返回的额外字段（原样透传给 auth-verifiers） */
+  authPayload?: Record<string, unknown> | null;
 }
 
 interface PermissionServiceState {
@@ -194,7 +196,6 @@ export async function resolvePermission(key: string | null | undefined): Promise
   // 无 key → 使用 fallback
   if (!key || key.trim() === '') {
     return {
-      valid: true,
       permissionLevel: state!.fallbackPermissionLevel,
       source: 'no-key',
     };
@@ -204,7 +205,6 @@ export async function resolvePermission(key: string | null | undefined): Promise
   if (!state!.url) {
     logWarn('[PermissionClient] 未配置权限查询服务地址，使用 fallback 权限');
     return {
-      valid: true,
       permissionLevel: state!.fallbackPermissionLevel,
       source: 'offline-fallback',
     };
@@ -217,7 +217,6 @@ export async function resolvePermission(key: string | null | undefined): Promise
   if (!isAvailable) {
     logWarn('[PermissionClient] 权限查询服务不可用，使用 fallback 权限');
     return {
-      valid: true,
       permissionLevel: state!.fallbackPermissionLevel,
       source: 'offline-fallback',
     };
@@ -242,7 +241,6 @@ export async function resolvePermission(key: string | null | undefined): Promise
         status: response.status,
       });
       return {
-        valid: true,
         permissionLevel: state!.fallbackPermissionLevel,
         source: 'offline-fallback',
       };
@@ -250,23 +248,42 @@ export async function resolvePermission(key: string | null | undefined): Promise
 
     const data = await response.json();
 
-    if (data.valid && typeof data.permissionLevel === 'number') {
+    if (typeof data.permissionLevel === 'number') {
+      // 提取业务核心字段之外的额外数据，原样透传给验证器
+      const { identityId: _id, permissionLevel: _pl, ...authPayload } = data;
+      const payload = Object.keys(authPayload).length > 0 ? authPayload : null;
+
+      // 执行鉴权响应验证器（auth-verifiers/）
+      const authVerified = verifyAuthResponse({
+        key,
+        permissionLevel: data.permissionLevel,
+        identityId: data.identityId,
+        authPayload: payload,
+      });
+
+      if (!authVerified) {
+        logWarn('[PermissionClient] 鉴权响应验证未通过，使用 fallback 权限');
+        return {
+          permissionLevel: state!.fallbackPermissionLevel,
+          source: 'invalid-key-fallback',
+        };
+      }
+
       logInfo('[PermissionClient] key 权限查询成功', {
         identityId: data.identityId,
         permissionLevel: data.permissionLevel,
       });
       return {
-        valid: true,
         identityId: data.identityId,
         permissionLevel: data.permissionLevel,
         source: 'permission-service',
+        authPayload: payload,
       };
     }
 
     // key 无效 → 使用 fallback
     logInfo('[PermissionClient] key 无效，使用 fallback 权限');
     return {
-      valid: true,
       permissionLevel: state!.fallbackPermissionLevel,
       source: 'invalid-key-fallback',
     };
@@ -281,7 +298,6 @@ export async function resolvePermission(key: string | null | undefined): Promise
     }
 
     return {
-      valid: true,
       permissionLevel: state!.fallbackPermissionLevel,
       source: 'offline-fallback',
     };

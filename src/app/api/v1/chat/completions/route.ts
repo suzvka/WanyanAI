@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolvePermission } from '@/lib/api-station/permissionClient';
 import { checkRateLimit } from '@/lib/api-station/rateLimit';
 import { executeHooks, HookContext } from '@/lib/api-station/hooks';
+import { validateKey } from '@/lib/api-station/authPlugins';
 import { createErrorResponse } from '@/lib/api-station/mockResponse';
 import { logInfo, logError, logWarn, generateRequestId } from '@/lib/api-station/logger';
 import { stationRegistry } from '@/stations/registry';
@@ -68,22 +69,23 @@ export async function POST(request: NextRequest) {
       stream,
     });
 
-    // === 权限解析：根据 key 查询对应的权限等级 ===
-    const permissionResult = await resolvePermission(key);
-
-    // key 为空时返回 401
-    if (!key) {
-      logWarn('[API:Chat] 缺少 Authorization key', { requestId });
+    // === Key 格式验证（key-validators/）===
+    // 格式合法性完全由钩子处理器决定，包括空值判定
+    if (!validateKey(key)) {
+      logWarn('[API:Chat] Key 格式验证未通过', { requestId });
       return NextResponse.json(
         createErrorResponse(
-          'Missing Authorization header. Please provide a valid API key.',
+          'Invalid API key format',
           'authentication_error',
-          'MISSING_API_KEY',
+          'INVALID_KEY_FORMAT',
           { requestId },
         ),
         { status: 401 },
       );
     }
+
+    // === 权限解析：根据 key 查询对应的权限等级 ===
+    const permissionResult = await resolvePermission(key);
 
     const permissionLevel = permissionResult.permissionLevel;
 

@@ -6,7 +6,6 @@
  *
  * key 的双重用途：
  * 1. 权限查询凭证：通过外部服务查询对应的 permissionLevel（用于限流）
- * 2. 上游 API Key：openai-forward 站将 key 直接作为上游模型服务的 API Key
  */
 
 // ============ 核心类型 ============
@@ -30,3 +29,12 @@ export interface PermissionResult {
   error?: string;
   errorCode?: string;
 }
+
+/**
+ * 鉴权响应中除核心业务字段外的额外数据
+ *
+ * 认证服务器可以在响应中携带任意自定义字段（验证码、签名等），
+ * 这些字段会被原样透传给 auth-verifiers 验证器，
+ * 业务层不解析、不校验这些字段的内容。
+ */
+export type AuthPayload = Record<string, unknown> | null;
