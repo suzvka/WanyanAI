@@ -1,9 +1,9 @@
 import 'server-only';
 
-export { loadPublishedPlatformConfig, loadForwardConfig, loadRateLimitConfig, loadAuthServiceConfig, getAuthServiceConfig, clearPlatformConfigRuntimeCaches } from './loader';
+export { loadPublishedPlatformConfig, loadForwardConfig, loadRateLimitConfig, loadPermissionServiceConfig, getPermissionServiceConfig, clearPlatformConfigRuntimeCaches } from './loader';
 export type {
   AppearanceConfig,
-  AuthServiceConfig,
+  PermissionServiceConfig,
   FeatureFlagsConfig,
   ForwardConfig,
   ForwardModelConfig,

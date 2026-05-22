@@ -155,7 +155,7 @@ export const openaiForwardStation: Station = {
       );
     }
 
-    // 始终使用配置文件中的 key（keys/*.json），用户的 UI key 仅用于本地鉴权
+    // 始终使用配置文件中的 key（keys/*.json），用户的 UI key 仅用于本地权限解析
     const apiKey = modelConfig.targetApiKey;
 
     logger.info('开始转发请求', {

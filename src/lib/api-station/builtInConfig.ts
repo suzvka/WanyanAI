@@ -107,8 +107,8 @@ function saveBuiltInApiKey(info: BuiltInProxyKeyInfo) {
 /**
  * 获取或刷新内置 API key
  *
- * 直接生成本地 key，无需请求认证服务器。
- * 因为认证服务不可用时，任意 key 都能通过验证并获取默认权限。
+ * 直接生成本地 key，无需请求外部权限查询服务。
+ * 因为权限查询服务不可用时，任意 key 都能通过并获取默认权限。
  */
 export function refreshBuiltInApiKey(): BuiltInProxyKeyInfo {
   const keyInfo: BuiltInProxyKeyInfo = {

@@ -1,31 +1,31 @@
 /**
- * 认证服务客户端
+ * 权限查询服务客户端
  *
  * 核心逻辑：
- * 1. 从配置加载认证服务地址和参数
- * 2. 定期探活检查认证服务可用性
- * 3. 只有认证服务可用时才进行权限校验
- * 4. 认证服务不可用时返回 fallback 权限
+ * 1. 从配置加载权限查询服务地址和参数
+ * 2. 定期探活检查权限查询服务可用性
+ * 3. 只有权限查询服务可用时才进行权限等级查询
+ * 4. 权限查询服务不可用时返回 fallback 权限
  *
  * 注意：此模块使用动态导入加载配置，避免循环依赖
  */
 
 import { logInfo, logWarn, logError } from './logger';
 
-export interface AuthVerifyResult {
+export interface PermissionQueryResult {
   valid: boolean;
   identityId?: string;
   permissionLevel: number;
-  source: 'auth-service' | 'offline-fallback' | 'invalid-key-fallback' | 'no-key';
+  source: 'permission-service' | 'offline-fallback' | 'invalid-key-fallback' | 'no-key';
 }
 
-interface AuthServiceState {
+interface PermissionServiceState {
   url: string | null;
   verifyTimeoutMs: number;
   fallbackPermissionLevel: number;
   enableHealthCheck: boolean;
   healthCheckTimeoutMs: number;
-  /** 认证服务是否可用 */
+  /** 权限查询服务是否可用 */
   isAvailable: boolean;
   /** 上次探活时间 */
   lastHealthCheckTime: number;
@@ -34,12 +34,12 @@ interface AuthServiceState {
 }
 
 // 全局状态（单例）
-let state: AuthServiceState | null = null;
+let state: PermissionServiceState | null = null;
 
 /**
- * 初始化认证服务状态
+ * 初始化权限查询服务状态
  */
-async function initializeState(): Promise<AuthServiceState> {
+async function initializeState(): Promise<PermissionServiceState> {
   if (state) {
     return state;
   }
@@ -55,10 +55,10 @@ async function initializeState(): Promise<AuthServiceState> {
   } = {};
 
   try {
-    const { loadAuthServiceConfig } = await import('@/server/platform-config/loader');
-    config = loadAuthServiceConfig();
+    const { loadPermissionServiceConfig } = await import('@/server/platform-config/loader');
+    config = loadPermissionServiceConfig();
   } catch (error) {
-    logWarn('[AuthClient] 无法加载认证服务配置，使用环境变量');
+    logWarn('[PermissionClient] 无法加载权限查询服务配置，使用环境变量');
   }
 
   const url = config.url || process.env.AUTH_SERVICE_URL || process.env.ACCOUNT_SERVICE_URL || null;
@@ -78,14 +78,14 @@ async function initializeState(): Promise<AuthServiceState> {
   if (state.url && state.enableHealthCheck) {
     await performHealthCheck();
   } else if (!state.url) {
-    logWarn('[AuthClient] 未配置认证服务地址');
+    logWarn('[PermissionClient] 未配置权限查询服务地址');
   }
 
   return state;
 }
 
 /**
- * 探活检查认证服务是否可用
+ * 探活检查权限查询服务是否可用
  */
 async function performHealthCheck(): Promise<boolean> {
   if (!state || !state.url) {
@@ -96,7 +96,7 @@ async function performHealthCheck(): Promise<boolean> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), state.healthCheckTimeoutMs);
 
-    // 尝试访问认证服务的健康检查端点
+    // 尝试访问权限查询服务的健康检查端点
     const healthUrl = `${state.url}/api/auth/health`;
     const response = await fetch(healthUrl, {
       method: 'GET',
@@ -110,9 +110,9 @@ async function performHealthCheck(): Promise<boolean> {
     state.lastHealthCheckTime = Date.now();
 
     if (isAvailable) {
-      logInfo('[AuthClient] 认证服务可用');
+      logInfo('[PermissionClient] 权限查询服务可用');
     } else {
-      logWarn('[AuthClient] 认证服务不可用', { status: response.status });
+      logWarn('[PermissionClient] 权限查询服务不可用', { status: response.status });
     }
 
     return isAvailable;
@@ -121,9 +121,9 @@ async function performHealthCheck(): Promise<boolean> {
     state.lastHealthCheckTime = Date.now();
 
     if (error instanceof Error && error.name === 'AbortError') {
-      logWarn('[AuthClient] 认证服务探活超时');
+      logWarn('[PermissionClient] 权限查询服务探活超时');
     } else {
-      logWarn('[AuthClient] 认证服务探活失败', { error: String(error) });
+      logWarn('[PermissionClient] 权限查询服务探活失败', { error: String(error) });
     }
 
     return false;
@@ -159,9 +159,9 @@ async function checkAndRefreshAvailability(): Promise<boolean> {
 }
 
 /**
- * 检查认证服务是否可用
+ * 检查权限查询服务是否可用
  */
-export async function isAuthServiceAvailable(): Promise<boolean> {
+export async function isPermissionServiceAvailable(): Promise<boolean> {
   return checkAndRefreshAvailability();
 }
 
@@ -176,12 +176,16 @@ export async function getFallbackPermissionLevel(): Promise<number> {
 }
 
 /**
- * 调用认证服务验证 key
+ * 根据 key 查询对应的权限等级
+ *
+ * key 由客户端通过 Authorization 头传入，本模块仅负责询问外部服务
+ * "这个 key 对应的权限等级是多少"，实际的身份认证（登录、用户身份验证等）
+ * 由外部服务（商业认证业务）完成。
  *
  * @param key - 客户端持有的访问密钥
- * @returns 验证结果
+ * @returns 权限查询结果（始终有效，无效 key 降级为 fallback 权限）
  */
-export async function verifyKey(key: string | null | undefined): Promise<AuthVerifyResult> {
+export async function resolvePermission(key: string | null | undefined): Promise<PermissionQueryResult> {
   // 初始化状态
   if (!state) {
     await initializeState();
@@ -196,9 +200,9 @@ export async function verifyKey(key: string | null | undefined): Promise<AuthVer
     };
   }
 
-  // 无认证服务地址 → 使用 fallback
+  // 无权限查询服务地址 → 使用 fallback
   if (!state!.url) {
-    logWarn('[AuthClient] 未配置认证服务地址，使用 fallback 权限');
+    logWarn('[PermissionClient] 未配置权限查询服务地址，使用 fallback 权限');
     return {
       valid: true,
       permissionLevel: state!.fallbackPermissionLevel,
@@ -206,12 +210,12 @@ export async function verifyKey(key: string | null | undefined): Promise<AuthVer
     };
   }
 
-  // 检查认证服务可用性
+  // 检查权限查询服务可用性
   const isAvailable = await checkAndRefreshAvailability();
 
-  // 认证服务不可用 → 使用 fallback
+  // 权限查询服务不可用 → 使用 fallback
   if (!isAvailable) {
-    logWarn('[AuthClient] 认证服务不可用，使用 fallback 权限');
+    logWarn('[PermissionClient] 权限查询服务不可用，使用 fallback 权限');
     return {
       valid: true,
       permissionLevel: state!.fallbackPermissionLevel,
@@ -219,7 +223,7 @@ export async function verifyKey(key: string | null | undefined): Promise<AuthVer
     };
   }
 
-  // 认证服务可用，进行权限校验
+  // 权限查询服务可用，查询权限等级
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), state!.verifyTimeoutMs);
@@ -234,7 +238,7 @@ export async function verifyKey(key: string | null | undefined): Promise<AuthVer
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      logWarn('[AuthClient] 认证服务返回非 200 状态，使用 fallback 权限', {
+      logWarn('[PermissionClient] 权限查询服务返回非 200 状态，使用 fallback 权限', {
         status: response.status,
       });
       return {
@@ -247,7 +251,7 @@ export async function verifyKey(key: string | null | undefined): Promise<AuthVer
     const data = await response.json();
 
     if (data.valid && typeof data.permissionLevel === 'number') {
-      logInfo('[AuthClient] key 验证成功', {
+      logInfo('[PermissionClient] key 权限查询成功', {
         identityId: data.identityId,
         permissionLevel: data.permissionLevel,
       });
@@ -255,12 +259,12 @@ export async function verifyKey(key: string | null | undefined): Promise<AuthVer
         valid: true,
         identityId: data.identityId,
         permissionLevel: data.permissionLevel,
-        source: 'auth-service',
+        source: 'permission-service',
       };
     }
 
     // key 无效 → 使用 fallback
-    logInfo('[AuthClient] key 无效，使用 fallback 权限');
+    logInfo('[PermissionClient] key 无效，使用 fallback 权限');
     return {
       valid: true,
       permissionLevel: state!.fallbackPermissionLevel,
@@ -271,9 +275,9 @@ export async function verifyKey(key: string | null | undefined): Promise<AuthVer
     state!.isAvailable = false;
 
     if (error instanceof Error && error.name === 'AbortError') {
-      logWarn('[AuthClient] 认证服务请求超时，使用 fallback 权限');
+      logWarn('[PermissionClient] 权限查询服务请求超时，使用 fallback 权限');
     } else {
-      logError('[AuthClient] 认证服务请求失败', error);
+      logError('[PermissionClient] 权限查询服务请求失败', error);
     }
 
     return {
@@ -287,6 +291,6 @@ export async function verifyKey(key: string | null | undefined): Promise<AuthVer
 /**
  * 重置状态（用于测试）
  */
-export function resetAuthClientState(): void {
+export function resetPermissionClientState(): void {
   state = null;
 }

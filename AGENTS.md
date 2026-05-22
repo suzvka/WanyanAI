@@ -44,10 +44,8 @@ src/
 │   ├── output-modes/           # 输出模式（literary-review、gaokao-essay）
 │   └── analysis-controls/      # 分析控制逻辑
 ├── lib/
-│   ├── api-station/            # 鉴权与限流模块
-│   │   ├── auth.ts             # 统一鉴权入口
-│   │   ├── authClient.ts       # 认证服务客户端
-│   │   ├── authExtractor.ts    # Token 提取工具
+│   ├── api-station/            # 权限解析与限流模块
+│   │   ├── permissionClient.ts # 权限查询服务客户端
 │   │   └── rateLimit.ts        # 限流逻辑
 │   ├── bootstrap/              # 服务端注册表统一初始化
 │   └── registry/               # BaseRegistry 注册表基类
@@ -93,65 +91,65 @@ keys/                          # 外部 API 模型配置（自动发现 *.json�
 - 用户自定义 Key：直接调用第三方 API
 - 内置模型：通过 `/api/v1/chat/completions` 调用中转站
 
-**中转站系统（可插拔）**：所有模型转发通过中转站实现，位于 `src/stations/` 目录。每个中转站实现 `Station` 接口，提供 `getModels()`、`canHandle()`、`forward()` 方法。启动时自动扫描注册，删除目录即可移除功能。鉴权与限流由主入口（`/api/v1/chat/completions`）统一处理，中转站仅负责转发。
+**中转站系统（可插拔）**：所有模型转发通过中转站实现，位于 `src/stations/` 目录。每个中转站实现 `Station` 接口，提供 `getModels()`、`canHandle()`、`forward()` 方法。启动时自动扫描注册，删除目录即可移除功能。权限解析与限流由主入口（`/api/v1/chat/completions`）统一处理，中转站仅负责转发。
 
 **路由隔离架构**：Server Actions 与中转站 API 通过路由隔离，安全边界清晰。
 - **Server Actions**：仅服务页面应用，使用 Next.js 默认同源校验（CSRF/Origin 验证）
-- **中转站 API**：通过 Route Handler 暴露（`/api/v1/chat/completions`），使用独立鉴权逻辑
+- **中转站 API**：通过 Route Handler 暴露（`/api/v1/chat/completions`），使用独立的权限解析逻辑
 - **安全配置**：不放宽 `allowedOrigins`，不修改请求头，保持 Next.js 默认安全模型
 
-**简化鉴权架构**：采用单 Token 统一鉴权，key 同时作为限流标识和权限查询凭证。
-- **业务服务器职责**：限流检查 + 检查认证服务可用性 + 格式校验 + 调用认证服务验证权限
-- **认证服务器职责**：签发 key + 验证 key + 返回权限等级
-- **降级策略**：认证服务离线时使用 fallback 权限（默认游客）
-- **配置文件**：`platform-config/auth-service.json` 配置认证服务地址和探活参数
-- **环境变量**：`AUTH_SERVICE_URL` 或 `ACCOUNT_SERVICE_URL` 作为认证服务地址的后备
+**权限解析架构**：采用单 Key 统一机制，key 同时作为限流标识和权限查询凭证。实际的身份认证（登录、用户验证等）由外部商业认证服务完成，本模块仅负责将 key 映射为权限等级（permissionLevel）。
+- **业务服务器职责**：限流检查 + 检查权限查询服务可用性 + 调用权限查询服务获取权限等级
+- **外部权限查询服务职责**：签发 key + 根据 key 返回对应的权限等级
+- **降级策略**：权限查询服务离线时使用 fallback 权限（默认游客）
+- **配置文件**：`platform-config/permission-service.json` 配置权限查询服务地址和探活参数
+- **环境变量**：`AUTH_SERVICE_URL` 或 `ACCOUNT_SERVICE_URL` 作为权限查询服务地址的后备
 
-## 鉴权流程
+## 权限解析流程
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        签发阶段                              │
-│  客户端 → 认证服务器（提交身份凭证）→ 返回 key               │
+│                        签发阶段（外部商业认证服务）            │
+│  客户端 → 外部认证服务器（提交身份凭证）→ 返回 key            │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│                        请求阶段                              │
+│                        请求阶段（本业务服务器）                │
 │  ┌─────────────┐                      ┌─────────────┐       │
 │  │   客户端     │────Bearer key───────►│  业务服务器  │       │
 │  │             │                      │             │       │
 │  │             │                      │ 1. 限流检查  │       │
 │  │             │                      │    （任何场景）│      │
-│  │             │                      │ 2. 检查认证   │       │
-│  │             │                      │    服务可用性 │       │
-│  │             │                      │ 3. 格式校验   │       │
+│  │             │                      │ 2. 检查权限   │       │
+│  │             │                      │    查询服务   │       │
+│  │             │                      │    可用性     │       │
+│  │             │                      │ 3. 查询权限   │       │
+│  │             │                      │    等级       │       │
 │  │             │                      │    （可用时） │       │
-│  │             │                      │ 4. 权限校验   │       │
-│  │             │                      │    （可用时） │       │
-│  │             │◄─────────────────────│ 5. 业务处理  │       │
+│  │             │◄─────────────────────│ 4. 业务处理  │       │
 │  └─────────────┘                      └─────────────┘       │
 └─────────────────────────────────────────────────────────────┘
 
 关键特性：
 - 限流在任何场景下有效（本地查表）
-- 认证服务不可用时跳过格式校验和权限校验，自动使用 fallback 权限
+- 权限查询服务不可用时自动使用 fallback 权限（降级，不阻断）
 - 探活检查定期执行，避免频繁请求
-- 内部组件直接生成本地 key，无需请求认证服务
+- 内部组件直接生成本地 key，无需请求外部服务
 ```
 
 **key 格式**：
-- 标准 key：32-64 字符的字母数字下划线横线组合（认证服务签发）
+- 标准 key：32-64 字符的字母数字下划线横线组合（外部权限查询服务签发）
 - 本地 key：`local_<timestamp>_<random>`（内部组件自生成，用于站内代理）
 
 **key 双重用途**：同一 key 在不同场景下承担不同角色：
-- **鉴权凭证**：主入口通过认证服务验证 key，获取权限等级用于限流
+- **权限查询凭证**：主入口通过外部服务查询 key 对应的权限等级，用于限流
 - **上游 API Key**：openai-forward 站将 key 直接作为上游模型服务的 API Key（用户自持 Key 模式）；coze 站忽略 key（使用 Coze SDK 内置凭证）
 
-**认证服务接口**：
+**权限查询服务接口**（由外部商业认证服务提供）：
 - 健康检查：`GET /api/auth/health`（返回 200 表示可用）
-- 验证：`POST /api/auth/verify`（返回 `{ valid, identityId, permissionLevel }`）
+- 权限查询：`POST /api/auth/verify`（返回 `{ valid, identityId, permissionLevel }`）
 
-**认证服务配置** (`platform-config/auth-service.json`)：
+**权限查询服务配置** (`platform-config/permission-service.json`)：
 ```json
 {
   "url": "https://auth.example.com",
@@ -218,12 +216,10 @@ interface Station {
 |------|------|
 | `instrumentation.ts` | Next.js 启动钩子，预初始化服务端注册表 |
 | `src/lib/bootstrap/registry-init.ts` | 服务端注册表统一初始化入口 |
-| `src/lib/api-station/auth.ts` | **统一鉴权入口**（限流 + 认证服务可用性检查 + 权限校验） |
-| `src/lib/api-station/authClient.ts` | **认证服务客户端**（探活 + 调用 /api/auth/verify） |
-| `src/lib/api-station/keyFormat.ts` | Key 格式校验（纯函数，客户端可用） |
+| `src/lib/api-station/permissionClient.ts` | **权限查询服务客户端**（探活 + 调用 /api/auth/verify 查询权限等级） |
 | `src/lib/api-station/rateLimit.ts` | 限流逻辑 |
-| `src/server/platform-config/loader.ts` | 平台配置加载（含认证服务配置） |
-| `platform-config/auth-service.json` | **认证服务配置**（地址、探活参数、fallback 权限） |
+| `src/server/platform-config/loader.ts` | 平台配置加载（含权限查询服务配置） |
+| `platform-config/permission-service.json` | **权限查询服务配置**（地址、探活参数、fallback 权限） |
 | `src/server/modules/loader.ts` | 模块扫描、加载、容器验证 |
 | `src/server/output-modes/registry.ts` | 输出模式注册表（继承 BaseRegistry） |
 | `src/server/output-modes/manifest.ts` | 服务端输出模式注册清单（新增输出模式在此添加） |

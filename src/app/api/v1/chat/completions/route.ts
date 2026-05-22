@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyKey } from '@/lib/api-station/authClient';
+import { resolvePermission } from '@/lib/api-station/permissionClient';
 import { checkRateLimit } from '@/lib/api-station/rateLimit';
 import { executeHooks, HookContext } from '@/lib/api-station/hooks';
 import { createErrorResponse } from '@/lib/api-station/mockResponse';
@@ -13,7 +13,7 @@ import { initializeStations } from '@/stations/loader';
  * 接收 OpenAI 格式请求，通过中转站转发到目标服务。
  *
  * 流程：
- * 1. 提取 key → 2. 鉴权（获取权限等级）→ 3. 限流检查 → 4. 查找中转站 → 5. 转发请求
+ * 1. 提取 key → 2. 权限解析（key → 权限等级）→ 3. 限流检查 → 4. 查找中转站 → 5. 转发请求
  */
 export async function POST(request: NextRequest) {
   const requestId = generateRequestId();
@@ -68,8 +68,8 @@ export async function POST(request: NextRequest) {
       stream,
     });
 
-    // === 鉴权：验证 key，获取权限等级 ===
-    const verifyResult = await verifyKey(key);
+    // === 权限解析：根据 key 查询对应的权限等级 ===
+    const permissionResult = await resolvePermission(key);
 
     // key 为空时返回 401
     if (!key) {
@@ -85,13 +85,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const permissionLevel = verifyResult.permissionLevel;
+    const permissionLevel = permissionResult.permissionLevel;
 
-    logInfo('[API:Chat] 鉴权完成', {
+    logInfo('[API:Chat] 权限解析完成', {
       requestId,
       permissionLevel,
-      source: verifyResult.source,
-      identityId: verifyResult.identityId,
+      source: permissionResult.source,
+      identityId: permissionResult.identityId,
     });
 
     // === 限流检查 ===
@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
 
     logInfo('[API:Chat] Hook 预处理完成', { requestId });
 
-    // === 转发请求（子站仅负责转发，不参与鉴权限流）===
+    // === 转发请求（子站仅负责转发，不参与权限解析和限流）===
     const forwardResponse = await station.forward({
       model,
       messages: messages || [],

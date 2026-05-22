@@ -7,7 +7,7 @@ import { logInfo, logError } from '@/lib/api-station/logger';
  * 获取所有可用模型列表。
  *
  * 模型列表来自所有已注册的中转站，不做权限过滤。
- * 鉴权与限流由各中转站在实际调用时自行处理。
+ * 权限解析与限流由各中转站在实际调用时自行处理。
  */
 export async function GET(_request: Request) {
   const requestId = `models_${Date.now()}`;

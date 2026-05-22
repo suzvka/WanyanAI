@@ -1,9 +1,12 @@
 /**
- * 鉴权相关类型定义（简化版）
+ * 权限解析相关类型定义
  *
- * 新架构下，key 仅作为：
- * 1. 限流标识（业务服务器）
- * 2. 权限查询凭证（认证服务器）
+ * 本模块仅负责将 key 映射为权限等级（permissionLevel），
+ * 实际的身份认证（登录、用户验证等）由外部商业认证服务完成。
+ *
+ * key 的双重用途：
+ * 1. 权限查询凭证：通过外部服务查询对应的 permissionLevel（用于限流）
+ * 2. 上游 API Key：openai-forward 站将 key 直接作为上游模型服务的 API Key
  */
 
 // ============ 核心类型 ============
@@ -17,8 +20,8 @@ export type PermissionRole = 'guest' | 'member' | 'admin';
 /** 身份类型 */
 export type SubjectType = 'guest' | 'user';
 
-/** 鉴权结果 */
-export interface AuthResult {
+/** 权限查询结果 */
+export interface PermissionResult {
   success: boolean;
   key?: string;
   identityId?: string;
@@ -26,75 +29,4 @@ export interface AuthResult {
   source?: string;
   error?: string;
   errorCode?: string;
-}
-
-// ============ 废弃类型（保持向后兼容） ============
-
-/**
- * @deprecated 新架构下不再使用 ProxyKey
- */
-export interface ProxyKeyPayloadV1 {
-  version: 'v1';
-  userRef: string;
-  sessionId: string | null;
-  issuedAt: number;
-  expiresAt: number;
-  permissionHint: PermissionRole;
-  powSeed?: string | null;
-}
-
-/**
- * @deprecated 新架构下不再使用 ProxyKey
- */
-export interface ProxyKeySessionBinding {
-  visitorIdHash: string;
-}
-
-/**
- * @deprecated 新架构下不再使用 ProxyKey
- */
-export interface ProxyKeyPayloadV2 {
-  version: 'v2';
-  subjectType: SubjectType;
-  subjectId: string;
-  userRef: string | null;
-  sessionId: string;
-  sessionBinding: ProxyKeySessionBinding;
-  issuedAt: number;
-  expiresAt: number;
-  permissionHint: PermissionRole;
-  keyUse: 'model_proxy';
-}
-
-/**
- * @deprecated 新架构下不再使用 ProxyKey
- */
-export type ProxyKeyPayload = ProxyKeyPayloadV1 | ProxyKeyPayloadV2;
-
-/**
- * @deprecated 新架构下不再使用 ProxyKey
- */
-export interface ProxyKeyVerificationResult {
-  success: boolean;
-  subjectType?: SubjectType;
-  subjectId?: string;
-  userRef?: string;
-  sessionId?: string | null;
-  proof?: string;
-  payload?: ProxyKeyPayload;
-  error?: string;
-  errorCode?: string;
-}
-
-/**
- * @deprecated 权限解析已移至认证服务器
- */
-export interface ResolvedPermissionProfile {
-  subjectType: SubjectType;
-  subjectId: string;
-  userRef: string | null;
-  permissionLevel: number;
-  role: PermissionRole;
-  isAuthenticated: boolean;
-  source: 'guest-fallback' | 'account-hook';
 }

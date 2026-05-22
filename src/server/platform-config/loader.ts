@@ -6,7 +6,7 @@ import path from 'node:path';
 import { validatePlatformConfig, platformManifestSchema, appearanceSchema, featureFlagsSchema } from '@/server/config/schemas';
 import { createLogger } from '@/lib/api-station/logger';
 import type {
-  AuthServiceConfig,
+  PermissionServiceConfig,
   ForwardConfig,
   PlatformConfig,
   RateLimitConfig,
@@ -47,7 +47,7 @@ const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
   defaults: DEFAULT_RATE_LIMIT_DEFAULTS,
 };
 
-const DEFAULT_AUTH_SERVICE_CONFIG: AuthServiceConfig = {
+const DEFAULT_PERMISSION_SERVICE_CONFIG: PermissionServiceConfig = {
   url: undefined,
   healthCheckIntervalMs: 30000,
   healthCheckTimeoutMs: 3000,
@@ -58,7 +58,7 @@ const DEFAULT_AUTH_SERVICE_CONFIG: AuthServiceConfig = {
 
 let forwardCache: { key: string; value: ForwardConfig } | null = null;
 let rateLimitCache: { key: string; value: RateLimitConfig } | null = null;
-let authServiceCache: { key: string; value: AuthServiceConfig } | null = null;
+let permissionServiceCache: { key: string; value: PermissionServiceConfig } | null = null;
 
 function getConfigRoot(): string {
   return process.cwd();
@@ -200,36 +200,36 @@ export function loadRateLimitConfig(): RateLimitConfig {
 }
 
 /**
- * 加载认证服务配置
+ * 加载权限查询服务配置
  */
-export function loadAuthServiceConfig(): AuthServiceConfig {
+export function loadPermissionServiceConfig(): PermissionServiceConfig {
   const configDir = resolveConfigDirSync();
-  const filePath = path.join(configDir, 'auth-service.json');
+  const filePath = path.join(configDir, 'permission-service.json');
   const cacheKey = createFileCacheKey(filePath);
 
-  if (authServiceCache?.key === cacheKey) {
-    return authServiceCache.value;
+  if (permissionServiceCache?.key === cacheKey) {
+    return permissionServiceCache.value;
   }
 
   try {
-    const parsed = readPlatformJsonFileSync<Partial<AuthServiceConfig>>('auth-service.json');
-    const normalized: AuthServiceConfig = {
+    const parsed = readPlatformJsonFileSync<Partial<PermissionServiceConfig>>('permission-service.json');
+    const normalized: PermissionServiceConfig = {
       url: parsed.url || process.env.AUTH_SERVICE_URL || process.env.ACCOUNT_SERVICE_URL || undefined,
-      healthCheckIntervalMs: parsed.healthCheckIntervalMs ?? DEFAULT_AUTH_SERVICE_CONFIG.healthCheckIntervalMs,
-      healthCheckTimeoutMs: parsed.healthCheckTimeoutMs ?? DEFAULT_AUTH_SERVICE_CONFIG.healthCheckTimeoutMs,
-      verifyTimeoutMs: parsed.verifyTimeoutMs ?? DEFAULT_AUTH_SERVICE_CONFIG.verifyTimeoutMs,
-      fallbackPermissionLevel: parsed.fallbackPermissionLevel ?? DEFAULT_AUTH_SERVICE_CONFIG.fallbackPermissionLevel,
-      enableHealthCheck: parsed.enableHealthCheck ?? DEFAULT_AUTH_SERVICE_CONFIG.enableHealthCheck,
+      healthCheckIntervalMs: parsed.healthCheckIntervalMs ?? DEFAULT_PERMISSION_SERVICE_CONFIG.healthCheckIntervalMs,
+      healthCheckTimeoutMs: parsed.healthCheckTimeoutMs ?? DEFAULT_PERMISSION_SERVICE_CONFIG.healthCheckTimeoutMs,
+      verifyTimeoutMs: parsed.verifyTimeoutMs ?? DEFAULT_PERMISSION_SERVICE_CONFIG.verifyTimeoutMs,
+      fallbackPermissionLevel: parsed.fallbackPermissionLevel ?? DEFAULT_PERMISSION_SERVICE_CONFIG.fallbackPermissionLevel,
+      enableHealthCheck: parsed.enableHealthCheck ?? DEFAULT_PERMISSION_SERVICE_CONFIG.enableHealthCheck,
     };
-    authServiceCache = { key: cacheKey, value: normalized };
+    permissionServiceCache = { key: cacheKey, value: normalized };
     return normalized;
   } catch {
     // 文件不存在或解析失败时使用默认值
-    const fallback: AuthServiceConfig = {
-      ...DEFAULT_AUTH_SERVICE_CONFIG,
+    const fallback: PermissionServiceConfig = {
+      ...DEFAULT_PERMISSION_SERVICE_CONFIG,
       url: process.env.AUTH_SERVICE_URL || process.env.ACCOUNT_SERVICE_URL || undefined,
     };
-    authServiceCache = { key: cacheKey, value: fallback };
+    permissionServiceCache = { key: cacheKey, value: fallback };
     return fallback;
   }
 }
@@ -237,18 +237,18 @@ export function loadAuthServiceConfig(): AuthServiceConfig {
 export function clearPlatformConfigRuntimeCaches() {
   forwardCache = null;
   rateLimitCache = null;
-  authServiceCache = null;
+  permissionServiceCache = null;
 }
 
 /**
- * 获取认证服务配置（同步版本，使用缓存）
+ * 获取权限查询服务配置（同步版本，使用缓存）
  * 供 API 路由使用
  */
-export function getAuthServiceConfig(): AuthServiceConfig {
+export function getPermissionServiceConfig(): PermissionServiceConfig {
   // 如果缓存存在，直接返回
-  if (authServiceCache) {
-    return authServiceCache.value;
+  if (permissionServiceCache) {
+    return permissionServiceCache.value;
   }
   // 否则加载配置
-  return loadAuthServiceConfig();
+  return loadPermissionServiceConfig();
 }

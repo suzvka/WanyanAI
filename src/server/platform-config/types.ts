@@ -48,18 +48,18 @@ export type RateLimitConfig = {
 };
 
 /**
- * 认证服务配置
+ * 权限查询服务配置
  */
-export type AuthServiceConfig = {
-  /** 认证服务地址（优先级高于环境变量） */
+export type PermissionServiceConfig = {
+  /** 权限查询服务地址（优先级高于环境变量） */
   url?: string;
   /** 探活检查间隔（毫秒），默认 30000 (30秒) */
   healthCheckIntervalMs?: number;
   /** 探活请求超时（毫秒），默认 3000 */
   healthCheckTimeoutMs?: number;
-  /** 认证请求超时（毫秒），默认 5000 */
+  /** 权限查询请求超时（毫秒），默认 5000 */
   verifyTimeoutMs?: number;
-  /** 认证服务不可用时的默认权限等级，默认 1 (游客) */
+  /** 权限查询服务不可用时的默认权限等级，默认 1 (游客) */
   fallbackPermissionLevel?: number;
   /** 是否启用探活检查，默认 true */
   enableHealthCheck?: boolean;
