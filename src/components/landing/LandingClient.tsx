@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { ArrowRight, BookOpen } from 'lucide-react';
 import BrandBackground from '@/components/ui/brand-background';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,6 +31,8 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
   const { appearance } = platformConfig;
   const { brand } = appearance;
   const pathname = usePathname();
+  const router = useRouter();
+  const prefetchedRef = useRef(false);
 
   // 检测是否首次加载，只在首次显示骨架屏
   const isFirstLoad = usePageFirstLoad();
@@ -56,6 +58,32 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
       return () => clearTimeout(timer);
     }
   }, [isFirstLoad]);
+
+  // === 静默预取次级页面 ===
+  // 主页渲染完成后，在浏览器空闲时预取所有评估模块页面。
+  // 这样用户点击进入时页面已缓存，实现秒开体验。
+  const prefetchModules = useCallback(() => {
+    if (prefetchedRef.current) return;
+    prefetchedRef.current = true;
+
+    const prefetchAll = () => {
+      for (const mod of modules) {
+        router.prefetch(getModuleHref(mod.slug));
+      }
+    };
+
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(prefetchAll, { timeout: 3000 });
+    } else {
+      setTimeout(prefetchAll, 1000);
+    }
+  }, [modules, router]);
+
+  useEffect(() => {
+    if (!isFirstLoad) {
+      prefetchModules();
+    }
+  }, [isFirstLoad, prefetchModules]);
 
   // 首次加载时显示骨架屏
   if (isFirstLoad) {

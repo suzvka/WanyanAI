@@ -272,76 +272,78 @@ export default function ApiConfigManagerDialog({
                       open={isExpanded}
                       onOpenChange={() => handleCardToggle(config.id)}
                       className={cn(
-                        'rounded-lg border bg-card transition-colors',
+                        'rounded-lg border bg-card transition-all duration-200',
                         // 已选配置的脉冲动画效果
-                        isActive && 'api-config-selected',
+                        isActive && 'api-config-selected ring-1 ring-primary/30',
                       )}
                     >
                       {/* 卡片头部 */}
-                      <CollapsibleTrigger asChild>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          className={cn(
-                            'flex w-full items-center gap-3 p-4 text-left transition-colors',
-                            'hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50',
-                            // 激活状态的卡片使用特殊样式
-                            isActive && 'bg-primary/5 ring-1 ring-primary/30',
-                            isExpanded && 'border-b',
-                          )}
-                        >
-                          {/* 展开箭头 */}
-                          <ChevronDown
+                      <div className="flex items-center">
+                        <CollapsibleTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={busy}
                             className={cn(
-                              'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
-                              isExpanded && 'rotate-180',
+                              'flex flex-1 items-center gap-3 p-4 text-left transition-all duration-200 ease-out',
+                              'hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50',
+                              // 激活状态的卡片使用特殊样式
+                              isActive && 'bg-primary/5',
+                              isExpanded && 'border-b',
                             )}
-                          />
-
-                          {/* 卡片内容 */}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="truncate text-sm font-medium">
-                                {config.name}
-                              </span>
-                              {/* 激活标记 */}
-                              {isActive && (
-                                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                              )}
-                            </div>
-                            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                              <span className="max-w-[120px] truncate">{config.baseUrl}</span>
-                              <span>·</span>
-                              <Badge
-                                variant={getStatusBadgeVariant(config.lastValidationStatus)}
-                                className="shrink-0 px-1.5 py-0 text-[10px]"
-                              >
-                                {getStatusLabel(config.lastValidationStatus)}
-                              </Badge>
-                              <span>·</span>
-                              <span className="shrink-0 whitespace-nowrap">{config.modelsCache.length} 个模型</span>
-                            </div>
-                          </div>
-
-                          {/* 选择配置按钮 - 仅在非激活状态显示 */}
-                          {!isActive && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
+                          >
+                            {/* 展开箭头 */}
+                            <ChevronDown
                               className={cn(
-                                'h-8 w-8 shrink-0',
-                                'text-primary hover:bg-primary/10 hover:text-primary',
+                                'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
+                                isExpanded && 'rotate-180',
                               )}
-                              disabled={busy}
-                              onClick={(e) => handleSelectConfig(e, config.id)}
-                              title="选择此配置"
-                            >
-                              <Check className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </button>
-                      </CollapsibleTrigger>
+                            />
+
+                            {/* 卡片内容 */}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="truncate text-sm font-medium">
+                                  {config.name}
+                                </span>
+                                {/* 激活标记 */}
+                                {isActive && (
+                                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                                )}
+                              </div>
+                              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                                <span className="max-w-[120px] truncate">{config.baseUrl}</span>
+                                <span>·</span>
+                                <Badge
+                                  variant={getStatusBadgeVariant(config.lastValidationStatus)}
+                                  className="shrink-0 px-2 py-0.5 text-xs"
+                                >
+                                  {getStatusLabel(config.lastValidationStatus)}
+                                </Badge>
+                                <span>·</span>
+                                <span className="shrink-0 whitespace-nowrap">{config.modelsCache.length} 个模型</span>
+                              </div>
+                            </div>
+                          </button>
+                        </CollapsibleTrigger>
+
+                        {/* 选择配置按钮 - 仅在非激活状态显示 */}
+                        {!isActive && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              'mr-2 h-9 w-9 shrink-0 transition-all duration-200',
+                              'text-primary hover:bg-primary/10 hover:text-primary hover:scale-105 active:scale-95',
+                            )}
+                            disabled={busy}
+                            onClick={(e) => handleSelectConfig(e, config.id)}
+                            title="选择此配置"
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
 
                       {/* 展开内容 - 动画由全局 CSS 控制 */}
                       <CollapsibleContent>
@@ -372,8 +374,8 @@ export default function ApiConfigManagerDialog({
                 onClick={handleAddNew}
                 className={cn(
                   'flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed',
-                  'border-border bg-muted/20 p-4 text-muted-foreground transition-colors',
-                  'hover:border-primary/50 hover:bg-muted/40 hover:text-foreground',
+                  'border-border bg-muted/20 p-4 text-muted-foreground transition-all duration-200',
+                  'hover:border-primary/50 hover:bg-muted/40 hover:text-foreground hover:scale-[1.01] active:scale-[0.99]',
                   'disabled:cursor-not-allowed disabled:opacity-50',
                   isCreateMode && 'border-primary/50 bg-primary/5 text-foreground',
                 )}
@@ -384,7 +386,7 @@ export default function ApiConfigManagerDialog({
 
               {/* 新建配置展开区域 */}
               {isCreateMode && (
-                <div className="rounded-lg border bg-card p-4">
+                <div className="motion-panel-in rounded-lg border bg-card p-4">
                   <h4 className="mb-3 text-sm font-medium">新建 API 配置</h4>
                   <ApiConfigEditor
                     busy={busy}
@@ -395,7 +397,7 @@ export default function ApiConfigManagerDialog({
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="mt-3 w-full"
+                    className="mt-3 w-full transition-all duration-200 active:scale-[0.98]"
                     disabled={busy}
                     onClick={() => setExpandedConfigId(undefined)}
                   >

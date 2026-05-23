@@ -56,9 +56,6 @@ export type GaokaoSectionGroup = {
 
 /** 报告元数据 */
 export type GaokaoMeta = {
-  frameworkVersion: string;
-  scoringPolicyVersion: string;
-  conclusionPolicyVersion: string;
   provider: string;
   model: string;
 };

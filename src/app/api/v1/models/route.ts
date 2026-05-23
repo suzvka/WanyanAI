@@ -1,74 +1,43 @@
-import { getAvailableModels } from '@/lib/api-station/forwardConfig';
-import { authenticateProxyKey } from '@/lib/api-station/auth';
-import { extractProxyKey } from '@/lib/api-station/authExtractor';
+import { stationRegistry } from '@/stations/registry';
+import { initializeStations } from '@/stations/loader';
 import { logInfo, logError } from '@/lib/api-station/logger';
-
-function toSubjectPreview(subjectId: string | undefined): string {
-  return subjectId ? `${subjectId.slice(0, 8)}...` : 'not_provided';
-}
 
 /**
  * GET /api/v1/models
- * 获取当前 proxy key 可用的模型列表。
+ * 获取所有可用模型列表。
+ *
+ * 模型列表来自所有已注册的中转站，不做权限过滤。
+ * 权限解析与限流由各中转站在实际调用时自行处理。
  */
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
   const requestId = `models_${Date.now()}`;
 
   try {
-    const proxyKey = extractProxyKey(request);
+    // 确保中转站已初始化（幂等操作）
+    initializeStations();
 
     logInfo('[API:Models] 收到模型列表请求', {
       requestId,
-      hasProxyKey: Boolean(proxyKey),
     });
 
-    const authResult = await authenticateProxyKey(proxyKey, request);
-    if (!authResult.success) {
-      logError('[API:Models] 鉴权失败', authResult.error, { requestId });
-      return Response.json(
-        {
-          error: {
-            message: authResult.error,
-            type: 'authentication_error',
-            code: authResult.errorCode,
-          },
-        },
-        {
-          status: 401,
-          headers: {
-            'Cache-Control': 'no-store',
-          },
-        },
-      );
-    }
-
-    const permissionLevel = authResult.permissionLevel!;
-    const subjectId = authResult.subjectId!;
-
-    logInfo('[API:Models] 鉴权成功', {
-      requestId,
-      subjectType: authResult.subjectType,
-      subjectPreview: toSubjectPreview(subjectId),
-      permissionLevel,
-    });
-
-    const availableModels = await getAvailableModels(permissionLevel);
+    // 从所有中转站获取模型列表
+    const allModels = await stationRegistry.getAllModels();
 
     logInfo('[API:Models] 返回模型列表', {
       requestId,
-      subjectType: authResult.subjectType,
-      subjectPreview: toSubjectPreview(subjectId),
-      availableModels: availableModels.length,
+      totalModels: allModels.length,
+      stationCount: stationRegistry.getStations().length,
     });
 
     const response = {
       object: 'list',
-      data: availableModels.map(model => ({
+      data: allModels.map(model => ({
         id: model.id,
-        name: model.id,
+        name: model.name || model.id,
+        description: model.description,
         object: 'model',
         created: Math.floor(Date.now() / 1000),
-        owned_by: 'api-station',
+        owned_by: 'station',
       })),
     };
 

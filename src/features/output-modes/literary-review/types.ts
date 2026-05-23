@@ -48,9 +48,6 @@ export type LiteraryReviewSection = {
 
 /** 报告元数据 */
 export type LiteraryReviewMeta = {
-  frameworkVersion: string;
-  scoringPolicyVersion: string;
-  conclusionPolicyVersion: string;
   provider: string;
   model: string;
 };

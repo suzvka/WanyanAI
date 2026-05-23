@@ -1,18 +1,20 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { evaluationGoalLabels } from '@/config/evaluationDimensions';
 import { ProgressController } from '@/features/analysis-progress';
 import { reportHistoryStore } from '@/features/report-history';
 import { showSuccessWithAction } from '@/lib/alert';
+import { createLogger } from '@/lib/api-station/logger';
 import type {
   AnalysisTaskRecord,
   CreateAnalysisTaskInput,
-  RuntimeAnalysisTask,
   TaskSubscriptionListener,
 } from '@/features/analysis-tasks/types';
-import { createSchedulerKey } from '@/features/analysis-tasks/createSchedulerKey';
-import { DEFAULT_PROGRESS_STAGES, runAnalysisTask } from '@/features/analysis-tasks/runAnalysisTask';
+import { runClientAnalysis, DEFAULT_PROGRESS_STAGES } from '@/features/analysis-tasks/clientAnalysisRunner';
+import { runAgent } from '@/features/agent/AgentRunner';
+import type { AgentProgressSnapshot } from '@/features/agent/types';
+
+const logger = createLogger('AnalysisTaskProvider');
 
 function generateTaskId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -23,8 +25,23 @@ function generateTaskId(): string {
 }
 
 function buildTaskTitle(input: CreateAnalysisTaskInput): string {
-  const goalLabel = evaluationGoalLabels[input.input.evaluationGoal as keyof typeof evaluationGoalLabels] ?? input.input.evaluationGoal;
-  return `${goalLabel}概览`;
+  return `${input.moduleName}概览`;
+}
+
+/**
+ * 生成调度 Key（不包含敏感信息）
+ *
+ * 只使用 baseUrl 和 model，不包含 apiKey。
+ */
+function createSchedulerKey(baseUrl: string, model: string): string {
+  // 简单哈希函数
+  let hash = 2166136261;
+  const value = `${baseUrl}::${model}`;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `task-${(hash >>> 0).toString(16)}`;
 }
 
 type AnalysisTaskContextValue = {
@@ -38,7 +55,8 @@ type AnalysisTaskContextValue = {
 const AnalysisTaskContext = createContext<AnalysisTaskContextValue | null>(null);
 
 export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
-  const runtimeTasksRef = useRef(new Map<string, RuntimeAnalysisTask>());
+  // 存储任务输入（不包含敏感信息的引用）
+  const taskInputsRef = useRef(new Map<string, CreateAnalysisTaskInput>());
   const schedulerQueuesRef = useRef(new Map<string, string[]>());
   const runningTasksRef = useRef(new Map<string, string>());
   const taskListenersRef = useRef(new Map<string, Set<TaskSubscriptionListener>>());
@@ -66,8 +84,8 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const runtimeTask = runtimeTasksRef.current.get(nextTaskId);
-    if (!runtimeTask) {
+    const taskInput = taskInputsRef.current.get(nextTaskId);
+    if (!taskInput) {
       processQueue(schedulerKey);
       return;
     }
@@ -76,7 +94,7 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
     progressController.registerStages(DEFAULT_PROGRESS_STAGES);
     runningTasksRef.current.set(schedulerKey, nextTaskId);
 
-    console.log('[AnalysisTaskProvider] Starting task execution:', { taskId: nextTaskId });
+    logger.info('Starting task execution', { taskId: nextTaskId });
 
     reportHistoryStore.updateTaskRecord(nextTaskId, {
       status: 'running',
@@ -84,6 +102,9 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
       taskMeta: {
         phase: 'prepare',
         message: '任务启动中...',
+        model: taskInput.modelConfig.selectedModel,
+        baseUrl: taskInput.modelConfig.baseUrl,
+        schedulerKey,
       },
     });
     notifyTaskListeners(nextTaskId);
@@ -101,6 +122,7 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
         status: 'running',
         progressSnapshot: snapshot,
         taskMeta: {
+          ...currentRecord.taskMeta,
           phase,
           message,
         },
@@ -108,56 +130,141 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
       notifyTaskListeners(nextTaskId);
     });
 
-    void runAnalysisTask(runtimeTask, progressController)
-      .then((report) => {
-        console.log('[AnalysisTaskProvider] Task completed successfully:', { taskId: nextTaskId });
-        const completedRecord = reportHistoryStore.completeTask(nextTaskId, report);
-        showSuccessWithAction(`分析已完成：${completedRecord.title}`, {
-          duration: 5000,
+    // Pipeline 模式由 agent.steps 配置决定
+    const shouldUsePipeline = (taskInput.moduleConfig.manifest.agent?.steps?.length ?? 0) > 0;
+
+    if (shouldUsePipeline) {
+      // === Pipeline 编排模式 ===
+      const agentPipeline = taskInput.moduleConfig.manifest.agent!;
+      logger.info('Starting pipeline task', { taskId: nextTaskId, pipeline: agentPipeline.steps.map(s => s.outputMode) });
+
+      const agentProgressHandler = (snapshot: AgentProgressSnapshot) => {
+        const label = snapshot.phase === 'agent-final'
+          ? `最终步骤：${snapshot.stepLabel}`
+          : `步骤 ${snapshot.stepIndex + 1}/${snapshot.totalSteps}：${snapshot.stepLabel}`;
+
+        progressController.handleEvent({
+          type: 'workflow-stage',
+          stage: 'request-model',
+          timestamp: Date.now(),
         });
-        runtimeTasksRef.current.delete(nextTaskId);
-      })
-      .catch((error) => {
-        console.error('[AnalysisTaskProvider] Task failed:', { taskId: nextTaskId, error });
-        const message = error instanceof Error ? error.message : '分析失败';
-        progressController.setError(message);
-        reportHistoryStore.failTask(nextTaskId, message);
-      })
-      .finally(() => {
-        console.log('[AnalysisTaskProvider] Task cleanup:', { taskId: nextTaskId });
-        unsubscribe();
-        runningTasksRef.current.delete(schedulerKey);
-        notifyTaskListeners(nextTaskId);
-        processQueue(schedulerKey);
-      });
+
+        const currentRecord = reportHistoryStore.getRecord(nextTaskId);
+        if (currentRecord) {
+          reportHistoryStore.updateTaskRecord(nextTaskId, {
+            status: 'running',
+            progressSnapshot: {
+              ...progressController.getSnapshot(),
+              currentLabel: label,
+              currentEventLabel: snapshot.phase === 'agent-final' ? '正在生成最终报告...' : '正在分析中...',
+            },
+            taskMeta: {
+              ...currentRecord.taskMeta,
+              phase: 'request-model',
+              message: label,
+            },
+          });
+          notifyTaskListeners(nextTaskId);
+        }
+      };
+
+      void runAgent(
+        {
+          taskId: nextTaskId,
+          moduleConfig: taskInput.moduleConfig,
+          modelConfig: taskInput.modelConfig,
+          controlSelections: taskInput.controlSelections,
+          input: taskInput.input,
+          pipeline: agentPipeline,
+        },
+        agentProgressHandler,
+      )
+        .then((result) => {
+          if (result.success && result.report) {
+            logger.info('Pipeline task completed', { taskId: nextTaskId });
+            const completedRecord = reportHistoryStore.completeTask(nextTaskId, result.report);
+            showSuccessWithAction(`分析已完成：${completedRecord.title}`, { duration: 5000 });
+          } else {
+            logger.error('Pipeline task failed', result.error, { taskId: nextTaskId });
+            progressController.setError(result.error || '分析失败');
+            reportHistoryStore.failTask(nextTaskId, result.error || '分析失败');
+          }
+          taskInputsRef.current.delete(nextTaskId);
+        })
+        .catch((error) => {
+          logger.error('Pipeline task failed', error, { taskId: nextTaskId });
+          const message = error instanceof Error ? error.message : '分析失败';
+          progressController.setError(message);
+          reportHistoryStore.failTask(nextTaskId, message);
+          taskInputsRef.current.delete(nextTaskId);
+        })
+        .finally(() => {
+          logger.debug('Pipeline task cleanup', { taskId: nextTaskId });
+          unsubscribe();
+          runningTasksRef.current.delete(schedulerKey);
+          notifyTaskListeners(nextTaskId);
+          processQueue(schedulerKey);
+        });
+    } else {
+      // === 单步分析模式 ===
+      void runClientAnalysis(
+        {
+          taskId: nextTaskId,
+          moduleConfig: taskInput.moduleConfig,
+          modelConfig: taskInput.modelConfig,
+          controlSelections: taskInput.controlSelections,
+          input: taskInput.input,
+        },
+        progressController
+      )
+        .then((result) => {
+          if (result.success && result.report) {
+            logger.info('Task completed successfully', { taskId: nextTaskId });
+            const completedRecord = reportHistoryStore.completeTask(nextTaskId, result.report);
+            showSuccessWithAction(`分析已完成：${completedRecord.title}`, {
+              duration: 5000,
+            });
+          } else {
+            logger.error('Task failed', result.error, { taskId: nextTaskId });
+            progressController.setError(result.error || '分析失败');
+            reportHistoryStore.failTask(nextTaskId, result.error || '分析失败');
+          }
+          taskInputsRef.current.delete(nextTaskId);
+        })
+        .catch((error) => {
+          logger.error('Task failed', error, { taskId: nextTaskId });
+          const message = error instanceof Error ? error.message : '分析失败';
+          progressController.setError(message);
+          reportHistoryStore.failTask(nextTaskId, message);
+          taskInputsRef.current.delete(nextTaskId);
+        })
+        .finally(() => {
+          logger.debug('Task cleanup', { taskId: nextTaskId });
+          unsubscribe();
+          runningTasksRef.current.delete(schedulerKey);
+          notifyTaskListeners(nextTaskId);
+          processQueue(schedulerKey);
+        });
+    }
   }, [notifyTaskListeners]);
 
   const createTask = useCallback(async (input: CreateAnalysisTaskInput): Promise<string | null> => {
     const taskId = generateTaskId();
     const createdAt = new Date().toISOString();
-    const schedulerKey = createSchedulerKey(input.modelConfig);
+    // 不再包含 apiKey
+    const schedulerKey = createSchedulerKey(input.modelConfig.baseUrl, input.modelConfig.selectedModel);
 
-    console.log('[AnalysisTaskProvider] Creating task:', {
+    logger.debug('Creating task', {
       taskId,
       schedulerKey,
       moduleId: input.moduleConfig.manifest.slug,
       model: input.modelConfig.selectedModel,
     });
 
-    const runtimeTask: RuntimeAnalysisTask = {
-      id: taskId,
-      schedulerKey,
-      moduleConfig: input.moduleConfig,
-      modelConfig: input.modelConfig,
-      controlSelections: input.controlSelections,
-      params: input.params,
-      input: input.input,
-      createdAt,
-    };
+    // 存储任务输入（在客户端内存中，不发送给服务端）
+    taskInputsRef.current.set(taskId, input);
 
-    runtimeTasksRef.current.set(taskId, runtimeTask);
-
-    console.log('[AnalysisTaskProvider] Creating task record in store');
+    logger.debug('Creating task record in store');
     reportHistoryStore.createTaskRecord({
       id: taskId,
       title: buildTaskTitle(input),
@@ -175,22 +282,23 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
     notifyTaskListeners(taskId);
     processQueue(schedulerKey);
 
-    console.log('[AnalysisTaskProvider] Task created and queued:', { taskId, queueLength: queue.length });
+    logger.info('Task created and queued', { taskId, queueLength: queue.length });
     return taskId;
   }, [notifyTaskListeners, processQueue]);
 
   const retryTask = useCallback(async (taskId: string): Promise<string | null> => {
-    const runtimeTask = runtimeTasksRef.current.get(taskId);
-    if (!runtimeTask) {
+    const taskInput = taskInputsRef.current.get(taskId);
+    if (!taskInput) {
       return null;
     }
 
     return createTask({
-      moduleConfig: runtimeTask.moduleConfig,
-      modelConfig: runtimeTask.modelConfig,
-      controlSelections: runtimeTask.controlSelections,
-      params: runtimeTask.params,
-      input: runtimeTask.input,
+      moduleConfig: taskInput.moduleConfig,
+      modelConfig: taskInput.modelConfig,
+      controlSelections: taskInput.controlSelections,
+      params: taskInput.params,
+      input: taskInput.input,
+      moduleName: taskInput.moduleName,
     });
   }, [createTask]);
 
@@ -214,7 +322,7 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getTask = useCallback((taskId: string) => reportHistoryStore.getRecord(taskId), []);
-  const canRetryTask = useCallback((taskId: string) => runtimeTasksRef.current.has(taskId), []);
+  const canRetryTask = useCallback((taskId: string) => taskInputsRef.current.has(taskId), []);
 
   useEffect(() => {
     reportHistoryStore.markInterruptedTasksAsFailed('任务因页面刷新或会话中断而结束。');

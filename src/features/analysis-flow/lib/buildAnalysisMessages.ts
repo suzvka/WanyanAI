@@ -1,18 +1,10 @@
-import { 
-    renderTextBlockMetadataForModel, 
-    renderTextBlocksForModel 
+import {
+  renderTextBlockMetadataForModel,
+  renderTextBlocksForModel,
 } from '@/lib/textBlocks';
-import type {
-    ModelAnalysisMessage,
-    PromptTemplateResource,
-    PromptTemplateSlotKey,
-} from '@/types/analysis';
+import type { ModelAnalysisMessage } from '@/types/analysis';
 import type { ContainerConfig } from '@/types/module';
 import type { EvaluationInput } from '@/types/report';
-
-type PromptSlotValues = Record<PromptTemplateSlotKey, string>;
-
-const promptSlotPattern = /{{(.*?)}}/g;
 
 const minimumInitialMaxTokens = 2200;
 const maximumGenerationMaxTokens = 3200;
@@ -23,9 +15,9 @@ const maximumGenerationMaxTokens = 3200;
 export type BuildAnalysisMessagesConfig = {
   /** 评价输入数据 */
   input: EvaluationInput;
-  /** 提示词模板资源 */
-  template: PromptTemplateResource;
-  /** 动态指令文本 */
+  /** 系统提示词 */
+  systemPrompt: string;
+  /** 动态指令文本（控件编译结果） */
   instructionText?: string;
   /** MCP 工具提示词 */
   mcpToolText?: string;
@@ -41,112 +33,55 @@ export type BuildAnalysisMessagesResult = {
   messages: ModelAnalysisMessage[];
   /** 计算出的 maxTokens 参数 */
   maxTokens: number;
-  /** 槽位值（用于调试） */
-  slotValues: PromptSlotValues;
 };
 
 /**
  * 构建分析请求消息
- * 
- * 将业务数据转换为模型可理解的消息格式
+ *
+ * 将业务数据直接转换为模型可理解的消息格式，
+ * 不再使用槽位填充机制。
  */
 export function buildAnalysisMessages(
-  config: BuildAnalysisMessagesConfig
+  config: BuildAnalysisMessagesConfig,
 ): BuildAnalysisMessagesResult {
-  const { input, template, instructionText, mcpToolText } = config;
+  const { input, systemPrompt, instructionText, mcpToolText } = config;
 
-  const slotValues = createSlotValues(input, instructionText, mcpToolText);
+  // 用户提示词：按顺序拼接各部分
+  const userParts: string[] = [];
 
-  console.log('[buildAnalysisMessages] Slot values:', {
-    textBlocksMetadataLength: slotValues.textBlocksMetadata.length,
-    textBlocksPlainTextLength: slotValues.textBlocksPlainText.length,
-    dynamicInstructionTextLength: slotValues.dynamicInstructionText.length,
-    mcpToolTextLength: slotValues.mcpToolText.length,
-  });
-
-  const messages = buildMessages(template, slotValues);
-  const maxTokens = calculateGenerationMaxTokens(
-    template.recommendedParameters.maxTokens ?? 8192,
-    slotValues.textBlocksPlainText.length,
-  );
-
-  return {
-    messages,
-    maxTokens,
-    slotValues,
-  };
-}
-
-/**
- * 创建槽位值映射
- */
-function createSlotValues(
-  input: EvaluationInput,
-  instructionText?: string,
-  mcpToolText?: string,
-): PromptSlotValues {
-  const metadata = renderTextBlockMetadataForModel(input);
-  
-  return {
-    textBlocksMetadata: metadata,
-    textBlocksPlainText: renderTextBlocksForModel(input),
-    dynamicInstructionText: instructionText?.trim() || '',
-    mcpToolText: mcpToolText?.trim() || '',
-  };
-}
-
-/**
- * 构建消息列表
- */
-function buildMessages(
-  template: PromptTemplateResource, 
-  slotValues: PromptSlotValues
-): ModelAnalysisMessage[] {
-  return [
-    {
-      role: 'system' as const,
-      content: fillPromptTemplate(template.systemPromptTemplate, slotValues),
-    },
-    {
-      role: 'user' as const,
-      content: fillPromptTemplate(template.userPromptTemplate, slotValues),
-    },
-  ];
-}
-
-/**
- * 填充提示词模板
- */
-function fillPromptTemplate(
-  template: string,
-  slotValues: PromptSlotValues
-): string {
-  const result = template.replace(promptSlotPattern, (_, rawKey: string) => {
-    const key = rawKey.trim() as PromptTemplateSlotKey;
-    const value = slotValues[key];
-
-    if (value == null) {
-      return '';
-    }
-
-    return value;
-  });
-
-  // 添加调试日志
-  if (result.includes('language_expression') || result.includes('structural_logic')) {
-    console.log('[buildAnalysisMessages] Template contains subscore definitions');
+  if (mcpToolText?.trim()) {
+    userParts.push(mcpToolText.trim());
   }
 
-  return result;
+  if (instructionText?.trim()) {
+    userParts.push(instructionText.trim());
+  }
+
+  userParts.push(renderTextBlockMetadataForModel(input));
+  userParts.push(renderTextBlocksForModel(input));
+
+  const messages: ModelAnalysisMessage[] = [
+    {
+      role: 'system',
+      content: systemPrompt,
+    },
+    {
+      role: 'user',
+      content: userParts.join('\n\n'),
+    },
+  ];
+
+  const maxTokens = calculateMaxTokens(8192, userParts.join('\n\n').length);
+
+  return { messages, maxTokens };
 }
 
 /**
- * 计算生成参数中的 maxTokens
- * 根据输入文本长度动态调整
+ * 根据输入文本长度动态计算 maxTokens
  */
-function calculateGenerationMaxTokens(
-  recommendedMaxTokens: number, 
-  plainTextLength: number
+function calculateMaxTokens(
+  recommendedMaxTokens: number,
+  plainTextLength: number,
 ): number {
   const baseTokens = Math.max(recommendedMaxTokens, minimumInitialMaxTokens);
 
@@ -156,10 +91,6 @@ function calculateGenerationMaxTokens(
 
   if (plainTextLength >= 18000) {
     return Math.min(maximumGenerationMaxTokens, baseTokens + 500);
-  }
-
-  if (plainTextLength >= 8000) {
-    return Math.min(maximumGenerationMaxTokens, baseTokens + 250);
   }
 
   return baseTokens;

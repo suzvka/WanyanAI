@@ -61,56 +61,48 @@ export default function ModelSelector({
   };
 
   return (
-    <Select value={selectedModel || ''} onValueChange={handleSelect}>
-      <SelectTrigger
-        className={cn('w-[180px]', className)}
-        disabled={isDisabled}
-      >
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent
-        header={
-          onRefresh ? (
-            <div className="bg-muted/50 border-b border-border p-2">
-              <div className="flex items-center justify-between mb-1.5 px-1">
-                <div className="text-muted-foreground text-xs font-medium">操作</div>
-                {!hasModels && !isRefreshing && (
-                  <div className="text-destructive text-xs">{getStatusText()}</div>
-                )}
-              </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="w-full justify-start gap-2 text-xs"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onRefresh();
-                }}
-                disabled={isRefreshing}
-              >
-                <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
-                {isRefreshing ? '正在刷新...' : '刷新模型列表'}
-              </Button>
+    <div className="flex items-center gap-2">
+      <Select value={selectedModel || ''} onValueChange={handleSelect}>
+        <SelectTrigger
+          className={cn('w-[180px]', className)}
+          disabled={isDisabled}
+        >
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {/* 模型列表 */}
+          {models.map((model) => (
+            <SelectItem key={model.id} value={model.id} className="max-w-[280px]">
+              <span className="truncate">{model.name}</span>
+            </SelectItem>
+          ))}
+          {models.length === 0 && !isRefreshing && (
+            <div className="px-2 py-4 text-center">
+              <div className="text-sm text-muted-foreground mb-2">暂无可用模型</div>
+              {getStatusText() && (
+                <div className="text-xs text-destructive">{getStatusText()}</div>
+              )}
             </div>
-          ) : undefined
-        }
-      >
-        {/* 模型列表 */}
-        {models.map((model) => (
-          <SelectItem key={model.id} value={model.id} className="max-w-[280px]">
-            <span className="truncate">{model.name}</span>
-          </SelectItem>
-        ))}
-        {models.length === 0 && !isRefreshing && (
-          <div className="px-2 py-4 text-center">
-            <div className="text-sm text-muted-foreground mb-2">暂无可用模型</div>
-            {getStatusText() && (
-              <div className="text-xs text-destructive">{getStatusText()}</div>
-            )}
-          </div>
-        )}
-      </SelectContent>
-    </Select>
+          )}
+        </SelectContent>
+      </Select>
+
+      {onRefresh && (
+        <Button
+          variant="outline"
+          size="icon"
+          className="shrink-0 transition-all duration-200 hover:bg-primary/5 hover:border-primary/30 active:scale-95"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onRefresh();
+          }}
+          disabled={isRefreshing}
+          title={isRefreshing ? '正在刷新...' : '刷新模型列表'}
+        >
+          <RefreshCw className={cn('h-4 w-4 transition-transform', isRefreshing && 'animate-spin')} />
+        </Button>
+      )}
+    </div>
   );
 }

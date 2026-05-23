@@ -8,10 +8,8 @@ export const reportScoringContextSchema = z.object({
 export const analysisReportMetadataSchema = z.object({
   model: z.string().trim().min(1, '模型名称不能为空'),
   baseUrl: z.string().trim().min(1, 'Base URL 不能为空'),
-  templateVersion: z.string().trim().min(1, '模板版本不能为空'),
-  scoringPolicyVersion: z.string().trim().min(1, '评分策略版本不能为空'),
-  conclusionPolicyVersion: z.string().trim().min(1, '结论策略版本不能为空'),
-  evaluationGoal: z.string().trim().min(1, '评价目标不能为空'),
+  outputMode: z.string().trim().min(1, '输出模式不能为空'),
+  moduleId: z.string().trim().min(1, '模块 ID 不能为空'),
 });
 
 export const persistedAnalysisReportSchema = z.object({

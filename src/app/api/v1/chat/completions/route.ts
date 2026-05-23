@@ -1,337 +1,249 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateProxyKey } from '@/lib/api-station/auth';
-import { extractChallengeHeaders, extractProxyKey } from '@/lib/api-station/authExtractor';
-import { verifyChallengeIfPresent } from '@/lib/api-station/challenge';
+import { resolvePermission } from '@/lib/api-station/permissionClient';
 import { checkRateLimit } from '@/lib/api-station/rateLimit';
-import { getModelConfig, getForwardMapping } from '@/lib/api-station/forwardConfig';
 import { executeHooks, HookContext } from '@/lib/api-station/hooks';
+import { validateKey } from '@/lib/api-station/authPlugins';
 import { createErrorResponse } from '@/lib/api-station/mockResponse';
-import { logInfo, logWarn, logError, generateRequestId } from '@/lib/api-station/logger';
-import { modelConfigProvider } from '@/services/modelConfig/provider';
-
-function toUserRefPreview(userRef: string): string {
-    return `${userRef.slice(0, 8)}...`;
-}
+import { logInfo, logError, logWarn, generateRequestId } from '@/lib/api-station/logger';
+import { stationRegistry } from '@/stations/registry';
+import { initializeStations } from '@/stations/loader';
 
 /**
  * POST /api/v1/chat/completions
- * 接收 OpenAI 格式请求，转发到配置的目标服务。
+ *
+ * 接收 OpenAI 格式请求，通过中转站转发到目标服务。
+ *
+ * 流程：
+ * 1. 提取 key → 2. 权限解析（key → 权限等级）→ 3. 限流检查 → 4. 查找中转站 → 5. 转发请求
  */
 export async function POST(request: NextRequest) {
-    const requestId = generateRequestId();
+  const requestId = generateRequestId();
 
-    try {
-        logInfo('[API:Chat] 收到聊天补全请求', { requestId });
+  // 确保中转站已初始化（幂等操作）
+  initializeStations();
 
-        const proxyKey = extractProxyKey(request);
-        const challengeParams = extractChallengeHeaders(request);
-        const requestBody = await request.json();
+  try {
+    logInfo('[API:Chat] 收到聊天补全请求', { requestId });
 
-        const {
-            model,
-            messages,
-            stream = false,
-            ...otherParams
-        } = requestBody;
+    const requestBody = await request.json();
 
-        logInfo('[API:Chat] 请求参数解析', {
-            requestId,
-            hasProxyKey: Boolean(proxyKey),
-            model,
-            messageCount: messages?.length || 0,
-            stream,
-        });
+    const {
+      model,
+      messages,
+      stream = false,
+      ...otherParams
+    } = requestBody;
 
-        logInfo('[API:Chat] 开始鉴权', { requestId });
-        const authResult = await authenticateProxyKey(proxyKey, request);
-
-        if (!authResult.success) {
-            logError('[API:Chat] 认证失败', authResult.error, { requestId });
-            return NextResponse.json(
-                createErrorResponse(
-                    authResult.error!,
-                    'authentication_error',
-                    authResult.errorCode,
-                    { requestId },
-                ),
-                { status: 401 },
-            );
-        }
-
-        const permissionLevel = authResult.permissionLevel!;
-        const authenticatedUserRef = authResult.userRef!;
-        const proof = authResult.proof!;
-
-        logInfo('[API:Chat] 认证成功', {
-            requestId,
-            userRefPreview: toUserRefPreview(authenticatedUserRef),
-            permissionLevel,
-        });
-
-        const challengeResult = await verifyChallengeIfPresent({
-            ...challengeParams,
-            proof,
-            userRef: authenticatedUserRef,
-        });
-
-        if (!challengeResult.success) {
-            logWarn('[API:Chat] 辅助防刷 challenge 验证失败', {
-                requestId,
-                userRefPreview: toUserRefPreview(authenticatedUserRef),
-                errorCode: challengeResult.errorCode,
-            });
-            return NextResponse.json(
-                createErrorResponse(
-                    challengeResult.error || 'Challenge verification failed',
-                    'authentication_error',
-                    challengeResult.errorCode,
-                    { requestId },
-                ),
-                { status: 401 },
-            );
-        }
-
-        if (!challengeResult.skipped) {
-            logInfo('[API:Chat] 辅助防刷 challenge 验证通过', {
-                requestId,
-                userRefPreview: toUserRefPreview(authenticatedUserRef),
-            });
-        }
-
-        logInfo('[API:Chat] 开始限流检查', { requestId, permissionLevel });
-        const rateLimitResult = checkRateLimit({
-            subjectId: authenticatedUserRef,
-            permissionLevel,
-        });
-
-        if (!rateLimitResult.allowed) {
-            logWarn('[API:Chat] 限流触发', {
-                requestId,
-                userRefPreview: toUserRefPreview(authenticatedUserRef),
-                reason: rateLimitResult.reason,
-                retryAfter: rateLimitResult.retryAfter,
-            });
-
-            const errorData: {
-                message: string;
-                type: string;
-                code: string | undefined;
-                requestId: string;
-                retryAfter?: number;
-            } = {
-                message: rateLimitResult.reason!,
-                type: 'rate_limit_error',
-                code: rateLimitResult.errorCode,
-                requestId,
-            };
-
-            if (rateLimitResult.retryAfter) {
-                errorData.retryAfter = rateLimitResult.retryAfter;
-            }
-
-            const headers: Record<string, string> = {};
-            if (rateLimitResult.retryAfter) {
-                headers['Retry-After'] = rateLimitResult.retryAfter.toString();
-            }
-            if (rateLimitResult.quota) {
-                headers['X-RateLimit-Limit'] = rateLimitResult.quota.limit.toString();
-                headers['X-RateLimit-Remaining'] = rateLimitResult.quota.remaining.toString();
-                headers['X-RateLimit-Reset'] = rateLimitResult.quota.reset.toString();
-            }
-
-            return NextResponse.json({ error: errorData }, { status: 429, headers });
-        }
-
-        logInfo('[API:Chat] 限流检查通过', {
-            requestId,
-            remaining: rateLimitResult.quota?.remaining,
-        });
-
-        if (!model) {
-            logError('[API:Chat] 模型 ID 缺失', null, { requestId });
-            return NextResponse.json(
-                createErrorResponse(
-                    'Missing required field: model',
-                    'invalid_request_error',
-                    'MISSING_MODEL',
-                    { requestId },
-                ),
-                { status: 400 },
-            );
-        }
-
-        const modelConfig = await getModelConfig(model);
-
-        if (!modelConfig) {
-            logError('[API:Chat] 模型不存在', null, { requestId, model });
-            return NextResponse.json(
-                createErrorResponse(
-                    `Model not found: ${model}`,
-                    'invalid_request_error',
-                    'MODEL_NOT_FOUND',
-                    { requestId },
-                ),
-                { status: 404 },
-            );
-        }
-
-        if (permissionLevel < modelConfig.minPermissionLevel) {
-            logWarn('[API:Chat] 权限不足', {
-                requestId,
-                userRefPreview: toUserRefPreview(authenticatedUserRef),
-                model,
-                userLevel: permissionLevel,
-                requiredLevel: modelConfig.minPermissionLevel,
-            });
-            return NextResponse.json(
-                createErrorResponse(
-                    `Insufficient permission for model: ${model}`,
-                    'permission_denied',
-                    'INSUFFICIENT_PERMISSION',
-                    { requestId },
-                ),
-                { status: 403 },
-            );
-        }
-
-        const forwardMapping = await getForwardMapping(model);
-
-        if (!forwardMapping) {
-            logError('[API:Chat] 模型未配置转发', null, { requestId, model });
-            return NextResponse.json(
-                createErrorResponse(
-                    `Model not configured for forwarding: ${model}`,
-                    'invalid_request_error',
-                    'FORWARD_NOT_CONFIGURED',
-                    { requestId },
-                ),
-                { status: 404 },
-            );
-        }
-
-        logInfo('[API:Chat] 模型验证通过', {
-            requestId,
-            model,
-        });
-
-        const hookContext: HookContext = {
-            request: {
-                browserId: authenticatedUserRef,
-                modelId: model,
-                messages: messages || [],
-                parameters: otherParams,
-            },
-            metadata: {
-                requestId,
-                timestamp: Date.now(),
-                permissionLevel,
-            },
-        };
-
-        logInfo('[API:Chat] 开始执行 Hook 预处理', { requestId });
-        const hookResult = await executeHooks(hookContext);
-
-        if (hookResult.action === 'block') {
-            logWarn('[API:Chat] Hook 阻止了请求', {
-                requestId,
-                hookReason: hookResult.error,
-            });
-            return NextResponse.json(
-                createErrorResponse(
-                    hookResult.error || 'Request blocked by hook',
-                    'blocked_by_hook',
-                    'REQUEST_BLOCKED',
-                    { requestId },
-                ),
-                { status: 403 },
-            );
-        }
-
-        if (hookResult.action === 'modify') {
-            logInfo('[API:Chat] Hook 修改了请求', {
-                requestId,
-                modified: true,
-            });
-        }
-
-        logInfo('[API:Chat] Hook 预处理完成', { requestId });
-
-        logInfo('[API:Chat] 开始转发请求', {
-            requestId,
-            model,
-            targetModel: forwardMapping.targetModel,
-            stream,
-        });
-
-        const result = await modelConfigProvider.chatCompletions(
-            forwardMapping.targetBaseUrl,
-            forwardMapping.targetApiKey,
-            {
-                model: forwardMapping.targetModel,
-                messages,
-                stream,
-                ...otherParams,
-            },
-        );
-
-        if (!result.success) {
-            logError('[API:Chat] 转发请求失败', result.error, { requestId, model });
-            return NextResponse.json(
-                createErrorResponse(
-                    result.error?.message || 'Forwarding failed',
-                    result.error?.code || 'forward_error',
-                    undefined,
-                    { requestId },
-                ),
-                { status: result.error?.status || 500 },
-            );
-        }
-
-        logInfo('[API:Chat] 转发请求成功', { requestId, model, stream });
-
-        const rateLimitHeaders: Record<string, string> = {};
-        if (rateLimitResult.quota) {
-            rateLimitHeaders['X-RateLimit-Limit'] = rateLimitResult.quota.limit.toString();
-            rateLimitHeaders['X-RateLimit-Remaining'] = rateLimitResult.quota.remaining.toString();
-            rateLimitHeaders['X-RateLimit-Reset'] = rateLimitResult.quota.reset.toString();
-        }
-
-        if (stream && result.response) {
-            return new Response(result.response.body, {
-                headers: {
-                    'Content-Type': 'text/event-stream',
-                    'Cache-Control': 'no-cache',
-                    'Connection': 'keep-alive',
-                    ...rateLimitHeaders,
-                },
-            });
-        }
-
-        const data = await result.response!.json();
-        return NextResponse.json(data, { headers: rateLimitHeaders });
-    } catch (error) {
-        logError('[API:Chat] 请求处理失败', error, { requestId });
-
-        if (error instanceof SyntaxError) {
-            return NextResponse.json(
-                createErrorResponse(
-                    'Invalid JSON in request body',
-                    'invalid_request_error',
-                    'INVALID_JSON',
-                    { requestId },
-                ),
-                { status: 400 },
-            );
-        }
-
-        return NextResponse.json(
-            createErrorResponse(
-                'Internal server error',
-                'api_error',
-                undefined,
-                { requestId },
-            ),
-            { status: 500 },
-        );
+    // === 模型验证 ===
+    if (!model) {
+      logError('[API:Chat] 模型 ID 缺失', null, { requestId });
+      return NextResponse.json(
+        createErrorResponse(
+          'Missing required field: model',
+          'invalid_request_error',
+          'MISSING_MODEL',
+          { requestId },
+        ),
+        { status: 400 }, 
+      );
     }
+
+    // === 提取 key ===
+    function extractKey(request: Request): string | null {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader) {
+        return null;
+      }
+
+      // Bearer <key>
+      const match = authHeader.match(/^Bearer\s+(.+)$/i);
+      return match ? match[1].trim() : null;
+    }
+    const key = extractKey(request);
+
+    logInfo('[API:Chat] 请求参数解析', {
+      requestId,
+      hasKey: Boolean(key),
+      model,
+      messageCount: messages?.length || 0,
+      stream,
+    });
+
+    // === Key 格式验证（key-validators/）===
+    // 格式合法性完全由钩子处理器决定，包括空值判定
+    if (!validateKey(key)) {
+      logWarn('[API:Chat] Key 格式验证未通过', { requestId });
+      return NextResponse.json(
+        createErrorResponse(
+          'Invalid API key format',
+          'authentication_error',
+          'INVALID_KEY_FORMAT',
+          { requestId },
+        ),
+        { status: 401 },
+      );
+    }
+
+    // === 权限解析：根据 key 查询对应的权限等级 ===
+    const permissionResult = await resolvePermission(key);
+
+    const permissionLevel = permissionResult.permissionLevel;
+
+    logInfo('[API:Chat] 权限解析完成', {
+      requestId,
+      permissionLevel,
+      source: permissionResult.source,
+      identityId: permissionResult.identityId,
+    });
+
+    // === 限流检查 ===
+    const subjectId = `key:${key}`;
+    const rateLimitResult = checkRateLimit({ subjectId, permissionLevel });
+
+    if (!rateLimitResult.allowed) {
+      logWarn('[API:Chat] 限流触发', {
+        requestId,
+        subjectId,
+        permissionLevel,
+        reason: rateLimitResult.reason,
+      });
+      const retryAfter = rateLimitResult.retryAfter || 60;
+      return NextResponse.json(
+        createErrorResponse(
+          rateLimitResult.reason || 'Rate limit exceeded',
+          'rate_limit_error',
+          rateLimitResult.errorCode || 'RATE_LIMITED',
+          { requestId },
+        ),
+        {
+          status: 429,
+          headers: { 'Retry-After': String(retryAfter) },
+        },
+      );
+    }
+
+    // 构建限流响应头
+    const rateLimitHeaders: Record<string, string> = {};
+    if (rateLimitResult.quota) {
+      rateLimitHeaders['X-RateLimit-Limit'] = String(rateLimitResult.quota.limit);
+      rateLimitHeaders['X-RateLimit-Remaining'] = String(rateLimitResult.quota.remaining);
+      rateLimitHeaders['X-RateLimit-Reset'] = String(rateLimitResult.quota.reset);
+    }
+
+    // === 查找中转站 ===
+    const station = stationRegistry.findStation(model);
+
+    if (!station) {
+      logError('[API:Chat] 未找到可处理该模型的中转站', null, { requestId, model });
+      return NextResponse.json(
+        createErrorResponse(
+          `Model not found: ${model}`,
+          'invalid_request_error',
+          'MODEL_NOT_FOUND',
+          { requestId },
+        ),
+        { status: 404 },
+      );
+    }
+
+    logInfo('[API:Chat] 找到中转站', {
+      requestId,
+      model,
+      stationId: station.id,
+      stationName: station.name,
+      stream,
+    });
+
+    // === Hook 预处理 ===
+    const hookContext: HookContext = {
+      request: {
+        browserId: key,
+        modelId: model,
+        messages: messages || [],
+        parameters: otherParams,
+      },
+      metadata: {
+        requestId,
+        timestamp: Date.now(),
+        permissionLevel,
+      },
+    };
+
+    logInfo('[API:Chat] 开始执行 Hook 预处理', { requestId });
+    const hookResult = await executeHooks(hookContext);
+
+    if (hookResult.action === 'block') {
+      logError('[API:Chat] Hook 阻止了请求', null, {
+        requestId,
+        hookReason: hookResult.error,
+      });
+      return NextResponse.json(
+        createErrorResponse(
+          hookResult.error || 'Request blocked by hook',
+          'blocked_by_hook',
+          'REQUEST_BLOCKED',
+          { requestId },
+        ),
+        { status: 403 },
+      );
+    }
+
+    if (hookResult.action === 'modify') {
+      logInfo('[API:Chat] Hook 修改了请求', {
+        requestId,
+        modified: true,
+      });
+    }
+
+    logInfo('[API:Chat] Hook 预处理完成', { requestId });
+
+    // === 转发请求（子站仅负责转发，不参与权限解析和限流）===
+    const forwardResponse = await station.forward({
+      model,
+      messages: messages || [],
+      stream,
+      ...otherParams,
+      headers: request.headers,
+      requestId,
+      authKey: key,
+    });
+
+    logInfo('[API:Chat] 请求处理完成', { requestId, model, stream });
+
+    // 合并限流响应头到转发响应
+    const mergedHeaders = new Headers(forwardResponse.headers);
+    for (const [name, value] of Object.entries(rateLimitHeaders)) {
+      mergedHeaders.set(name, value);
+    }
+
+    return new Response(forwardResponse.body, {
+      status: forwardResponse.status,
+      headers: mergedHeaders,
+    });
+
+  } catch (error) {
+    logError('[API:Chat] 请求处理失败', error, { requestId });
+
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        createErrorResponse(
+          'Invalid JSON in request body',
+          'invalid_request_error',
+          'INVALID_JSON',
+          { requestId },
+        ),
+        { status: 400 },
+      );
+    }
+
+    return NextResponse.json(
+      createErrorResponse(
+        'Internal server error',
+        'api_error',
+        undefined,
+        { requestId },
+      ),
+      { status: 500 },
+    );
+  }
 }

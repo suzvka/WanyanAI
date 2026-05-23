@@ -1,32 +1,25 @@
 import 'server-only';
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { validatePlatformConfig, platformManifestSchema, appearanceSchema, featureFlagsSchema } from '@/server/config/schemas';
+import { createLogger } from '@/lib/api-station/logger';
 import type {
-  ForwardChallengeConfig,
+  PermissionServiceConfig,
   ForwardConfig,
-  ForwardModelConfig,
   PlatformConfig,
   RateLimitConfig,
   RateLimitDefaults,
   RateLimitRule,
 } from './types';
 
-const CONFIG_DIR_NAME = 'platform-config';
-const KEYS_DIR_NAME = 'keys';
+const logger = createLogger('platform-config');
 
-const DEFAULT_FORWARD_CHALLENGE: ForwardChallengeConfig = {
-  enabled: false,
-  difficulty: 3,
-  tokenExpireMinutes: 30,
-  maxNonceAgeSeconds: 300,
-};
+const CONFIG_DIR_NAME = 'platform-config';
 
 const DEFAULT_FORWARD_CONFIG: ForwardConfig = {
   version: '1.0',
-  challenge: DEFAULT_FORWARD_CHALLENGE,
   models: [],
 };
 
@@ -54,8 +47,18 @@ const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
   defaults: DEFAULT_RATE_LIMIT_DEFAULTS,
 };
 
+const DEFAULT_PERMISSION_SERVICE_CONFIG: PermissionServiceConfig = {
+  url: undefined,
+  healthCheckIntervalMs: 30000,
+  healthCheckTimeoutMs: 3000,
+  verifyTimeoutMs: 5000,
+  fallbackPermissionLevel: 1,
+  enableHealthCheck: true,
+};
+
 let forwardCache: { key: string; value: ForwardConfig } | null = null;
 let rateLimitCache: { key: string; value: RateLimitConfig } | null = null;
+let permissionServiceCache: { key: string; value: PermissionServiceConfig } | null = null;
 
 function getConfigRoot(): string {
   return process.cwd();
@@ -64,14 +67,6 @@ function getConfigRoot(): string {
 function resolveConfigDirSync(): string {
   const configDir = path.join(getConfigRoot(), CONFIG_DIR_NAME);
   return existsSync(configDir) ? configDir : configDir;
-}
-
-/**
- * 解析 keys 目录路径
- */
-function resolveKeysDirSync(): string {
-  const keysDir = path.join(getConfigRoot(), KEYS_DIR_NAME);
-  return keysDir;
 }
 
 async function resolveConfigDir(): Promise<string> {
@@ -97,88 +92,6 @@ function readPlatformJsonFileSync<T>(fileName: string): T {
   const configDir = resolveConfigDirSync();
   const content = readFileSync(path.join(configDir, fileName), 'utf-8');
   return JSON.parse(content) as T;
-}
-
-/**
- * 从 keys 目录加载所有模型配置
- * 自动发现所有 .json 文件，解析错误时跳过
- */
-async function loadModelConfigsFromKeysDir(): Promise<ForwardModelConfig[]> {
-  const keysDir = resolveKeysDirSync();
-
-  // 如果 keys 目录不存在，返回空数组
-  if (!existsSync(keysDir)) {
-    return [];
-  }
-
-  try {
-    const files = await readdir(keysDir);
-    const jsonFiles = files.filter(file => file.endsWith('.json'));
-
-    const models: ForwardModelConfig[] = [];
-
-    for (const file of jsonFiles) {
-      const filePath = path.join(keysDir, file);
-      try {
-        const content = await readFile(filePath, 'utf-8');
-        const parsed = JSON.parse(content) as Partial<ForwardModelConfig>;
-        const normalized = normalizeForwardModel(parsed);
-
-        if (normalized) {
-          models.push(normalized);
-        }
-      } catch (error) {
-        // 文件解析错误时跳过，不影响其他文件
-        console.warn(`[loadForwardConfig] Failed to load key file: ${file}, error: ${error}`);
-        continue;
-      }
-    }
-
-    return models;
-  } catch (error) {
-    console.warn(`[loadForwardConfig] Failed to read keys directory: ${error}`);
-    return [];
-  }
-}
-
-function normalizeForwardModel(model: Partial<ForwardModelConfig>): ForwardModelConfig | null {
-  if (!model.id || !model.targetModel || !model.targetBaseUrl || !model.targetApiKey) {
-    return null;
-  }
-
-  return {
-    id: model.id,
-    targetModel: model.targetModel,
-    minPermissionLevel: typeof model.minPermissionLevel === 'number' && model.minPermissionLevel > 0 ? model.minPermissionLevel : 1,
-    maxCallsPerHour: typeof model.maxCallsPerHour === 'number' && model.maxCallsPerHour > 0 ? model.maxCallsPerHour : 1000,
-    targetBaseUrl: model.targetBaseUrl,
-    targetApiKey: model.targetApiKey,
-  };
-}
-
-function normalizeForwardConfig(config: Partial<ForwardConfig>): ForwardConfig {
-  const models = Array.isArray(config.models)
-    ? config.models
-        .map((model) => normalizeForwardModel(model as Partial<ForwardModelConfig>))
-        .filter((model): model is ForwardModelConfig => model !== null)
-    : [];
-
-  return {
-    version: config.version || DEFAULT_FORWARD_CONFIG.version,
-    challenge: {
-      enabled: typeof config.challenge?.enabled === 'boolean' ? config.challenge.enabled : DEFAULT_FORWARD_CHALLENGE.enabled,
-      difficulty: typeof config.challenge?.difficulty === 'number' ? config.challenge.difficulty : DEFAULT_FORWARD_CHALLENGE.difficulty,
-      tokenExpireMinutes:
-        typeof config.challenge?.tokenExpireMinutes === 'number'
-          ? config.challenge.tokenExpireMinutes
-          : DEFAULT_FORWARD_CHALLENGE.tokenExpireMinutes,
-      maxNonceAgeSeconds:
-        typeof config.challenge?.maxNonceAgeSeconds === 'number'
-          ? config.challenge.maxNonceAgeSeconds
-          : DEFAULT_FORWARD_CHALLENGE.maxNonceAgeSeconds,
-    },
-    models,
-  };
 }
 
 function normalizeRateLimitRule(rule: Partial<RateLimitRule>): RateLimitRule {
@@ -236,43 +149,33 @@ export async function loadPublishedPlatformConfig(): Promise<PlatformConfig> {
 export async function loadForwardConfig(): Promise<ForwardConfig> {
   const configDir = resolveConfigDirSync();
   const filePath = path.join(configDir, 'forward.json');
-  const keysDir = resolveKeysDirSync();
-  const cacheKey = `${createFileCacheKey(filePath)}:${createFileCacheKey(keysDir)}`;
+  const cacheKey = createFileCacheKey(filePath);
 
   if (forwardCache?.key === cacheKey) {
     return forwardCache.value;
   }
 
   try {
-    // 从 forward.json 读取 challenge 配置
+    // 从 forward.json 读取版本配置（模型列表由各中转站自行管理 keys/ 目录）
     const parsed = readPlatformJsonFileSync<Partial<ForwardConfig>>('forward.json');
-
-    // 从 keys 目录自动发现所有模型配置
-    const models = await loadModelConfigsFromKeysDir();
 
     const normalized: ForwardConfig = {
       version: parsed.version || DEFAULT_FORWARD_CONFIG.version,
-      challenge: {
-        enabled: typeof parsed.challenge?.enabled === 'boolean' ? parsed.challenge.enabled : DEFAULT_FORWARD_CHALLENGE.enabled,
-        difficulty: typeof parsed.challenge?.difficulty === 'number' ? parsed.challenge.difficulty : DEFAULT_FORWARD_CHALLENGE.difficulty,
-        tokenExpireMinutes:
-          typeof parsed.challenge?.tokenExpireMinutes === 'number'
-            ? parsed.challenge.tokenExpireMinutes
-            : DEFAULT_FORWARD_CHALLENGE.tokenExpireMinutes,
-        maxNonceAgeSeconds:
-          typeof parsed.challenge?.maxNonceAgeSeconds === 'number'
-            ? parsed.challenge.maxNonceAgeSeconds
-            : DEFAULT_FORWARD_CHALLENGE.maxNonceAgeSeconds,
-      },
-      models,
+      models: parsed.models ?? [],
     };
 
     forwardCache = { key: cacheKey, value: normalized };
     return normalized;
   } catch (error) {
-    console.warn('[loadForwardConfig] Failed to load forward config, using defaults:', error);
-    forwardCache = { key: cacheKey, value: DEFAULT_FORWARD_CONFIG };
-    return DEFAULT_FORWARD_CONFIG;
+    logger.warn('Failed to load forward config, using defaults', { error: String(error) });
+
+    const fallbackConfig: ForwardConfig = {
+      ...DEFAULT_FORWARD_CONFIG,
+      models: [],
+    };
+
+    forwardCache = { key: cacheKey, value: fallbackConfig };
+    return fallbackConfig;
   }
 }
 
@@ -296,7 +199,56 @@ export function loadRateLimitConfig(): RateLimitConfig {
   }
 }
 
+/**
+ * 加载权限查询服务配置
+ */
+export function loadPermissionServiceConfig(): PermissionServiceConfig {
+  const configDir = resolveConfigDirSync();
+  const filePath = path.join(configDir, 'permission-service.json');
+  const cacheKey = createFileCacheKey(filePath);
+
+  if (permissionServiceCache?.key === cacheKey) {
+    return permissionServiceCache.value;
+  }
+
+  try {
+    const parsed = readPlatformJsonFileSync<Partial<PermissionServiceConfig>>('permission-service.json');
+    const normalized: PermissionServiceConfig = {
+      url: parsed.url || process.env.AUTH_SERVICE_URL || process.env.ACCOUNT_SERVICE_URL || undefined,
+      healthCheckIntervalMs: parsed.healthCheckIntervalMs ?? DEFAULT_PERMISSION_SERVICE_CONFIG.healthCheckIntervalMs,
+      healthCheckTimeoutMs: parsed.healthCheckTimeoutMs ?? DEFAULT_PERMISSION_SERVICE_CONFIG.healthCheckTimeoutMs,
+      verifyTimeoutMs: parsed.verifyTimeoutMs ?? DEFAULT_PERMISSION_SERVICE_CONFIG.verifyTimeoutMs,
+      fallbackPermissionLevel: parsed.fallbackPermissionLevel ?? DEFAULT_PERMISSION_SERVICE_CONFIG.fallbackPermissionLevel,
+      enableHealthCheck: parsed.enableHealthCheck ?? DEFAULT_PERMISSION_SERVICE_CONFIG.enableHealthCheck,
+    };
+    permissionServiceCache = { key: cacheKey, value: normalized };
+    return normalized;
+  } catch {
+    // 文件不存在或解析失败时使用默认值
+    const fallback: PermissionServiceConfig = {
+      ...DEFAULT_PERMISSION_SERVICE_CONFIG,
+      url: process.env.AUTH_SERVICE_URL || process.env.ACCOUNT_SERVICE_URL || undefined,
+    };
+    permissionServiceCache = { key: cacheKey, value: fallback };
+    return fallback;
+  }
+}
+
 export function clearPlatformConfigRuntimeCaches() {
   forwardCache = null;
   rateLimitCache = null;
+  permissionServiceCache = null;
+}
+
+/**
+ * 获取权限查询服务配置（同步版本，使用缓存）
+ * 供 API 路由使用
+ */
+export function getPermissionServiceConfig(): PermissionServiceConfig {
+  // 如果缓存存在，直接返回
+  if (permissionServiceCache) {
+    return permissionServiceCache.value;
+  }
+  // 否则加载配置
+  return loadPermissionServiceConfig();
 }

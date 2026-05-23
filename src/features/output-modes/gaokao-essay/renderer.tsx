@@ -14,14 +14,6 @@ import {
 import { GaokaoEssayView } from './components/GaokaoEssayView';
 import type { RendererProps } from '@/features/output-modes/renderer';
 import { createAppError } from '@/types/errors';
-import { evaluationGoalLabels } from '@/config/evaluationDimensions';
-
-/**
- * 从原始数据中提取评价目标标签
- */
-function getGoalLabel(evaluationGoal: string): string {
-  return evaluationGoalLabels[evaluationGoal as keyof typeof evaluationGoalLabels] || evaluationGoal;
-}
 
 /**
  * 从 baseUrl 提取 provider
@@ -76,7 +68,7 @@ export function GaokaoEssayRenderer({
     const parsed = modelMinimalReportSchema.safeParse(data.rawJson);
     if (!parsed.success) {
       const firstIssue = parsed.error.issues[0];
-      let errorMessage = firstIssue?.message || '模型返回的报告结构不合法';
+      const errorMessage = firstIssue?.message || '模型返回的报告结构不合法';
       
       throw createAppError({
         code: 'report_schema_invalid',
@@ -90,10 +82,10 @@ export function GaokaoEssayRenderer({
     const normalizedReport: GaokaoEssayData = {
       schemaVersion: 'gaokao_essay_v1_0',
       reportId: data.reportId,
-      reportVersion: metadata.templateVersion,
+      reportVersion: '1.0.0',
       generatedAt: data.createdAt,
       summary: {
-        title: parsed.data.summary.title || `${getGoalLabel(metadata.evaluationGoal)}概览`,
+        title: parsed.data.summary.title || '高考作文评分概览',
         overview: parsed.data.summary.overview,
       },
       dashboard: {
@@ -113,9 +105,6 @@ export function GaokaoEssayRenderer({
         rationale: parsed.data.conclusion.rationale,
       },
       meta: {
-        frameworkVersion: metadata.templateVersion,
-        scoringPolicyVersion: metadata.scoringPolicyVersion,
-        conclusionPolicyVersion: metadata.conclusionPolicyVersion,
         provider: getProviderHost(metadata.baseUrl),
         model: metadata.model,
       },

@@ -82,7 +82,7 @@ function SelectContent({
         <SelectScrollUpButton />
         <SelectPrimitive.Viewport
           className={cn(
-            "p-1 py-6",
+            "p-1 py-6 max-h-[320px]",
             position === "popper" && "h-[var(--radix-select-trigger-height)] w-full scroll-my-1"
           )}
         >
@@ -165,12 +165,14 @@ function SelectScrollUpButton({
     <SelectPrimitive.ScrollUpButton
       data-slot="select-scroll-up-button"
       className={cn(
-        "flex cursor-default items-center justify-center py-1 absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-popover to-transparent",
+        "flex cursor-default items-center justify-center py-1 absolute top-0 left-0 right-0 z-10",
+        "bg-gradient-to-b from-popover/80 via-popover/40 to-transparent",
+        "backdrop-blur-sm transition-opacity duration-150",
         className
       )}
       {...props}
     >
-      <ChevronUpIcon className="size-4 text-muted-foreground/60" />
+      <ChevronUpIcon className="size-4 text-muted-foreground/70" />
     </SelectPrimitive.ScrollUpButton>
   )
 }
@@ -183,12 +185,14 @@ function SelectScrollDownButton({
     <SelectPrimitive.ScrollDownButton
       data-slot="select-scroll-down-button"
       className={cn(
-        "flex cursor-default items-center justify-center py-1 absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-popover to-transparent",
+        "flex cursor-default items-center justify-center py-1 absolute bottom-0 left-0 right-0 z-10",
+        "bg-gradient-to-t from-popover/80 via-popover/40 to-transparent",
+        "backdrop-blur-sm transition-opacity duration-150",
         className
       )}
       {...props}
     >
-      <ChevronDownIcon className="size-4 text-muted-foreground/60" />
+      <ChevronDownIcon className="size-4 text-muted-foreground/70" />
     </SelectPrimitive.ScrollDownButton>
   )
 }

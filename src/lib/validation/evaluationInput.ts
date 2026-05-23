@@ -7,15 +7,6 @@ import {
   isTextAnnotationEmpty,
   MAX_BLOCK_CONTENT_LENGTH,
 } from '@/lib/textBlocks';
-import {
-  textTypeValues,
-  textCompletenessValues,
-  evaluationGoalValues,
-} from '@/config/evaluationDimensions';
-
-const textTypeSchema = z.enum(textTypeValues);
-const textCompletenessSchema = z.enum(textCompletenessValues);
-const evaluationGoalSchema = z.enum(evaluationGoalValues);
 
 const textBlockAttachmentSourceSchema = z.enum(['upload']);
 
@@ -99,9 +90,6 @@ export const evaluationInputSchema = z.object({
     });
   }),
   containers: z.array(containerDataSchema).default([]),
-  textType: textTypeSchema,
-  textCompleteness: textCompletenessSchema,
-  evaluationGoal: evaluationGoalSchema,
 });
 
 export type EvaluationFormErrors = Partial<Record<keyof EvaluationInput | 'form', string>>;

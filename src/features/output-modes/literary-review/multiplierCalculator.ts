@@ -14,10 +14,19 @@ import { defaultSubscoreIds } from './subscores';
 
 /** 选项定义（用于乘子计算） */
 export type MultiplierOption = {
-  value: string;
+  /** 选项唯一标识（可选，默认 fallback 为 label） */
+  value?: string;
+  label?: string;
   /** 自定义字段（维度字段直接在根级别） */
   [key: string]: unknown;
 };
+
+/**
+ * 获取选项的唯一标识值（value 优先，fallback 为 label）
+ */
+function resolveOptionId(option: MultiplierOption): string {
+  return (typeof option.value === 'string' ? option.value : String(option.label ?? '')) as string;
+}
 
 /**
  * 计算最终乘子
@@ -34,15 +43,21 @@ export function calculateMultipliers(
   defaultMultiplier: number = reportNeutralMultiplier,
   dimensionIds: string[] = defaultSubscoreIds,
 ): SubscoreMultipliers {
-  // 1. 从所有选项中构建 value -> option 映射
+  // 1. 从所有选项中构建 id -> option 映射
   const optionMap = new Map<string, MultiplierOption>();
   for (const option of options) {
-    optionMap.set(option.value, option);
+    optionMap.set(resolveOptionId(option), option);
   }
 
   // 2. 收集所有涉及到的维度（配置中显式出现的维度）
   const affectedDimensions = new Set<string>();
-  for (const value of selectedValues) {
+
+  // 展开逗号分隔的多选值
+  const expandedValues = selectedValues.flatMap((v) =>
+    String(v).split(',').map((s) => s.trim()).filter(Boolean),
+  );
+
+  for (const value of expandedValues) {
     const option = optionMap.get(value);
     if (option) {
       for (const dim of dimensionIds) {
@@ -59,7 +74,7 @@ export function calculateMultipliers(
   for (const dim of affectedDimensions) {
     // 计算该维度的总 delta
     let totalDelta = 0;
-    for (const value of selectedValues) {
+    for (const value of expandedValues) {
       const option = optionMap.get(value);
       const delta = option?.[dim];
       if (typeof delta === 'number') {
@@ -78,21 +93,19 @@ export function calculateMultipliers(
   return multipliers;
 }
 
+import type { ControlConfig } from '@/types/module';
+
 /**
- * 从模块配置中提取所有选项
+ * 从控件配置中提取所有选项
  * 
- * @param groups - 控制组配置
+ * @param controls - 控件配置数组
  * @returns 所有选项的扁平列表
  */
-export function extractAllOptions(groups: Array<{
-  controls: Array<{
-    options: MultiplierOption[];
-  }>;
-}>): MultiplierOption[] {
+export function extractAllOptions(controls: ControlConfig[]): MultiplierOption[] {
   const options: MultiplierOption[] = [];
-  for (const group of groups) {
-    for (const control of group.controls) {
-      options.push(...control.options);
+  for (const control of controls) {
+    if (control.options) {
+      options.push(...(control.options as MultiplierOption[]));
     }
   }
   return options;

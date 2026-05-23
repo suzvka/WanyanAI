@@ -1,10 +1,10 @@
 import 'server-only';
 
-export { loadPublishedPlatformConfig, loadForwardConfig, loadRateLimitConfig, clearPlatformConfigRuntimeCaches } from './loader';
+export { loadPublishedPlatformConfig, loadForwardConfig, loadRateLimitConfig, loadPermissionServiceConfig, getPermissionServiceConfig, clearPlatformConfigRuntimeCaches } from './loader';
 export type {
   AppearanceConfig,
+  PermissionServiceConfig,
   FeatureFlagsConfig,
-  ForwardChallengeConfig,
   ForwardConfig,
   ForwardModelConfig,
   GlobalRateLimitConfig,

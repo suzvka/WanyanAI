@@ -2,69 +2,39 @@
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import CollapsiblePanel from '@/components/ui/collapsible-panel';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sparkles } from 'lucide-react';
-import type { AnalysisControlConfig, AnalysisControlGroupConfig } from '@/server/config/types';
-
-/** 下拉菜单固定宽度 */
-const SELECT_FIXED_WIDTH = '200px';
+import type { ControlConfig } from '@/types/module';
+import { renderControl } from '@/features/controls/renderer';
 
 type AnalysisControlsPanelProps = {
   title?: string;
   description?: string;
-  groups?: AnalysisControlGroupConfig[];
-  controls: AnalysisControlConfig[];
+  controls: ControlConfig[];
   controlSelections: Record<string, string>;
   isSubmitting: boolean;
   emptyStateMessage?: string;
   onControlChange: (controlId: string, value: string) => void;
 };
 
-type ControlRowProps = {
-  control: AnalysisControlConfig;
-  selectedValue?: string;
-  isSubmitting: boolean;
-  onControlChange: (controlId: string, value: string) => void;
-};
-
-function ControlRow({
-  control,
-  selectedValue,
-  isSubmitting,
-  onControlChange,
-}: ControlRowProps) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="flex-1 text-sm text-[color:var(--report-text-heading)]">
-        {control.title}
-      </span>
-      <Select
-        value={selectedValue}
-        onValueChange={(value: string) => onControlChange(control.id, value)}
-        disabled={isSubmitting}
-      >
-        <SelectTrigger
-          className="shrink-0"
-          style={{ width: SELECT_FIXED_WIDTH }}
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent style={{ minWidth: SELECT_FIXED_WIDTH }}>
-          {control.options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
+/**
+ * 将控件配置转换为 renderControl 需要的 definition 格式
+ */
+function toDefinition(control: ControlConfig) {
+  return {
+    id: control.id,
+    type: control.type,
+    title: control.title,
+    data: {
+      options: control.options ?? [],
+      promptText: (control as Record<string, unknown>).promptText as string | undefined,
+      maxSelections: (control as Record<string, unknown>).maxSelections as number | undefined,
+    },
+  };
 }
 
 export default function AnalysisControlsPanel({
   title = '分析设置',
   description,
-  groups,
   controls,
   controlSelections,
   isSubmitting,
@@ -77,48 +47,17 @@ export default function AnalysisControlsPanel({
       subtitle={description}
       defaultExpanded={false}
     >
-      <div className="space-y-6">
-        {groups && groups.length > 0 ? (
-          <div className="space-y-6">
-            {groups.map((group, groupIndex) => (
-              <div key={group.id}>
-                {/* 分组标题 */}
-                <div className="mb-4 space-y-1">
-                  <h3 className="text-base font-semibold text-[color:var(--report-text-heading)]">{group.title}</h3>
-                  {group.description ? <p className="text-sm text-[color:var(--report-text-subtle)]">{group.description}</p> : null}
-                </div>
-
-                {/* 控件列表 */}
-                <div className="space-y-3">
-                  {group.controls.map((control) => (
-                    <div key={control.id}>
-                      <ControlRow
-                        control={control}
-                        selectedValue={controlSelections[control.id]}
-                        isSubmitting={isSubmitting}
-                        onControlChange={onControlChange}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                {/* 分组分隔符：最后一个分组不显示 */}
-                {groupIndex < groups.length - 1 && (
-                  <div className="mt-6 border-t border-[color:var(--report-border)]" />
-                )}
-              </div>
-            ))}
-          </div>
-        ) : controls.length > 0 ? (
+      <div className="space-y-3">
+        {controls.length > 0 ? (
           <div className="space-y-3">
             {controls.map((control) => (
               <div key={control.id}>
-                <ControlRow
-                  control={control}
-                  selectedValue={controlSelections[control.id]}
-                  isSubmitting={isSubmitting}
-                  onControlChange={onControlChange}
-                />
+                {renderControl(
+                  toDefinition(control),
+                  controlSelections[control.id] ?? '',
+                  onControlChange,
+                  isSubmitting,
+                )}
               </div>
             ))}
           </div>

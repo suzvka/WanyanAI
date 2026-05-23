@@ -345,9 +345,6 @@ function EvaluateContent({
     return {
       textBlocks: allTextBlocks,
       containers: containersDataList,
-      textType: 'general_text',
-      textCompleteness: 'complete',
-      evaluationGoal: 'overall_check',
     };
   }, [moduleConfig.manifest.containers, containersData]);
 

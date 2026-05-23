@@ -119,9 +119,6 @@ export function prepareEvaluationSubmission(input: EvaluationInput): PreparedEva
       files: blocks.flatMap((item) => item.metadataFiles),
     },
     containers,
-    textType: input.textType,
-    textCompleteness: input.textCompleteness,
-    evaluationGoal: input.evaluationGoal,
   };
 
   return {

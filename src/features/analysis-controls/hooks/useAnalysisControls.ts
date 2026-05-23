@@ -1,38 +1,24 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { AnalysisControlConfig } from '@/server/config/types';
-import type { ModuleConfig } from '@/types/module';
-import type { EvaluationInput } from '@/types/report';
+import type { PageModuleConfig as ModuleConfig } from '@/types/module';
 import {
-  applyBoundControlSelection,
   buildActiveControlSelections,
-  getBoundControlValue,
   getEnabledDynamicControls,
   resolveInitialControlSelections,
   synchronizeControlSelections,
-  type EvaluationInputUpdater,
 } from '../lib/controlSelection';
 
 type UseAnalysisControlsOptions = {
   moduleConfig: ModuleConfig;
-  formData: EvaluationInput;
-  initialEvaluationInput: EvaluationInput;
-  updateField: EvaluationInputUpdater;
-  clearError: (key?: keyof EvaluationInput | 'form') => void;
 };
 
 export function useAnalysisControls({
   moduleConfig,
-  formData,
-  initialEvaluationInput,
-  updateField,
-  clearError,
 }: UseAnalysisControlsOptions) {
   const [controlSelections, setControlSelections] = useState<Record<string, string>>(() =>
     resolveInitialControlSelections(
       getEnabledDynamicControls(moduleConfig),
-      initialEvaluationInput,
     ),
   );
 
@@ -42,44 +28,22 @@ export function useAnalysisControls({
   );
 
   useEffect(() => {
-    setControlSelections((current: Record<string, string>) => {
-      const { changed, nextSelections } = synchronizeControlSelections(dynamicControls, current, formData);
-      return changed ? nextSelections : current;
-    });
-  }, [dynamicControls, formData]);
+    setControlSelections((prev) =>
+      synchronizeControlSelections(dynamicControls, prev),
+    );
+  }, [dynamicControls]);
 
-  useEffect(() => {
-    dynamicControls.forEach((control: AnalysisControlConfig) => {
-      const selectedValue = controlSelections[control.id];
-      if (!selectedValue) {
-        return;
-      }
-
-      if (getBoundControlValue(control, formData) !== selectedValue) {
-        applyBoundControlSelection(control, selectedValue, updateField);
-      }
-    });
-  }, [controlSelections, dynamicControls, formData, updateField]);
-
-  const activeControlSelections = useMemo<Record<string, string>>(
-    () => buildActiveControlSelections(dynamicControls, controlSelections),
-    [controlSelections, dynamicControls],
-  );
-
-  const handleControlChange = (controlId: string, value: string) => {
-    const control = dynamicControls.find((item: AnalysisControlConfig) => item.id === controlId);
-
-    setControlSelections((current: Record<string, string>) => ({
-      ...current,
+  function handleControlChange(controlId: string, value: string) {
+    setControlSelections((prev) => ({
+      ...prev,
       [controlId]: value,
     }));
-    applyBoundControlSelection(control, value, updateField);
-    clearError('form');
-  };
+  }
 
   return {
+    controlSelections,
     dynamicControls,
-    activeControlSelections,
+    activeControlSelections: buildActiveControlSelections(dynamicControls, controlSelections),
     handleControlChange,
   };
 }

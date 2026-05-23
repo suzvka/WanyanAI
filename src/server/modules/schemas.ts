@@ -19,13 +19,16 @@ export const textBlocksParamsSchema = z.object({
 });
 
 const pageModuleEntrySchema = z.object({
-  enabled: z.boolean(),
+  enabled: z.boolean().default(true),
   icon: z.string().trim().min(1).optional(),
-  order: z.number().int(),
+  order: z.number().int().default(0),
 });
 
 /**
  * 页面模块注册配置 Schema
+ *
+ * 只校验框架必需字段，其余字段（如 agent）由 TypeScript 类型和
+ * 独立的 validateAgentPipeline() 负责校验，避免 Zod 静默丢弃。
  */
 export const moduleManifestSchema: z.ZodType<PageModuleManifest> = z.object({
   slug: z.string().trim().min(1),
@@ -43,7 +46,7 @@ export const moduleManifestSchema: z.ZodType<PageModuleManifest> = z.object({
       annotations: z.boolean(),
     })
     .optional(),
-});
+}).passthrough();
 
 /**
  * 验证模块注册配置

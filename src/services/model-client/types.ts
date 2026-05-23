@@ -1,49 +1,41 @@
-import type { ModelAnalysisMessage } from '@/types/analysis';
-import type { AnalysisEventHandlers } from '@/types/streamEvents';
-import type { McpToolDefinition } from '@/mcp/types';
-
 /**
- * ModelClient 配置选项
+ * ModelClient — 纯 HTTP 透传访问器
+ *
+ * 全局单例。不感知 MCP、tools、<call> 标签等业务概念。
+ * 仅负责：接收参数 → JSON.stringify → POST 到 LLM API → 返回原始响应。
  */
-export type ModelClientOptions = {
-  /** API 基础 URL */
+
+/** 单例配置（可随时替换） */
+export interface ModelClientConfig {
+  /** API 端点，例如 'https://api.deepseek.com' 或 '/api/v1'（走中转站） */
   baseUrl: string;
-  /** API 密钥 */
-  apiKey: string;
-  /** 模型标识 */
+  /** API Key（可选，不传则不发送 Authorization 头） */
+  apiKey?: string;
+}
+
+/** 请求参数（model 和 messages 必需，其余全部透传到请求体） */
+export interface ChatParams {
   model: string;
-  /** 消息列表 */
-  messages: ModelAnalysisMessage[];
-  /** 温度参数 */
-  temperature?: number;
-  /** 最大 token 数 */
-  maxTokens?: number;
-  /** 事件回调处理器 */
-  events?: AnalysisEventHandlers;
-  /** MCP 工具定义（来自输出模式模块） */
-  mcpToolDefinitions?: McpToolDefinition[];
-};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  messages: any;
+  [key: string]: unknown;
+}
 
-/**
- * ModelClient 响应结果
- */
-export type ModelClientResult = {
-  /** 模型返回的内容 */
-  content: string;
-  /** 结束原因 */
-  finishReason?: string;
-  /** 捕获的工具调用（如果有） */
-  toolCall?: { name: string; params: Record<string, unknown> } | null;
-};
-
-/**
- * ModelClient 服务接口
- */
+/** ModelClient 服务接口 */
 export interface ModelClient {
+  /** 更新配置（baseUrl / apiKey） */
+  configure(config: ModelClientConfig): void;
+
   /**
-   * 调用模型 API
-   * @param options 调用配置
-   * @returns 模型响应
+   * 一次性调用：发送请求，返回完整的原始 JSON 响应体。
+   * 调用方自行提取 choices[0].message.content / tool_calls 等字段。
    */
-  call(options: ModelClientOptions): Promise<ModelClientResult>;
+  chat(params: ChatParams): Promise<Record<string, unknown>>;
+
+  /**
+   * 流式调用：发送 stream:true 请求，返回异步可迭代的文本 chunk。
+   * 每个 chunk 是 SSE delta 中的 content 字段。
+   * 调用方自行拼接完整内容或解析其中的 <call> 标签。
+   */
+  chatStream(params: ChatParams): AsyncIterable<string>;
 }

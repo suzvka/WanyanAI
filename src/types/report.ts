@@ -1,8 +1,3 @@
-import {
-  evaluationGoalValues,
-  textCompletenessValues,
-  textTypeValues,
-} from '@/config/evaluationDimensions';
 import type { ReportRating } from '@/config/reportScoring';
 
 export type AnalysisReport = {
@@ -72,12 +67,6 @@ export type ReportMeta = {
   provider: string;
   model: string;
 };
-
-export type TextType = string;
-
-export type TextCompleteness = string;
-
-export type EvaluationGoal = string;
 
 export type TextBlockType = string;
 
@@ -188,9 +177,6 @@ export type EvaluationInput = {
   textBlocks: TextBlock[];
   /** 容器数据（按容器分组） */
   containers: ContainerData[];
-  textType: TextType;
-  textCompleteness: TextCompleteness;
-  evaluationGoal: EvaluationGoal;
 };
 
 export type SerializableEvaluationInput = Omit<EvaluationInput, 'textBlocks' | 'containers'> & {

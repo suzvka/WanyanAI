@@ -13,6 +13,9 @@ import {
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { reportReactError } from '@/lib/client-errors/report';
 import { toAppErrorPayload } from '@/types/errors';
+import { createLogger } from '@/lib/api-station/logger';
+
+const logger = createLogger('GlobalErrorBoundary');
 
 /**
  * 全局错误边界 Props
@@ -92,8 +95,7 @@ export class GlobalErrorBoundary extends Component<
 
     // 开发环境输出详细信息
     if (shouldLogDebugError()) {
-      console.error('[GlobalErrorBoundary] Caught error:', error);
-      console.error('[GlobalErrorBoundary] Component stack:', errorInfo.componentStack);
+      logger.error('Caught error', error, { componentStack: errorInfo.componentStack });
     }
   }
 

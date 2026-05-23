@@ -1,177 +1,188 @@
 /**
  * 输出模式注册表
  *
- * 自动扫描并注册所有输出模式模块
+ * 延迟初始化：单例实例在加载时创建（无副作用），内置模块通过 initialize() 注册，
+ * reset() 用于测试隔离和热重置。
  */
 
 import 'server-only';
 
+import { BaseRegistry } from '@/lib/registry/BaseRegistry';
+import type { McpToolDefinition } from '@/mcp/types';
 import type {
   OutputModeModule,
   OutputModeRegistry as IOutputModeRegistry,
   ValidationResult,
-  ProcessInput,
   BuildScoringContextParams,
   CollectedToolData,
+  ToolCallResolutionResult,
 } from './types';
 import type { ReportScoringContext } from '@/types/analysis';
-import { getOutputModeManifest } from '@/features/output-modes/manifest';
+import { registerBuiltinOutputModes } from './manifest';
+import { abortWorkflowTool } from '@/mcp/tools/abortWorkflow';
+import { createLogger } from '@/lib/api-station/logger';
 
-// ============================================================================
-// 静态导入所有模块（确保同步初始化）
-// ============================================================================
+const logger = createLogger('OutputModeRegistry');
 
-// 从 features/output-modes/ 导入模块（模块自治架构）
-import { register as registerLiteraryReview } from '@/features/output-modes/literary-review/module';
-import { register as registerGaokaoEssay } from '@/features/output-modes/gaokao-essay/module';
+class OutputModeRegistryImpl extends BaseRegistry<OutputModeModule> implements IOutputModeRegistry {
+  /** 框架注入的工具名集合（运行时由 getTools() 动态维护），用于 resolveToolCall 分源分派 */
+  private frameworkToolNames = new Set<string>();
 
-const OUTPUT_MODE_REGISTER_MAP: Record<string, (registry: IOutputModeRegistry) => void> = {
-  'literary-review': registerLiteraryReview,
-  'gaokao-essay': registerGaokaoEssay,
-};
-
-// ============================================================================
-// 注册表实现
-// ============================================================================
-
-/**
- * 输出模式注册表实现
- */
-class OutputModeRegistryImpl implements IOutputModeRegistry {
-  private modules = new Map<string, OutputModeModule>();
-
-  /**
-   * 注册输出模式模块
-   */
-  register(module: OutputModeModule): void {
-    if (this.modules.has(module.id)) {
-      console.warn(`[OutputModeRegistry] 模块 ${module.id} 已存在，将被覆盖`);
-    }
-    this.modules.set(module.id, module);
-    console.log(`[OutputModeRegistry] 已注册模块: ${module.id}`);
+  constructor() {
+    super('OutputModeRegistry');
   }
 
-  /**
-   * 获取模块
-   */
-  get(id: string): OutputModeModule | undefined {
-    return this.modules.get(id);
-  }
-
-  /**
-   * 获取所有模块 ID
-   */
-  getIds(): string[] {
-    return Array.from(this.modules.keys());
-  }
-
-  /**
-   * 获取模块提示词
-   */
   getPrompt(id: string): string | undefined {
     return this.modules.get(id)?.prompt;
   }
 
-  /**
-   * 验证数据
-   */
+  getName(id: string): string | undefined {
+    return this.modules.get(id)?.name;
+  }
+
+  getDescription(id: string): string | undefined {
+    return this.modules.get(id)?.description;
+  }
+
   validate(id: string, data: unknown): ValidationResult {
-    const module = this.modules.get(id);
-    if (!module) {
+    const outputMode = this.modules.get(id);
+    if (!outputMode) {
       return {
         success: false,
         errors: [{ path: '', message: `未找到输出模式：${id}` }],
       };
     }
-    return module.validate(data);
+    // 调试日志
+    logger.info('Validating output mode data', { 
+      outputModeId: id, 
+      dataType: typeof data,
+      dataKeys: data && typeof data === 'object' ? Object.keys(data) : 'N/A',
+    });
+    return outputMode.validate(data);
   }
 
-  /**
-   * 处理数据
-   */
-  process(id: string, input: ProcessInput): unknown {
-    const module = this.modules.get(id);
-    if (!module) {
-      throw new Error(`未找到输出模式：${id}`);
-    }
-    return module.process(input);
-  }
-
-  /**
-   * 构建评分上下文
-   */
   buildScoringContext(id: string, params: BuildScoringContextParams): ReportScoringContext {
-    const module = this.modules.get(id);
-    if (!module) {
+    const outputMode = this.modules.get(id);
+    if (!outputMode) {
       throw new Error(`未找到输出模式：${id}`);
     }
-    return module.buildScoringContext(params);
+    return outputMode.buildScoringContext(params);
   }
 
-  /**
-   * 拼装数据（多工具收集模式）
-   *
-   * 从多个工具调用结果中拼装完整的报告数据
-   */
   assemble(id: string, collectedData: CollectedToolData): { success: boolean; data?: Record<string, unknown>; error?: string } {
-    const module = this.modules.get(id);
-    if (!module) {
+    const outputMode = this.modules.get(id);
+    if (!outputMode) {
       return { success: false, error: `未找到输出模式：${id}` };
     }
 
-    // 检查模块是否支持 assemble
-    if (!module.assemble) {
+    if (!outputMode.assemble) {
       return { success: false, error: `输出模式 ${id} 不支持多工具收集模式` };
     }
 
     try {
-      const assembledData = module.assemble(collectedData);
+      const assembledData = outputMode.assemble(collectedData);
       return { success: true, data: assembledData as Record<string, unknown> };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : '拼装数据失败' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '拼装数据失败',
       };
     }
   }
 
   /**
-   * 检查模块是否存在
+   * 获取模块的工具定义。
+   *
+   * 模块只应声明业务工具；框架工具（如 abort_workflow）由注册表统一注入，
+   * 避免各模块重复声明导致版本不一致。
    */
-  has(id: string): boolean {
-    return this.modules.has(id);
+  getTools(id: string): McpToolDefinition[] {
+    const outputMode = this.modules.get(id);
+    if (!outputMode) {
+      return [];
+    }
+
+    const moduleTools = outputMode.mcpToolDefinitions ?? [];
+
+    const moduleFrameworkRequests = outputMode.getFrameworkToolNames
+      ? outputMode.getFrameworkToolNames()
+      : ['abort_workflow'];
+
+    const filteredModuleTools = moduleTools.filter((tool) => {
+      if (moduleFrameworkRequests.includes(tool.name)) {
+        logger.warn('Module should not declare framework tool', {
+          moduleId: id,
+          toolName: tool.name,
+        });
+        return false;
+      }
+      return true;
+    });
+
+    const frameworkTools: McpToolDefinition[] = [];
+    if (moduleFrameworkRequests.includes('abort_workflow')) {
+      frameworkTools.push(abortWorkflowTool);
+      this.frameworkToolNames.add('abort_workflow');
+    }
+
+    return [...filteredModuleTools, ...frameworkTools];
+  }
+
+  resolveToolCall(
+    id: string,
+    toolName: string,
+    params: Record<string, unknown>
+  ): ToolCallResolutionResult {
+    // 1. 框架注入的工具：框架自己消化，模块完全无感知
+    if (this.frameworkToolNames.has(toolName)) {
+      return this.resolveFrameworkTool(toolName, params);
+    }
+
+    // 2. 模块业务工具：完全交给模块解释含义
+    const outputMode = this.modules.get(id);
+    if (outputMode?.resolveToolCall) {
+      return outputMode.resolveToolCall(toolName, params);
+    }
+
+    // 3. 无法识别的工具：不再靠硬编码猜测
+    return { type: 'unknown' };
+  }
+
+  /**
+   * 解析框架工具调用。
+   *
+   * 框架自己注入的工具，名字自己控制，按名解析是合理的——
+   * 外部模块永远不会看到这些工具名，也不应该声明同名的业务工具。
+   */
+  private resolveFrameworkTool(
+    toolName: string,
+    params: Record<string, unknown>
+  ): ToolCallResolutionResult {
+    if (toolName === 'abort_workflow') {
+      return {
+        type: 'abort',
+        reason: params.reason as string,
+        message: params.message as string,
+      };
+    }
+    return { type: 'unknown' };
   }
 }
 
-// ============================================================================
-// 全局注册表实例与初始化
-// ============================================================================
-
-/**
- * 全局注册表实例
- */
 export const outputModeRegistry = new OutputModeRegistryImpl();
 
-// 同步注册所有模块（在模块加载时立即执行）
-for (const item of getOutputModeManifest()) {
-  const register = OUTPUT_MODE_REGISTER_MAP[item.id];
-  if (register) {
-    register(outputModeRegistry);
-  }
+export function initializeOutputModes(): void {
+  outputModeRegistry.initialize(() => registerBuiltinOutputModes(outputModeRegistry));
 }
 
-console.log('[OutputModeRegistry] 初始化完成，已注册模块:', outputModeRegistry.getIds());
+export function resetOutputModes(): void {
+  outputModeRegistry.reset();
+}
 
-// ============================================================================
-// 导出
-// ============================================================================
+export type { OutputModeModule, ValidationResult } from './types';
 
-// 重新导出类型
-export type { OutputModeModule, ValidationResult, ProcessInput, ProcessedReportData } from './types';
-
-/**
- * 获取输出模式模块（便捷函数）
- */
 export function getOutputModeModule(id: string): OutputModeModule | undefined {
   return outputModeRegistry.get(id);
 }
+
+

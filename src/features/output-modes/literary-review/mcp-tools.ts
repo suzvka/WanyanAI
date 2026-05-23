@@ -1,24 +1,14 @@
 /**
  * 文学作品评审 - MCP 工具定义
  *
- * 使用 McpToolDefinition 格式，不依赖 @obayd/agentic
+ * handler 只负责收集数据，不做验证（验证在 assemble 阶段统一进行），
+ * 避免在流执行阶段引入额外计算开销。
  *
- * 架构说明：
- * - 业务工具由模块自行定义（collect_summary, collect_subscore 等）
- * - abort_workflow 从框架层导入，确保所有模块使用统一的中止工具
- * - handler 只负责收集数据，不做验证（验证在 assemble/process 阶段进行）
- * - 子维度分数由 grade 通过计算得出，无需模型提供 score
- *
- * 提示词微调位置：
- * - 修改 `description` 字段调整工具整体描述
- * - 修改 `parameters[].description` 字段调整参数说明
+ * 注意：此文件在客户端使用，handler 在客户端执行。
  */
-
-import 'server-only';
 
 import { z } from 'zod';
 import { defineMcpTool, type McpToolDefinition } from '@/mcp/types';
-import { abortWorkflowTool } from '@/mcp/tools/abortWorkflow';
 import { defaultSubscoreIds, defaultSubscoreDefinitions } from './subscores';
 
 const collectSummaryInputSchema = z.object({
@@ -45,10 +35,6 @@ const collectSectionInputSchema = z.object({
 const finalizeReportInputSchema = z.object({
   confirm: z.boolean(),
 });
-
-// ============================================================================
-// collect_summary - 收集报告摘要
-// ============================================================================
 
 export const collectSummaryMcpTool = defineMcpTool<typeof collectSummaryInputSchema>({
   name: 'collect_summary',
@@ -78,11 +64,9 @@ export const collectSummaryMcpTool = defineMcpTool<typeof collectSummaryInputSch
   }),
 });
 
-// ============================================================================
-// collect_subscore - 收集单个子维度评分
-// 注意：分数由 grade 计算得出，无需模型提供 score
-// ============================================================================
-
+/**
+ * 子维度分数由 grade 通过计算得出，无需模型提供 score，避免评分口径不一致。
+ */
 export const collectSubscoreMcpTool = defineMcpTool<typeof collectSubscoreInputSchema>({
   name: 'collect_subscore',
   description: `收集单个子维度评分。必须依次收集全部 6 个子维度：${defaultSubscoreIds.join(', ')}`,
@@ -124,10 +108,6 @@ export const collectSubscoreMcpTool = defineMcpTool<typeof collectSubscoreInputS
   },
 });
 
-// ============================================================================
-// collect_conclusion - 收集报告结论
-// ============================================================================
-
 export const collectConclusionMcpTool = defineMcpTool<typeof collectConclusionInputSchema>({
   name: 'collect_conclusion',
   description: '收集报告结论',
@@ -148,10 +128,6 @@ export const collectConclusionMcpTool = defineMcpTool<typeof collectConclusionIn
     message: '结论已收集',
   }),
 });
-
-// ============================================================================
-// collect_section - 收集单个段落
-// ============================================================================
 
 export const collectSectionMcpTool = defineMcpTool<typeof collectSectionInputSchema>({
   name: 'collect_section',
@@ -188,10 +164,6 @@ export const collectSectionMcpTool = defineMcpTool<typeof collectSectionInputSch
   }),
 });
 
-// ============================================================================
-// finalize_report - 确认报告完成
-// ============================================================================
-
 export const finalizeReportMcpTool = defineMcpTool<typeof finalizeReportInputSchema>({
   name: 'finalize_report',
   description: '确认报告完成，结束工作流',
@@ -208,7 +180,7 @@ export const finalizeReportMcpTool = defineMcpTool<typeof finalizeReportInputSch
     ok: true,
     data: { finalized: true },
     message: '报告已完成',
-    terminate: true, // 终止工作流
+    terminate: true,
   }),
 });
 
@@ -219,19 +191,15 @@ export const finalizeReportMcpTool = defineMcpTool<typeof finalizeReportInputSch
 /**
  * 获取所有文学作品评审工具定义
  *
- * 包含：
- * - 业务工具：collect_summary, collect_subscore, collect_conclusion, collect_section, finalize_report
- * - 框架工具：abort_workflow（从框架层导入）
+ * 包含业务工具：collect_summary, collect_subscore, collect_conclusion, collect_section, finalize_report
+ * abort_workflow 由框架统一注入，模块不应自行声明。
  */
 export function getLiteraryReviewMcpTools(): McpToolDefinition[] {
   return [
-    // 业务工具
     collectSummaryMcpTool,
     collectSubscoreMcpTool,
     collectConclusionMcpTool,
     collectSectionMcpTool,
     finalizeReportMcpTool,
-    // 框架工具（中止工作流）
-    abortWorkflowTool,
   ];
 }

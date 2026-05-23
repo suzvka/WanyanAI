@@ -1,6 +1,7 @@
 'use client';
 
 import type { ComponentType, ReactNode } from 'react';
+import { BaseRegistry } from '@/lib/registry/BaseRegistry';
 import type { ContainerConfig } from '@/types/module';
 import type { ContainerDataPayload } from '@/types/container-data';
 
@@ -63,45 +64,69 @@ export type ContainerComponentProps<
 
 /**
  * 容器注册表
+ *
+ * 采用延迟初始化模式（与 ControlRegistry / OutputModeRegistry 统一）：
+ * - 单例实例在模块加载时创建（无副作用）
+ * - 内置容器通过 initialize() 显式注册
+ * - 支持 reset() 用于测试隔离
+ *
+ * 注意：ContainerRenderer 使用 `type` 字段作为标识符（而非 `id`），
+ * 内部通过适配层桥接到 BaseRegistry 的 `id` 约定。
  */
-class ContainerRegistry {
-  private registry = new Map<string, ContainerRenderer>();
+
+/** 内部适配类型：将 ContainerRenderer.type 映射为 BaseRegistry 要求的 id */
+type ContainerRegistryEntry = ContainerRenderer & { id: string };
+
+class ContainerRegistryImpl extends BaseRegistry<ContainerRegistryEntry> {
+  constructor() {
+    super('ContainerRegistry');
+  }
 
   /**
    * 注册容器渲染器
+   *
+   * 泛型兼容：接受带泛型参数的渲染器，统一存储。
+   * ContainerRenderer.type 自动映射为 BaseRegistry 的 id。
    */
   register<TParams, TData = ContainerDataPayload>(
     renderer: ContainerRenderer<TParams, TData>,
   ): void {
-    this.registry.set(renderer.type, renderer as ContainerRenderer);
+    // 将 type 映射为 id，适配 BaseRegistry 的统一约定
+    const entry: ContainerRegistryEntry = {
+      ...renderer,
+      id: renderer.type,
+    } as ContainerRegistryEntry;
+    super.register(entry);
   }
 
   /**
-   * 获取容器渲染器
+   * 获取容器渲染器（按 type 查找）
    */
-  get(type: string): ContainerRenderer | undefined {
-    return this.registry.get(type);
+  getRenderer(type: string): ContainerRenderer | undefined {
+    return this.modules.get(type);
   }
 
   /**
    * 检查容器类型是否已注册
    */
   has(type: string): boolean {
-    return this.registry.has(type);
+    return this.modules.has(type);
   }
 
   /**
    * 获取所有已注册的容器类型
+   *
+   * 兼容旧接口名 getRegisteredTypes()
    */
   getRegisteredTypes(): string[] {
-    return Array.from(this.registry.keys());
+    return this.getIds();
   }
 }
 
 /**
  * 全局容器注册表实例
  */
-export const containerRegistry = new ContainerRegistry();
+export const containerRegistry = new ContainerRegistryImpl();
 
 /**
  * 渲染容器组件
@@ -117,7 +142,7 @@ export function renderContainer(
   total: number,
   sharedProps?: ContainerSharedProps,
 ): ReactNode {
-  const renderer = containerRegistry.get(config.type);
+  const renderer = containerRegistry.getRenderer(config.type);
   if (!renderer) {
     return null;
   }

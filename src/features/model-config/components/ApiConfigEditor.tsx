@@ -107,8 +107,13 @@ export default function ApiConfigEditor({
       </div>
 
       {/* 按钮区域 */}
-      <div className="space-y-2">
-        <Button type="button" className="w-full" disabled={busy} onClick={handleSubmit}>
+      <div className="space-y-3 pt-1">
+        <Button
+          type="button"
+          className="w-full transition-all duration-200 active:scale-[0.98]"
+          disabled={busy}
+          onClick={handleSubmit}
+        >
           <Save className="mr-2 h-4 w-4" />
           {submitLabel}
         </Button>
@@ -119,11 +124,11 @@ export default function ApiConfigEditor({
             type="button"
             variant="outline"
             className={cn(
-              'w-full',
+              'w-full transition-all duration-200 active:scale-[0.98]',
               // 红色主题 - 局部定义，不修改全局配置
-              'border-[oklch(0.55_0.18_28)] bg-transparent text-[oklch(0.50_0.16_28)]',
-              'hover:bg-[oklch(0.55_0.18_28)] hover:text-white',
-              'focus-visible:ring-[oklch(0.55_0.18_28)]',
+              'border-destructive/60 bg-transparent text-destructive/80',
+              'hover:bg-destructive hover:text-destructive-foreground hover:border-destructive',
+              'focus-visible:ring-destructive/30',
             )}
             disabled={busy}
             onClick={onDelete}

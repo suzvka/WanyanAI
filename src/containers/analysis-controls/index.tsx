@@ -20,14 +20,13 @@ export default function AnalysisControlsContainer(
     analysisState,
   } = usePageContext();
 
-  const { analysisControls } = moduleConfig;
+  const { controls } = moduleConfig;
   const isSubmitting = analysisState.status === 'running' || analysisState.status === 'recovering';
 
   return (
     <AnalysisControlsPanel
       title="分析设置"
-      groups={analysisControls.groups.filter(g => g.enabled)}
-      controls={analysisControls.controls.filter(c => c.enabled)}
+      controls={controls.filter(c => c.enabled !== false && c.options?.length > 0)}
       controlSelections={controlSelections}
       isSubmitting={isSubmitting}
       onControlChange={updateControlSelection}

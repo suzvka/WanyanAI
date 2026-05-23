@@ -1,6 +1,6 @@
-import { evaluationGoalLabels } from '@/config/evaluationDimensions';
 import { validatePersistedAnalysisReport, validateReportHistoryStoreState } from '@/lib/validation/reportHistory';
 import type { PersistedAnalysisReport } from '@/types/analysis';
+import { createLogger } from '@/lib/api-station/logger';
 import {
   MAX_REPORT_HISTORY_RECORDS,
   REPORT_HISTORY_STORAGE_KEY,
@@ -8,6 +8,8 @@ import {
   type ReportHistoryQuery,
   type ReportHistoryStoreState,
 } from './types';
+
+const logger = createLogger('report-history');
 
 const REPORT_HISTORY_UPDATED_EVENT = 'report-history-updated';
 
@@ -17,7 +19,7 @@ const emptyState: ReportHistoryStoreState = {
 };
 
 function persistState(state: ReportHistoryStoreState) {
-  console.log('[report-history] persistState called:', {
+  logger.debug('persistState called', {
     recordCount: Object.keys(state.recordsById).length,
     orderLength: state.order.length,
   });
@@ -46,8 +48,7 @@ function getReportTitle(report: PersistedAnalysisReport): string {
     }
   }
 
-  const goalLabel = evaluationGoalLabels[report.metadata.evaluationGoal as keyof typeof evaluationGoalLabels] || report.metadata.evaluationGoal;
-  return `${goalLabel}概览`;
+  return `${report.metadata.moduleId || report.metadata.outputMode}概览`;
 }
 
 function buildCachedRecord(report: PersistedAnalysisReport): CachedReportRecord {
@@ -143,26 +144,26 @@ export const reportHistoryStore = {
     try {
       const stored = localStorage.getItem(REPORT_HISTORY_STORAGE_KEY);
       if (!stored) {
-        console.log('[report-history] getState: No stored data found');
+        logger.debug('getState: No stored data found');
         return emptyState;
       }
 
-      console.log('[report-history] getState: Parsing stored data');
+      logger.debug('getState: Parsing stored data');
       const parsed = validateReportHistoryStoreState(JSON.parse(stored));
       if (!parsed.success) {
-        console.error('[report-history] getState: Validation failed, removing storage', parsed.error);
+        logger.error('getState: Validation failed, removing storage', undefined, { error: parsed.error });
         localStorage.removeItem(REPORT_HISTORY_STORAGE_KEY);
         return emptyState;
       }
 
       const normalized = normalizeState(parsed.data);
-      console.log('[report-history] getState: Returning state with', {
+      logger.debug('getState: Returning state', {
         recordCount: Object.keys(normalized.recordsById).length,
         orderLength: normalized.order.length,
       });
       return normalized;
     } catch (error) {
-      console.error('[report-history] getState: Error', error);
+      logger.error('getState: Error', error);
       return emptyState;
     }
   },
@@ -200,7 +201,7 @@ export const reportHistoryStore = {
       throw new Error('历史任务仅支持在浏览器环境中创建');
     }
 
-    console.log('[report-history] createTaskRecord called:', {
+    logger.debug('createTaskRecord called', {
       id: input.id,
       title: input.title,
       moduleId: input.moduleId,
@@ -240,7 +241,7 @@ export const reportHistoryStore = {
       order: [record.id, ...currentState.order.filter((id) => id !== record.id)],
     }));
 
-    console.log('[report-history] Task record created:', {
+    logger.debug('Task record created', {
       id: record.id,
       title: record.title,
       status: record.status,
@@ -255,18 +256,18 @@ export const reportHistoryStore = {
       throw new Error('历史任务仅支持在浏览器环境中更新');
     }
 
-    console.log('[report-history] updateTaskRecord called:', { reportId, updates });
+    logger.debug('updateTaskRecord called', { reportId, updates });
     const currentState = this.getState();
     const currentRecord = currentState.recordsById[reportId];
 
-    console.log('[report-history] Current state:', {
+    logger.debug('Current state', {
       reportId,
       recordExists: !!currentRecord,
       allRecordIds: Object.keys(currentState.recordsById),
     });
 
     if (!currentRecord) {
-      console.error('[report-history] Record not found:', {
+      logger.error('Record not found', undefined, {
         reportId,
         allRecordIds: Object.keys(currentState.recordsById),
       });
@@ -294,19 +295,19 @@ export const reportHistoryStore = {
       order: currentState.order,
     });
 
-    console.log('[report-history] Record updated:', { reportId, newStatus: nextRecord.status });
+    logger.debug('Record updated', { reportId, newStatus: nextRecord.status });
     return nextRecord;
   },
 
   completeTask(reportId: string, report: PersistedAnalysisReport): CachedReportRecord {
-    console.log('[report-history] completeTask called:', { reportId });
+    logger.debug('completeTask called', { reportId });
     const parsed = validatePersistedAnalysisReport(report);
     if (!parsed.success) {
-      console.error('[report-history] Report validation failed:', parsed.error);
+      logger.error('Report validation failed', undefined, { error: parsed.error });
       throw new Error(parsed.error);
     }
 
-    console.log('[report-history] Report validated, calling updateTaskRecord');
+    logger.debug('Report validated, calling updateTaskRecord');
     return this.updateTaskRecord(reportId, {
       title: getReportTitle(parsed.data),
       status: 'completed',
@@ -329,17 +330,17 @@ export const reportHistoryStore = {
   },
 
   failTask(reportId: string, errorMessage: string): CachedReportRecord {
-    console.log('[report-history] failTask called:', { reportId, errorMessage });
+    logger.debug('failTask called', { reportId, errorMessage });
     const currentState = this.getState();
 
-    console.log('[report-history] Current state:', {
+    logger.debug('Current state', {
       reportId,
       recordExists: !!currentState.recordsById[reportId],
       allRecordIds: Object.keys(currentState.recordsById),
     });
 
     if (!currentState.recordsById[reportId]) {
-      console.error('[report-history] Record not found in failTask:', {
+      logger.error('Record not found in failTask', undefined, {
         reportId,
         allRecordIds: Object.keys(currentState.recordsById),
         order: currentState.order,
@@ -347,14 +348,14 @@ export const reportHistoryStore = {
 
       // 尝试从 localStorage 直接读取原始数据
       const rawState = localStorage.getItem(REPORT_HISTORY_STORAGE_KEY);
-      console.log('[report-history] Raw localStorage data:', rawState);
+      logger.debug('Raw localStorage data', { rawState });
 
       throw new Error('未找到对应的历史任务');
     }
 
     const currentRecord = currentState.recordsById[reportId];
 
-    console.log('[report-history] Calling updateTaskRecord to fail task');
+    logger.debug('Calling updateTaskRecord to fail task');
     return this.updateTaskRecord(reportId, {
       status: 'failed',
       progressSnapshot: {

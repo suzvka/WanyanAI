@@ -101,14 +101,14 @@ export function PageProvider({
   const { createTask, getTask, subscribeTask, retryTask, canRetryTask } = useAnalysisTasks();
 
   // 分析控制选择
+  // 初始值由控件模块在 getDefinitions() 中通过 initialValue 字段交付，
+  // 框架只需统一读取，无需了解控件类型内部细节（符合开闭原则）。
   const [controlSelections, setControlSelections] = useState<ControlSelections>(() => {
     const initial: ControlSelections = {};
-    for (const control of moduleConfig.analysisControls.controls) {
-      if (control.enabled && control.options.length > 0) {
-        const enabledOption = control.options.find(opt => opt.enabled);
-        if (enabledOption) {
-          initial[control.id] = enabledOption.value;
-        }
+    const definitions = moduleConfig?.controlDefinitions ?? [];
+    for (const def of definitions) {
+      if (def.initialValue !== undefined && def.initialValue !== '') {
+        initial[def.id] = def.initialValue;
       }
     }
     return initial;
@@ -203,6 +203,7 @@ export function PageProvider({
         controlSelections,
         params,
         input,
+        moduleName: moduleConfig.manifest.title ?? '评测',
       });
 
       if (!taskId) {

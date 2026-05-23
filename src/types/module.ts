@@ -1,4 +1,6 @@
-import type { AnalysisControlsConfig, SiteConfig } from '@/server/config/types';
+import type { ControlDefinition } from '@/features/controls';
+
+import type { SiteConfig } from '@/server/config/types';
 
 /**
  * 容器配置
@@ -47,6 +49,39 @@ export type PageModuleEntry = {
   icon?: string;
 };
 
+// ============================================================
+// Agent 系统类型
+// ============================================================
+
+/**
+ * Agent 管线步骤定义
+ */
+export type AgentStep = {
+  /** 调用的输出模式 ID */
+  outputMode: string;
+  /** 步骤显示标签（用于进度指示器） */
+  label: string;
+  /** 上下文来源策略 */
+  inputSource: 'user' | 'previous' | 'accumulated';
+};
+
+/**
+ * Agent 管线配置
+ */
+export type AgentPipeline = {
+  /**
+   * @deprecated 已废弃，Pipeline 激活由 steps.length > 0 决定
+   * 保留字段以兼容现有 main.json，不再用于运行时判断
+   */
+  enabled?: boolean;
+  /** 最大迭代次数（防止无限循环） */
+  maxIterations: number;
+  /** 可用中间步骤池（Agent 可从中自主选择） */
+  steps: AgentStep[];
+  /** 最终步骤（必须有渲染器，产出用户可见报告） */
+  terminalStep: AgentStep;
+};
+
 /**
  * 页面模块注册配置（main.json）
  */
@@ -63,6 +98,8 @@ export type PageModuleManifest = {
   containers: ContainerConfig[];
   /** 输出模式标识 */
   outputMode: string;
+  /** Agent 管线配置（不配置则使用传统一次性分析流程） */
+  agent?: AgentPipeline;
   /** 页面入口配置（内部配置） */
   entry: PageModuleEntry;
   /**
@@ -77,6 +114,57 @@ export type PageModuleManifest = {
 };
 
 /**
+ * 控件配置
+ *
+ * main.json 中的 controls 字段类型
+ * 结构为 { [controlType]: controlConfig }
+ * 例如：{ "select": { "groups": [...] } }
+ */
+export type ControlItemBase = {
+  id: string;
+  title?: string;
+  enabled?: boolean;
+  type: string;
+};
+
+export type SelectControlItem = ControlItemBase & {
+  type: 'select';
+  options: Array<{
+    /** 选项唯一值（可选，默认 fallback 为 label） */
+    value?: string;
+    label: string;
+    enabled?: boolean;
+    promptText?: string;
+    /** 是否默认选中 */
+    defaultSelected?: boolean;
+  }>;
+};
+
+/**
+ * 多选控件配置
+ */
+export type MultiSelectControlItem = ControlItemBase & {
+  type: 'multi-select';
+  /** 控件级提示词 */
+  promptText: string;
+  /** 最大可选择数量，0 或不填表示不限制 */
+  maxSelections?: number;
+  options: Array<{
+    label: string;
+    promptText: string;
+    /** 是否默认选中 */
+    defaultSelected?: boolean;
+  }>;
+};
+
+export type ControlConfig = SelectControlItem | MultiSelectControlItem;
+
+/**
+ * 控件配置（数组结构，每个控件有自己的 type 字段标识类型）
+ */
+export type ControlsConfig = ControlConfig[];
+
+/**
  * 页面模块完整配置
  */
 export type PageModuleConfig = {
@@ -86,8 +174,15 @@ export type PageModuleConfig = {
   manifest: PageModuleManifest;
   /** 页面文案配置 */
   site: SiteConfig;
-  /** 分析控制配置 */
-  analysisControls: AnalysisControlsConfig;
+  /** 控件配置（原始 JSON 数据，编译时使用） */
+  controls: ControlsConfig;
+  /**
+   * 控件定义（由控件模块 getDefinitions() 预计算）
+   *
+   * 含 initialValue 字段，前端 PageContext 直接读取以初始化 controlSelections，
+   * 无需了解控件类型内部细节（符合开闭原则）。
+   */
+  controlDefinitions: ControlDefinition[];
 };
 
 /**

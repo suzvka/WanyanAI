@@ -4,38 +4,41 @@
   "description": "AI 驱动的小说文本深度诊断",
   "route": "/evaluate/novel-evaluate",
   "containers": [
-    { "type": "analysis-controls" },
-    { 
-      "type": "text-blocks", 
-      "params": { 
+    {
+      "type": "analysis-controls"
+    },
+    {
+      "type": "text-blocks",
+      "params": {
         "id": "main-text",
         "title": "正文",
         "subtitle": "待评文本",
         "prompt": "只有这部分需要评分",
-        "defaultExpanded": true, 
-        "initialBlockCount": 1 
-      } 
+        "defaultExpanded": true,
+        "initialBlockCount": 1
+      }
     },
-    { 
-      "type": "text-blocks", 
-      "params": { 
+    {
+      "type": "text-blocks",
+      "params": {
         "id": "reference-material",
-        "title": "参考内容", 
-        "defaultExpanded": false, 
-        "initialBlockCount": 0 
-      } 
+        "title": "参考内容",
+        "defaultExpanded": false,
+        "initialBlockCount": 0
+      }
     },
-    { 
-      "type": "text-blocks", 
-      "params": { 
+    {
+      "type": "text-blocks",
+      "params": {
         "id": "reference-review",
-        "title": "参考评价", 
-        "defaultExpanded": false, 
-        "initialBlockCount": 0 
-      } 
+        "title": "参考评价",
+        "defaultExpanded": false,
+        "initialBlockCount": 0
+      }
     }
   ],
   "outputMode": "literary-review",
+  "controlsConfig": "./controls.json",
   "entry": {
     "enabled": true,
     "icon": "BookOpen",

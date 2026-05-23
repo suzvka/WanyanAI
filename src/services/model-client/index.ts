@@ -1,50 +1,104 @@
-import type { AnalysisEventHandlers } from '@/types/streamEvents';
-import { StreamingMCPAdapter } from '@/mcp/streamingAdapter';
-import type { ModelAnalysisRequest } from '@/types/analysis';
-import type { ModelClient, ModelClientOptions, ModelClientResult } from './types';
+import type { ModelClient, ModelClientConfig, ChatParams } from './types';
+import { requestResponse } from '@/lib/client-request';
 
-export type { ModelClient, ModelClientOptions, ModelClientResult };
+export type { ModelClient, ModelClientConfig, ChatParams };
 
-/**
- * 默认 ModelClient 实现
- *
- * 基于 StreamingMCPAdapter，提供简洁的 API 调用接口
- * 支持流式响应和工具调用自动捕获
- * 
- * 注意：不使用 @obayd/agentic 的 Conversation 类，因为它会在工具调用后自动发起新请求
- */
+const log = (message: string, data?: unknown) => {
+  console.log(`[modelClient] ${message}`, data !== undefined ? data : '');
+};
+
 class DefaultModelClient implements ModelClient {
-  async call(options: ModelClientOptions): Promise<ModelClientResult> {
-    const { baseUrl, apiKey, model, messages, temperature, events, mcpToolDefinitions } = options;
+  private config: ModelClientConfig = { baseUrl: '' };
 
-    const payload: ModelAnalysisRequest = {
-      model,
-      messages,
-      temperature,
+  configure(config: ModelClientConfig): void {
+    this.config = {
+      baseUrl: config.baseUrl.replace(/\/$/, ''),
+      apiKey: config.apiKey,
     };
+    log('configured', { baseUrl: this.config.baseUrl, hasKey: !!this.config.apiKey });
+  }
 
-    // 使用 StreamingMCPAdapter
-    // 传递 baseUrl 和 apiKey，支持自定义端点
-    const adapter = new StreamingMCPAdapter(
-      model,
-      temperature,
-      events,
-      mcpToolDefinitions,
-      baseUrl,
-      apiKey
+  async chat(params: ChatParams): Promise<Record<string, unknown>> {
+    const body = JSON.stringify(params);
+
+    const response = await requestResponse(
+      `${this.config.baseUrl}/chat/completions`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.config.apiKey
+            ? { Authorization: `Bearer ${this.config.apiKey}` }
+            : {}),
+        },
+        body,
+        errorCode: 'provider_request_failed',
+        errorMessage: '模型请求失败',
+        networkErrorMessage: '模型请求失败，请检查网络连接或服务配置后重试',
+      },
     );
 
-    const result = await adapter.sendMessage(payload);
+    const text = await response.text();
+    return JSON.parse(text) as Record<string, unknown>;
+  }
 
-    return {
-      content: result.fullContent,
-      finishReason: 'stop',
-      toolCall: result.toolCall, // 返回捕获的工具调用
-    };
+  async *chatStream(params: ChatParams): AsyncIterable<string> {
+    const body = JSON.stringify({ ...params, stream: true });
+
+    const response = await requestResponse(
+      `${this.config.baseUrl}/chat/completions`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.config.apiKey
+            ? { Authorization: `Bearer ${this.config.apiKey}` }
+            : {}),
+        },
+        body,
+        errorCode: 'provider_request_failed',
+        errorMessage: '模型请求失败',
+        networkErrorMessage: '模型请求失败，请检查网络连接或服务配置后重试',
+      },
+    );
+
+    if (!response.body) {
+      throw new Error('响应体为空');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            const data = line.substring(5).trim();
+            if (data === '[DONE]') return;
+
+            try {
+              const parsed = JSON.parse(data);
+              const content: string | undefined =
+                parsed.choices?.[0]?.delta?.content;
+              if (content) yield content;
+            } catch {
+              // 跳过无法解析的行
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 }
 
-/**
- * 默认导出的 ModelClient 实例
- */
 export const modelClient: ModelClient = new DefaultModelClient();

@@ -144,7 +144,7 @@ function checkUserRateLimit(
     userRequestsByLevel.set(permissionLevel, userMap);
   }
 
-  let requests = userMap.get(subjectId) || [];
+  const requests = userMap.get(subjectId) || [];
 
   // 检查每分钟限流
   const minuteRequests = cleanupOldRequests([...requests], minuteWindowMs);

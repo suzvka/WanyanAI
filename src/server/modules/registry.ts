@@ -2,6 +2,9 @@ import 'server-only';
 
 import { loadPageModuleRegistry } from './loader';
 import type { PageModuleRegistry, PageModuleConfig, PageModulePublicMeta } from '@/types/module';
+import { createLogger } from '@/lib/api-station/logger';
+
+const logger = createLogger('ModuleLoader');
 
 let cachedRegistry: PageModuleRegistry | null = null;
 
@@ -26,9 +29,11 @@ function setCachedPageModuleRegistry(registry: PageModuleRegistry): PageModuleRe
 export async function getPageModuleRegistry(): Promise<PageModuleRegistry> {
   const cached = getCachedModuleRegistry();
   if (cached) {
+    logger.debug('使用缓存的注册表');
     return cached;
   }
 
+  logger.info('缓存未命中，正在加载模块注册表');
   const registry = await loadPageModuleRegistry();
   return setCachedPageModuleRegistry(registry);
 }

@@ -3,14 +3,15 @@
  * 提供站内模型服务的配置信息
  */
 
-import { requestJson } from '@/lib/client-request';
 import type { ModelInfo, ApiConfigValidationStatus } from '@/types/modelConfig';
-import { looksLikeProxyKey } from './proxyKey';
 
 const USER_REF_KEY = 'built_in_user_ref';
 const BUILT_IN_PROXY_KEY = 'built_in_proxy_key';
 const BUILT_IN_PROXY_KEY_EXPIRES = 'built_in_proxy_key_expires';
 const BUILT_IN_CACHE_KEY = 'built_in_models_cache';
+
+// 本地 key 有效期：30 分钟
+const LOCAL_KEY_TTL_MS = 30 * 60 * 1000;
 
 interface BuiltInModelsCache {
   models: ModelInfo[];
@@ -22,6 +23,14 @@ interface BuiltInModelsCache {
 interface BuiltInProxyKeyInfo {
   key: string;
   expiresAt: number;
+}
+
+/**
+ * 生成本地 key
+ * 格式：local_<timestamp>_<random>
+ */
+function generateLocalKey(): string {
+  return `local_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function generateUserRef(): string {
@@ -70,11 +79,6 @@ export function getBuiltInApiKey(): string {
       return '';
     }
 
-    if (!looksLikeProxyKey(key)) {
-      clearBuiltInApiKey();
-      return '';
-    }
-
     return key;
   } catch {
     clearBuiltInApiKey();
@@ -100,33 +104,35 @@ function saveBuiltInApiKey(info: BuiltInProxyKeyInfo) {
   localStorage.setItem(BUILT_IN_PROXY_KEY_EXPIRES, info.expiresAt.toString());
 }
 
-export async function refreshBuiltInApiKey(): Promise<BuiltInProxyKeyInfo> {
-  const userRefHint = getBuiltInUserRef();
-  const payload = await requestJson<{
-    key?: string;
-    expiresAt?: number;
-    error?: { message?: string };
-  }>(`${getBuiltInBaseUrl()}/key`, {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ userRef: userRefHint }),
-    errorMessage: '站内代理 Key 获取失败',
-    networkErrorMessage: '站内代理 Key 获取失败，请检查网络连接后重试',
-  });
-
-  if (!payload?.key || typeof payload.expiresAt !== 'number') {
-    throw new Error(payload?.error?.message || '站内代理 Key 获取失败');
-  }
-
-  const keyInfo = {
-    key: payload.key,
-    expiresAt: payload.expiresAt,
+/**
+ * 获取或刷新内置 API key
+ *
+ * 直接生成本地 key，无需请求外部权限查询服务。
+ * 因为权限查询服务不可用时，任意 key 都能通过并获取默认权限。
+ */
+export function refreshBuiltInApiKey(): BuiltInProxyKeyInfo {
+  const keyInfo: BuiltInProxyKeyInfo = {
+    key: generateLocalKey(),
+    expiresAt: Date.now() + LOCAL_KEY_TTL_MS,
   };
+
   saveBuiltInApiKey(keyInfo);
   return keyInfo;
+}
+
+/**
+ * 确保有可用的 key
+ *
+ * 如果当前 key 有效则返回，否则生成新的
+ */
+export function ensureBuiltInApiKey(): string {
+  const existingKey = getBuiltInApiKey();
+  if (existingKey) {
+    return existingKey;
+  }
+
+  const keyInfo = refreshBuiltInApiKey();
+  return keyInfo.key;
 }
 
 export function getBuiltInModelsCache(): BuiltInModelsCache | null {

@@ -1,6 +1,9 @@
 'use client';
 
-import { containerRegistry } from './registry';
+import type { ReactNode } from 'react';
+import { containerRegistry, renderContainer as _renderContainer } from './registry';
+import type { ContainerConfig } from '@/types/module';
+import type { ContainerSharedProps } from './registry';
 import { getBuiltInContainerManifest } from './manifest';
 import TextBlocksContainer from './text-blocks';
 import AnalysisControlsContainer from './analysis-controls';
@@ -15,8 +18,11 @@ function getBuiltInContainerManifestItem(type: string) {
 
 /**
  * 注册所有内置容器
+ *
+ * 此函数由框架在启动时调用（延迟初始化），
+ * 不再在 import 时自动执行。
  */
-export function registerBuiltInContainers(): void {
+export function registerBuiltinContainers(): void {
   const analysisControlsManifest = getBuiltInContainerManifestItem('analysis-controls');
   const textBlocksManifest = getBuiltInContainerManifestItem('text-blocks');
 
@@ -43,11 +49,38 @@ export function registerBuiltInContainers(): void {
   // });
 }
 
-// 自动注册
-registerBuiltInContainers();
+/**
+ * 初始化容器注册表（注册所有内置容器）
+ *
+ * 幂等操作，重复调用不会重复注册。
+ * 必须在使用 containerRegistry 之前调用。
+ *
+ * 客户端容器注册表不通过 server-only 的 loader.ts 统一初始化，
+ * 而是通过以下两种方式之一：
+ * 1. 显式调用 initializeContainers()
+ * 2. renderContainer() 自动初始化守卫（首次渲染时触发）
+ */
+export function initializeContainers(): void {
+  containerRegistry.initialize(registerBuiltinContainers);
+}
 
-// 导出注册表和渲染函数
-export { containerRegistry, renderContainer } from './registry';
+/**
+ * 渲染容器组件（带自动初始化守卫）
+ *
+ * 首次调用时自动触发容器注册表初始化，
+ * 确保即使未显式调用 initializeContainers() 也能正常工作。
+ */
+export function renderContainer(
+  config: ContainerConfig,
+  index: number,
+  total: number,
+  sharedProps?: ContainerSharedProps,
+): ReactNode {
+  if (!containerRegistry.isInitialized) {
+    initializeContainers();
+  }
+  return _renderContainer(config, index, total, sharedProps);
+}
 
-// 导出容器类型
-export type { ContainerRenderer, ContainerComponentProps, ContainerSharedProps } from './registry';
+// 导出注册表
+export { containerRegistry } from './registry';

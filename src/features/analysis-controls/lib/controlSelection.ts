@@ -1,157 +1,75 @@
-import type {
-  AnalysisControlGroupConfig,
-  AnalysisControlConfig,
-} from '@/server/config/types';
-import type { ModuleConfig } from '@/types/module';
-import type { EvaluationInput } from '@/types/report';
-import {
-  readBoundControlValue,
-  writeBoundControlValue,
-  type EvaluationInputUpdater,
-} from './controlBindings';
-import {
-  textTypeLabels,
-  textCompletenessLabels,
-  evaluationGoalLabels,
-} from '@/config/evaluationDimensions';
+import type { PageModuleConfig as ModuleConfig, ControlConfig } from '@/types/module';
 
-export type { EvaluationInputUpdater } from './controlBindings';
-
-function normalizeControl(control: AnalysisControlConfig): AnalysisControlConfig {
-  return {
-    ...control,
-    options: control.options.filter((option) => option.enabled),
-  };
-}
-
-export function getEnabledDynamicControlGroups(moduleConfig: ModuleConfig): AnalysisControlGroupConfig[] {
-  return moduleConfig.analysisControls.groups
-    .filter((group) => group.enabled)
-    .map((group: AnalysisControlGroupConfig) => ({
-      ...group,
-      controls: group.controls
-        .filter((control) => control.enabled)
-        .map(normalizeControl)
-        .filter((control) => control.options.length > 0),
-    }));
+/**
+ * 获取已启用的控件列表（扁平结构）
+ */
+export function buildActiveControlSelections(
+  controls: ControlConfig[],
+  selections: Record<string, string>,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const ctrl of controls) {
+    result[ctrl.id] = selections[ctrl.id] ?? '';
+  }
+  return result;
 }
 
 export function getEnabledDynamicControls(
   moduleConfig: ModuleConfig,
-): AnalysisControlConfig[] {
-  return getEnabledDynamicControlGroups(moduleConfig)
-    .flatMap((group) => group.controls)
-    .filter((control) => control.options.length > 0);
+): ControlConfig[] {
+  return moduleConfig.controls.filter((control) => control.enabled !== false && control.options?.length > 0);
 }
 
-export function getBoundControlValue(control: AnalysisControlConfig, input: EvaluationInput): string | null {
-  return readBoundControlValue(control.id, input);
-}
-
+/**
+ * 解析控件的当前有效值
+ *
+ * 默认值已由控件模块在 getDefinitions() 中通过 initialValue 字段交付，
+ * PageContext 在初始化时已将其填入 controlSelections。
+ * 此函数仅处理运行时值的解析。
+ */
 export function resolveControlSelectionValue(
-  control: AnalysisControlConfig,
+  control: ControlConfig,
   currentValue: string | undefined,
-  input: EvaluationInput,
-) {
-  if (control.options.length === 0) {
-    return '';
-  }
+): string {
+  if (control.options.length === 0) return '';
 
-  if (currentValue && control.options.some((option) => option.value === currentValue)) {
-    return currentValue;
-  }
+  // 有有效当前值 → 直接使用
+  if (currentValue) return currentValue;
 
-  const boundValue = getBoundControlValue(control, input);
-  return boundValue && control.options.some((option) => option.value === boundValue)
-    ? boundValue
-    : control.options[0].value;
+  // 无默认值逻辑 —— 初始值由数据层（PageContext / initialValue）负责
+  return '';
 }
 
-export function resolveInitialControlSelections(
-  controls: AnalysisControlConfig[],
-  input: EvaluationInput,
-) {
+export function resolveInitialControlSelections(controls: ControlConfig[]) {
   return Object.fromEntries(
-    controls.map((control) => [control.id, resolveControlSelectionValue(control, undefined, input)]),
+    controls.map((control) => [control.id, resolveControlSelectionValue(control, undefined)]),
   );
+}
+
+/**
+ * 解析选项的唯一标识值（value 优先，fallback 为 label）
+ */
+function resolveOptionValue(opt: Record<string, unknown>): string {
+  return (typeof opt.value === 'string' ? opt.value : String(opt.label ?? '')) as string;
 }
 
 export function synchronizeControlSelections(
-  controls: AnalysisControlConfig[],
+  controls: ControlConfig[],
   currentSelections: Record<string, string>,
-  input: EvaluationInput,
-) {
-  let changed = Object.keys(currentSelections).length !== controls.length;
-  const nextSelections: Record<string, string> = {};
-
-  controls.forEach((control) => {
-    const selectedValue = resolveControlSelectionValue(control, currentSelections[control.id], input);
-    nextSelections[control.id] = selectedValue;
-
-    if (selectedValue !== currentSelections[control.id]) {
-      changed = true;
-    }
-  });
-
-  return {
-    changed,
-    nextSelections,
-  };
-}
-
-export function buildActiveControlSelections(
-  controls: AnalysisControlConfig[],
-  controlSelections: Record<string, string>,
 ): Record<string, string> {
-  return Object.fromEntries(
-    controls
-      .filter((control) => control.options.length > 0)
-      .map((control) => [control.id, controlSelections[control.id] || control.options[0].value]),
-  );
-}
+  const updated = { ...currentSelections };
 
-function getBoundControlOptionLabel(
-  controls: AnalysisControlConfig[],
-  controlId: string,
-  input: EvaluationInput,
-) {
-  const control = controls.find((item) => item.id === controlId);
+  for (const control of controls) {
+    if (control.enabled === false || control.options.length === 0) continue;
 
-  if (!control) {
-    return null;
+    const current = updated[control.id];
+    if (!current || !control.options.some((opt) => {
+      const optObj = opt as Record<string, unknown>;
+      return resolveOptionValue(optObj) === current;
+    })) {
+      updated[control.id] = '';
+    }
   }
 
-  const value = readBoundControlValue(controlId, input);
-  const option = control.options.find((item) => item.enabled && item.value === value);
-
-  if (!option) {
-    return null;
-  }
-
-  return option.label;
-}
-
-export function resolveBoundControlLabels(moduleConfig: ModuleConfig, input: EvaluationInput) {
-  const controls = getEnabledDynamicControls(moduleConfig);
-  const textTypeLabel = getBoundControlOptionLabel(controls, 'text_type', input) ?? '未设置';
-  const textCompletenessLabel = getBoundControlOptionLabel(controls, 'text_completeness', input) ?? '未设置';
-  const evaluationGoalLabel = getBoundControlOptionLabel(controls, 'evaluation_goal', input) ?? '未设置';
-
-  return {
-    textTypeLabel,
-    textCompletenessLabel,
-    evaluationGoalLabel,
-  };
-}
-
-export function applyBoundControlSelection(
-  control: AnalysisControlConfig | undefined,
-  value: string,
-  updateField: EvaluationInputUpdater,
-) {
-  if (!control) {
-    return;
-  }
-
-  writeBoundControlValue(control.id, value, updateField);
+  return updated;
 }
