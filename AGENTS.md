@@ -91,7 +91,7 @@ keys/                          # 外部 API 模型配置（自动发现 *.json�
 - 用户自定义 Key：直接调用第三方 API
 - 内置模型：通过 `/api/v1/chat/completions` 调用中转站
 
-**中转站系统（可插拔）**：所有模型转发通过中转站实现，位于 `src/stations/` 目录。每个中转站实现 `Station` 接口，提供 `getModels()`、`canHandle()`、`forward()` 方法。启动时自动扫描注册，删除目录即可移除功能。权限解析与限流由主入口（`/api/v1/chat/completions`）统一处理，中转站仅负责转发。
+**中转站系统（可插拔）**：所有模型转发通过中转站实现，位于 `src/stations/` 目录。每个中转站实现 `Station` 接口，提供 `getModels()`、`canHandle()`、`forward()` 方法。启动时自动扫描注册，删除目录即可移除功能。权限解析、限流检查与限流记录清理均由主入口（`/api/v1/chat/completions` 和 `instrumentation.ts`）统一处理，中转站仅负责转发。
 
 **路由隔离架构**：Server Actions 与中转站 API 通过路由隔离，安全边界清晰。
 - **Server Actions**：仅服务页面应用，使用 Next.js 默认同源校验（CSRF/Origin 验证）
@@ -214,10 +214,10 @@ interface Station {
 
 | 文件 | 职责 |
 |------|------|
-| `instrumentation.ts` | Next.js 启动钩子，预初始化服务端注册表 |
+| `instrumentation.ts` | Next.js 启动钩子，预初始化服务端注册表 + 限流记录定期清理 |
 | `src/lib/bootstrap/registry-init.ts` | 服务端注册表统一初始化入口 |
 | `src/lib/api-station/permissionClient.ts` | **权限查询服务客户端**（探活 + 调用 /api/auth/verify 查询权限等级） |
-| `src/lib/api-station/rateLimit.ts` | 限流逻辑 |
+| `src/lib/api-station/rateLimit.ts` | 限流逻辑（含 `cleanupExpiredRecords` 过期记录清理） |
 | `src/server/platform-config/loader.ts` | 平台配置加载（含权限查询服务配置） |
 | `platform-config/permission-service.json` | **权限查询服务配置**（地址、探活参数、fallback 权限） |
 | `src/server/modules/loader.ts` | 模块扫描、加载、容器验证 |

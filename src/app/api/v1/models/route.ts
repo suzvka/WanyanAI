@@ -1,18 +1,26 @@
 import { stationRegistry } from '@/stations/registry';
 import { initializeStations } from '@/stations/loader';
-import { logInfo, logError } from '@/lib/api-station/logger';
+import { logInfo, logError, logWarn, generateRequestId } from '@/lib/api-station/logger';
+import { validateRequestKey } from '@/app/api/v1/guard';
 
 /**
  * GET /api/v1/models
  * 获取所有可用模型列表。
  *
- * 模型列表来自所有已注册的中转站，不做权限过滤。
- * 权限解析与限流由各中转站在实际调用时自行处理。
+ * 模型列表来自所有已注册的中转站。
+ * Key 格式验证在 /api/v1 统一守卫中执行。
  */
-export async function GET(_request: Request) {
-  const requestId = `models_${Date.now()}`;
+export async function GET(request: Request) {
+  const requestId = generateRequestId();
 
   try {
+    // === Key 格式验证（统一守卫）===
+    const keyResult = validateRequestKey(request, requestId);
+    if (!keyResult.valid) {
+      logWarn('[API:Models] Key 格式验证未通过', { requestId });
+      return keyResult.errorResponse;
+    }
+
     // 确保中转站已初始化（幂等操作）
     initializeStations();
 
