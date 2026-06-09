@@ -605,6 +605,17 @@ body {
     animation: config-selected-pulse 2s ease-in-out infinite;
   }
 
+  /* Dialog 关闭按钮样式优化 */
+  [data-slot="dialog-close"] {
+    background: var(--background);
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+  [data-slot="dialog-close"]:hover {
+    background: var(--muted);
+  }
+
 
 
   /* New item appear animation */

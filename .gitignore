@@ -91,3 +91,4 @@ logs/
 /.vs
 /keys
 /.qoder
+tsconfig.tsbuildinfo

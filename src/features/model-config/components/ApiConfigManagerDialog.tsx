@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, CheckCircle2, ChevronDown, Loader2, Plus, Server, Settings, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Check, CheckCircle2, ChevronDown, Loader2, Plus, Server, Settings, ToggleLeft, ToggleRight, X } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import type { ApiConfigDraft, ApiConfigRecord, ApiConfigValidationStatus, ModelInfo } from '@/types/modelConfig';
 import ApiConfigEditor from './ApiConfigEditor';
@@ -177,237 +178,240 @@ export default function ApiConfigManagerDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-w-lg p-0 sm:max-w-lg" showCloseButton={!busy}>
-          <DialogHeader className="border-b px-4 py-4 sm:px-6">
+        <DialogContent className="max-w-lg p-0 sm:max-w-lg w-[560px]" showCloseButton={false}>
+          {/* 标题栏 - 包含标题和关闭按钮 */}
+          <div className="flex items-center justify-between border-b px-6 py-4">
             <DialogTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
+              <Settings className="h-5 w-5 text-muted-foreground" />
               API 配置管理
             </DialogTitle>
-            <DialogDescription>
-              {useCustomEndpoint
-                ? ''
-                : ''}
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* 端点切换开关 */}
-          <div className="border-b bg-muted/30 px-4 py-3 sm:px-6">
-            <button
-              type="button"
-              onClick={() => setUseBuiltInMode(useCustomEndpoint)}
-              className={cn(
-                'flex w-full items-center justify-between rounded-lg p-2 transition-colors',
-                'hover:bg-muted/50'
-              )}
-            >
-              <div className="flex items-center gap-2">
-                {useCustomEndpoint ? (
-                  <ToggleRight className="h-5 w-5 text-primary" />
-                ) : (
-                  <ToggleLeft className="h-5 w-5 text-muted-foreground" />
-                )}
-                <span className="text-sm font-medium">使用自定义端点</span>
-              </div>
-              <span className={cn(
-                'text-xs',
-                useCustomEndpoint ? 'text-primary' : 'text-muted-foreground'
-              )}>
-                {useCustomEndpoint ? '已开启' : '已关闭'}
-              </span>
-            </button>
-          </div>
-
-          {/* 站内模型提示 */}
-          {!useCustomEndpoint && (
-            <div className="px-4 py-8 sm:px-6">
-              <div className="flex flex-col items-center justify-center gap-4 text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                  <Server className="h-8 w-8 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-medium">站内端点激活</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    已提供站内模型，请查看模型选择器
-                    <br />
-                    如需使用自定义 API 端点，请开启上方的开关。
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 验证中的遮罩层 */}
-          {busy && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">正在验证配置...</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleOpenChange(false)}
-                >
-                  取消
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* 自定义端点配置列表 */}
-          {useCustomEndpoint && (
-            <ScrollArea className="h-[60vh] max-h-[560px] px-4 py-4 sm:px-6">
-            <div className="space-y-3">
-              {configs.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-                  还没有 API 配置，请点击下方新增。
-                </div>
-              ) : (
-                configs.map((config) => {
-                  const isExpanded = expandedConfigId === config.id;
-                  const isActive = selectedConfigId === config.id;
-
-                  return (
-                    <Collapsible
-                      key={config.id}
-                      open={isExpanded}
-                      onOpenChange={() => handleCardToggle(config.id)}
-                      className={cn(
-                        'rounded-lg border bg-card transition-all duration-200',
-                        // 已选配置的脉冲动画效果
-                        isActive && 'api-config-selected ring-1 ring-primary/30',
-                      )}
-                    >
-                      {/* 卡片头部 */}
-                      <div className="flex items-center">
-                        <CollapsibleTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            className={cn(
-                              'flex flex-1 items-center gap-3 p-4 text-left transition-all duration-200 ease-out',
-                              'hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50',
-                              // 激活状态的卡片使用特殊样式
-                              isActive && 'bg-primary/5',
-                              isExpanded && 'border-b',
-                            )}
-                          >
-                            {/* 展开箭头 */}
-                            <ChevronDown
-                              className={cn(
-                                'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
-                                isExpanded && 'rotate-180',
-                              )}
-                            />
-
-                            {/* 卡片内容 */}
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="truncate text-sm font-medium">
-                                  {config.name}
-                                </span>
-                                {/* 激活标记 */}
-                                {isActive && (
-                                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                                )}
-                              </div>
-                              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                                <span className="max-w-[120px] truncate">{config.baseUrl}</span>
-                                <span>·</span>
-                                <Badge
-                                  variant={getStatusBadgeVariant(config.lastValidationStatus)}
-                                  className="shrink-0 px-2 py-0.5 text-xs"
-                                >
-                                  {getStatusLabel(config.lastValidationStatus)}
-                                </Badge>
-                                <span>·</span>
-                                <span className="shrink-0 whitespace-nowrap">{config.modelsCache.length} 个模型</span>
-                              </div>
-                            </div>
-                          </button>
-                        </CollapsibleTrigger>
-
-                        {/* 选择配置按钮 - 仅在非激活状态显示 */}
-                        {!isActive && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                              'mr-2 h-9 w-9 shrink-0 transition-all duration-200',
-                              'text-primary hover:bg-primary/10 hover:text-primary hover:scale-105 active:scale-95',
-                            )}
-                            disabled={busy}
-                            onClick={(e) => handleSelectConfig(e, config.id)}
-                            title="选择此配置"
-                          >
-                            <Check className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-
-                      {/* 展开内容 - 动画由全局 CSS 控制 */}
-                      <CollapsibleContent>
-                        <div className="bg-muted/20 p-4">
-                          <ApiConfigEditor
-                            initialValue={{
-                              name: config.name,
-                              baseUrl: config.baseUrl,
-                              apiKey: config.apiKey,
-                            }}
-                            busy={busy}
-                            submitLabel="保存"
-                            showDelete
-                            onDelete={handleDeleteFromEditor}
-                            onSubmit={handleSave}
-                          />
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  );
-                })
-              )}
-
-              {/* 新增块 */}
+            {!busy && (
               <button
                 type="button"
-                disabled={busy}
-                onClick={handleAddNew}
-                className={cn(
-                  'flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed',
-                  'border-border bg-muted/20 p-4 text-muted-foreground transition-all duration-200',
-                  'hover:border-primary/50 hover:bg-muted/40 hover:text-foreground hover:scale-[1.01] active:scale-[0.99]',
-                  'disabled:cursor-not-allowed disabled:opacity-50',
-                  isCreateMode && 'border-primary/50 bg-primary/5 text-foreground',
-                )}
+                onClick={() => handleOpenChange(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
-                <Plus className="h-5 w-5" />
-                <span className="text-sm">新增配置</span>
+                <X className="h-4 w-4" />
+                <span className="sr-only">关闭</span>
               </button>
+            )}
+          </div>
 
-              {/* 新建配置展开区域 */}
-              {isCreateMode && (
-                <div className="motion-panel-in rounded-lg border bg-card p-4">
-                  <h4 className="mb-3 text-sm font-medium">新建 API 配置</h4>
-                  <ApiConfigEditor
-                    busy={busy}
-                    submitLabel="创建并验证"
-                    onSubmit={handleCreate}
-                  />
+          {/* 端点模式切换 */}
+          <div className="border-b border-border/60 bg-muted/30 px-6 py-3.5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium leading-tight">使用自定义端点</p>
+                <p className="text-xs text-muted-foreground leading-tight mt-0.5">
+                  {useCustomEndpoint ? '将使用您配置的 API 地址' : '使用站内提供的模型服务'}
+                </p>
+              </div>
+              <Switch
+                checked={useCustomEndpoint}
+                onCheckedChange={(checked) => setUseBuiltInMode(!checked)}
+                className="shrink-0"
+              />
+            </div>
+          </div>
+
+          {/* 动态内容区域 */}
+          <div className="relative">
+            {/* 站内模型提示 */}
+            {!useCustomEndpoint && (
+              <div className="px-6 py-12 motion-panel-in">
+                <div className="flex flex-col items-center gap-5 text-center">
+                  <div className="relative">
+                    <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5">
+                      <Server className="h-9 w-9 text-primary" />
+                    </div>
+                    <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex h-4 w-4 rounded-full bg-emerald-500" />
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-base font-semibold">站内模型已就绪</h3>
+                    <p className="mx-auto max-w-xs text-sm text-muted-foreground leading-relaxed">
+                      请在左上角浏览模型列表。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 验证中的遮罩层 */}
+            {busy && (
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="text-sm text-muted-foreground">正在验证配置...</p>
                   <Button
-                    type="button"
                     variant="outline"
                     size="sm"
-                    className="mt-3 w-full transition-all duration-200 active:scale-[0.98]"
-                    disabled={busy}
-                    onClick={() => setExpandedConfigId(undefined)}
+                    onClick={() => handleOpenChange(false)}
                   >
                     取消
                   </Button>
                 </div>
-              )}
-            </div>
-          </ScrollArea>
-          )}
+              </div>
+            )}
+
+            {/* 自定义端点配置列表 */}
+            {useCustomEndpoint && (
+              <ScrollArea className="h-[60vh] max-h-[560px] px-6 py-4">
+                <div className="space-y-3">
+                  {configs.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+                      暂无配置，点击下方按钮添加第一个 API 端点
+                    </div>
+                  ) : (
+                    configs.map((config) => {
+                      const isExpanded = expandedConfigId === config.id;
+                      const isActive = selectedConfigId === config.id;
+
+                      return (
+                        <Collapsible
+                          key={config.id}
+                          open={isExpanded}
+                          onOpenChange={() => handleCardToggle(config.id)}
+                          className={cn(
+                            'rounded-lg border bg-card transition-all duration-200',
+                            // 已选配置的脉冲动画效果
+                            isActive && 'api-config-selected ring-1 ring-primary/30',
+                          )}
+                        >
+                          {/* 卡片头部 */}
+                          <div className="flex items-center">
+                            <CollapsibleTrigger asChild>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                className={cn(
+                                  'flex flex-1 items-center gap-3 p-4 text-left transition-all duration-200 ease-out',
+                                  'hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50',
+                                  // 激活状态的卡片使用特殊样式
+                                  isActive && 'bg-primary/5',
+                                  isExpanded && 'border-b',
+                                )}
+                              >
+                                {/* 展开箭头 */}
+                                <ChevronDown
+                                  className={cn(
+                                    'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
+                                    isExpanded && 'rotate-180',
+                                  )}
+                                />
+
+                                {/* 卡片内容 */}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="truncate text-sm font-medium">
+                                      {config.name}
+                                    </span>
+                                    {/* 激活标记 */}
+                                    {isActive && (
+                                      <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                                    )}
+                                  </div>
+                                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                                    <span className="max-w-[120px] truncate">{config.baseUrl}</span>
+                                    <span>·</span>
+                                    <Badge
+                                      variant={getStatusBadgeVariant(config.lastValidationStatus)}
+                                      className="shrink-0 px-2 py-0.5 text-xs"
+                                    >
+                                      {getStatusLabel(config.lastValidationStatus)}
+                                    </Badge>
+                                    <span>·</span>
+                                    <span className="shrink-0 whitespace-nowrap">{config.modelsCache.length} 个模型</span>
+                                  </div>
+                                </div>
+                              </button>
+                            </CollapsibleTrigger>
+
+                            {/* 选择配置按钮 - 仅在非激活状态显示 */}
+                            {!isActive && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className={cn(
+                                  'mr-2 h-9 w-9 shrink-0 transition-all duration-200',
+                                  'text-primary hover:bg-primary/10 hover:text-primary hover:scale-105 active:scale-95',
+                                )}
+                                disabled={busy}
+                                onClick={(e) => handleSelectConfig(e, config.id)}
+                                title="选择此配置"
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+
+                          {/* 展开内容 - 动画由全局 CSS 控制 */}
+                          <CollapsibleContent>
+                            <div className="bg-muted/20 p-4">
+                              <ApiConfigEditor
+                                initialValue={{
+                                  name: config.name,
+                                  baseUrl: config.baseUrl,
+                                  apiKey: config.apiKey,
+                                }}
+                                busy={busy}
+                                submitLabel="保存"
+                                showDelete
+                                onDelete={handleDeleteFromEditor}
+                                onSubmit={handleSave}
+                              />
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      );
+                    })
+                  )}
+
+                  {/* 新增块 */}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={handleAddNew}
+                    className={cn(
+                      'flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed',
+                      'border-border bg-muted/20 p-4 text-muted-foreground transition-all duration-200',
+                      'hover:border-primary/50 hover:bg-muted/40 hover:text-foreground hover:scale-[1.01] active:scale-[0.99]',
+                      'disabled:cursor-not-allowed disabled:opacity-50',
+                      isCreateMode && 'border-primary/50 bg-primary/5 text-foreground',
+                    )}
+                  >
+                    <Plus className="h-5 w-5" />
+                    <span className="text-sm">新增配置</span>
+                  </button>
+
+                  {/* 新建配置展开区域 */}
+                  {isCreateMode && (
+                    <div className="motion-panel-in rounded-lg border bg-card p-4">
+                      <h4 className="mb-3 text-sm font-medium">新建 API 配置</h4>
+                      <ApiConfigEditor
+                        busy={busy}
+                        submitLabel="创建并验证"
+                        onSubmit={handleCreate}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 w-full transition-all duration-200 active:scale-[0.98]"
+                        disabled={busy}
+                        onClick={() => setExpandedConfigId(undefined)}
+                      >
+                        取消
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
