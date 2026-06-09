@@ -12,6 +12,8 @@ export async function register() {
     const { ensureServerRegistriesInitialized } = await import('./src/lib/bootstrap');
     await ensureServerRegistriesInitialized();
 
-    // 限流的过期记录清理已迁移至各中转站内部管理
+    // 限流过期记录定期清理（限流统一在 /api/v1/chat/completions 入口执行，清理在此统一管理）
+    const { cleanupExpiredRecords } = await import('./src/lib/api-station/rateLimit');
+    setInterval(cleanupExpiredRecords, 5 * 60 * 1000);
   }
 }

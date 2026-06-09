@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolvePermission } from '@/lib/api-station/permissionClient';
 import { checkRateLimit } from '@/lib/api-station/rateLimit';
 import { executeHooks, HookContext } from '@/lib/api-station/hooks';
-import { validateKey } from '@/lib/api-station/authPlugins';
 import { createErrorResponse } from '@/lib/api-station/mockResponse';
 import { logInfo, logError, logWarn, generateRequestId } from '@/lib/api-station/logger';
 import { stationRegistry } from '@/stations/registry';
 import { initializeStations } from '@/stations/loader';
+import { validateRequestKey } from '@/app/api/v1/guard';
 
 /**
  * POST /api/v1/chat/completions
@@ -48,18 +48,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // === 提取 key ===
-    function extractKey(request: Request): string | null {
-      const authHeader = request.headers.get('Authorization');
-      if (!authHeader) {
-        return null;
-      }
-
-      // Bearer <key>
-      const match = authHeader.match(/^Bearer\s+(.+)$/i);
-      return match ? match[1].trim() : null;
+    // === Key 格式验证（统一守卫）===
+    const keyResult = validateRequestKey(request, requestId);
+    if (!keyResult.valid) {
+      return keyResult.errorResponse;
     }
-    const key = extractKey(request);
+    const key = keyResult.key;
 
     logInfo('[API:Chat] 请求参数解析', {
       requestId,
@@ -68,21 +62,6 @@ export async function POST(request: NextRequest) {
       messageCount: messages?.length || 0,
       stream,
     });
-
-    // === Key 格式验证（key-validators/）===
-    // 格式合法性完全由钩子处理器决定，包括空值判定
-    if (!validateKey(key)) {
-      logWarn('[API:Chat] Key 格式验证未通过', { requestId });
-      return NextResponse.json(
-        createErrorResponse(
-          'Invalid API key format',
-          'authentication_error',
-          'INVALID_KEY_FORMAT',
-          { requestId },
-        ),
-        { status: 401 },
-      );
-    }
 
     // === 权限解析：根据 key 查询对应的权限等级 ===
     const permissionResult = await resolvePermission(key);
