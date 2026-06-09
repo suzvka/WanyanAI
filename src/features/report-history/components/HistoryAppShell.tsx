@@ -24,7 +24,6 @@ export default function HistoryAppShell({
       <AppShell
         siteTitle={platformConfig.appearance.brand.name}
         primaryColor={platformConfig.appearance.theme.primary}
-        modules={modules}
       >
         {children}
       </AppShell>

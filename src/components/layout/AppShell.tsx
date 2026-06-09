@@ -2,7 +2,6 @@
 
 import type { ReactNode } from 'react';
 import { CircleHelp, Settings2, UserRound } from 'lucide-react';
-import type { PageModulePublicMeta } from '@/types/module';
 import AppSidebar from '@/components/layout/AppSidebar';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
@@ -21,14 +20,12 @@ import { useModelConfig } from '@/providers/ModelConfigProvider';
 interface AppShellProps {
   siteTitle: string;
   primaryColor?: string;
-  modules?: PageModulePublicMeta[];
   children: ReactNode;
 }
 
 export default function AppShell({
   siteTitle,
   primaryColor,
-  modules,
   children,
 }: AppShellProps) {
   const {
@@ -56,7 +53,7 @@ export default function AppShell({
   return (
     <>
       <SidebarProvider defaultOpen={false}>
-        <AppSidebar title={siteTitle} primaryColor={primaryColor} modules={modules} />
+        <AppSidebar title={siteTitle} primaryColor={primaryColor} />
         <SidebarInset className="min-h-screen bg-transparent">
           <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
             <div className="mx-auto max-w-7xl px-2.5 py-2 sm:px-6 lg:px-8">

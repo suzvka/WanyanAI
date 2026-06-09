@@ -1,10 +1,9 @@
 'use client';
 
-import type { ComponentType, MouseEvent } from 'react';
+import type { MouseEvent } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, Compass, History, Home, Sparkles } from 'lucide-react';
-import type { PageModulePublicMeta } from '@/types/module';
+import { Compass, History, Home, Layers, Sparkles } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -20,28 +19,16 @@ import {
 } from '@/components/ui/sidebar';
 import { useNavigationGuard } from '@/providers/NavigationGuardContext';
 
-// 图标映射表
-const ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
-  BookOpen,
-  Compass,
-  Home,
-  Sparkles,
-};
-
 interface AppSidebarProps {
   title: string;
   primaryColor?: string;
-  modules?: PageModulePublicMeta[];
 }
 
-function getModuleHref(slug: string): string {
-  return `/evaluate/${slug}`;
-}
-
-export default function AppSidebar({ title, primaryColor, modules = [] }: AppSidebarProps) {
+export default function AppSidebar({ title, primaryColor }: AppSidebarProps) {
   const pathname = usePathname();
   const { requestNavigate } = useNavigationGuard();
   const isHistoryActive = pathname === '/history' || pathname.startsWith('/history/');
+  const isModulesActive = pathname === '/modules';
 
   // 处理导航点击
   const handleNavigate = (href: string, e: MouseEvent<HTMLAnchorElement>) => {
@@ -69,7 +56,7 @@ export default function AppSidebar({ title, primaryColor, modules = [] }: AppSid
       </SidebarHeader>
       <SidebarSeparator />
       <SidebarContent>
-        {/* 首页入口 */}
+        {/* 导航 */}
         <SidebarGroup>
           <SidebarGroupLabel>导航</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -82,38 +69,17 @@ export default function AppSidebar({ title, primaryColor, modules = [] }: AppSid
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isModulesActive}>
+                  <Link href="/modules" onClick={(e: MouseEvent<HTMLAnchorElement>) => handleNavigate('/modules', e)}>
+                    <Layers />
+                    <span>功能模块</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        {/* 功能模块入口 */}
-        {modules.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>功能模块</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {modules.map((module) => {
-                  const isActive = pathname === getModuleHref(module.slug);
-                  const IconComponent = ICON_MAP.BookOpen || Compass;
-
-                  return (
-                    <SidebarMenuItem key={module.slug}>
-                      <SidebarMenuButton asChild isActive={isActive}>
-                        <Link
-                          href={getModuleHref(module.slug)}
-                          onClick={(e: MouseEvent<HTMLAnchorElement>) => handleNavigate(getModuleHref(module.slug), e)}
-                        >
-                          <IconComponent />
-                          <span>{module.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
       </SidebarContent>
       <SidebarSeparator />
       <SidebarFooter className="px-4 py-3 text-xs text-sidebar-foreground/70">

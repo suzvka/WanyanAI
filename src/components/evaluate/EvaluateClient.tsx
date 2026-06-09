@@ -405,7 +405,6 @@ function EvaluateContent({
       <AppShell
         siteTitle={site.home.title}
         primaryColor={appearance.theme.primary}
-        modules={modules}
       >
         {shouldShowReport ? (
           <ReportErrorBoundary
