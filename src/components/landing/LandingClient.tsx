@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ArrowRight, BookOpen, Sparkles } from 'lucide-react';
@@ -8,31 +8,16 @@ import BrandBackground from '@/components/ui/brand-background';
 import { Card } from '@/components/ui/card';
 import AppShell from '@/components/layout/AppShell';
 import { NavigationGuardProvider } from '@/providers/NavigationGuardContext';
-import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { usePageFirstLoad } from '@/hooks/usePageFirstLoad';
-import type { PlatformConfig } from '@/types/platform';
-import type { PageModulePublicMeta } from '@/types/module';
-
-// 图标映射表
-const ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
-  BookOpen,
-};
+import type { AppearanceConfig } from '@/server/config/types';
 
 interface LandingClientProps {
-  platformConfig: PlatformConfig;
-  modules: PageModulePublicMeta[];
+  appearance: AppearanceConfig;
 }
 
-function getModuleHref(slug: string): string {
-  return `/evaluate/${slug}`;
-}
-
-export default function LandingClient({ platformConfig, modules }: LandingClientProps) {
-  const { appearance } = platformConfig;
+export default function LandingClient({ appearance }: LandingClientProps) {
   const { brand } = appearance;
   const pathname = usePathname();
-  const router = useRouter();
-  const prefetchedRef = useRef(false);
 
   // 检测是否首次加载，只在首次显示骨架屏
   const isFirstLoad = usePageFirstLoad();
@@ -42,7 +27,6 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
 
   // 路由变化时触发页面过渡动画
   useEffect(() => {
-    // 使用 setTimeout 延迟状态更新
     const hideTimer = setTimeout(() => setIsPageVisible(false), 0);
     const showTimer = setTimeout(() => setIsPageVisible(true), 50);
     return () => {
@@ -59,35 +43,17 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
     }
   }, [isFirstLoad]);
 
-  // === 静默预取次级页面 ===
-  // 主页渲染完成后，在浏览器空闲时预取所有评估模块页面。
-  // 这样用户点击进入时页面已缓存，实现秒开体验。
-  const prefetchModules = useCallback(() => {
-    if (prefetchedRef.current) return;
-    prefetchedRef.current = true;
-
-    const prefetchAll = () => {
-      for (const mod of modules) {
-        router.prefetch(getModuleHref(mod.slug));
-      }
-    };
-
-    if (typeof requestIdleCallback !== 'undefined') {
-      requestIdleCallback(prefetchAll, { timeout: 3000 });
-    } else {
-      setTimeout(prefetchAll, 1000);
-    }
-  }, [modules, router]);
-
-  useEffect(() => {
-    if (!isFirstLoad) {
-      prefetchModules();
-    }
-  }, [isFirstLoad, prefetchModules]);
-
   // 首次加载时显示骨架屏
   if (isFirstLoad) {
-    return <PageSkeleton type="landing" />;
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="flex min-h-[70vh] flex-col items-center justify-center px-4">
+          <div className="h-14 w-64 animate-pulse rounded-md bg-accent mb-6" />
+          <div className="h-5 w-80 animate-pulse rounded-md bg-accent mb-10" />
+          <div className="h-12 w-40 animate-pulse rounded-full bg-accent" />
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -98,11 +64,11 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
         <AppShell
           siteTitle={brand.name}
           primaryColor={appearance.theme.primary}
-          modules={modules}
         >
         <main 
           className="mx-auto w-full max-w-4xl px-4 py-16 sm:px-6 lg:px-8"
           style={{
+            minHeight: 'calc(100vh - 65px)',
             opacity: isPageVisible ? 1 : 0,
             transform: isPageVisible ? 'translateY(0)' : 'translateY(16px)',
             transition: `opacity var(--motion-duration-slow) var(--motion-ease-emphasized),

@@ -42,35 +42,13 @@ function LandingSkeleton() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
-        {/* 品牌区域骨架 */}
-        <div className="text-center mb-12">
-          <Skeleton className="h-12 w-48 mx-auto mb-4" />
-          <Skeleton className="h-6 w-64 mx-auto" />
-        </div>
-
-        {/* 模块卡片网格骨架 */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
-          {Array.from({ length: 2 }).map((_, i) => (
-            <div
-              key={i}
-              className="rounded-xl border border-border p-6 space-y-4"
-            >
-              {/* 图标 + 标题 */}
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-12 w-12 rounded-lg" />
-                <Skeleton className="h-6 w-32" />
-              </div>
-              {/* 描述 */}
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-              {/* 操作提示 */}
-              <div className="pt-2">
-                <Skeleton className="h-4 w-20" />
-              </div>
-            </div>
-          ))}
-        </div>
+      <main className="flex min-h-[70vh] flex-col items-center justify-center px-4">
+        {/* 品牌名骨架 */}
+        <Skeleton className="h-14 w-64 mb-6" />
+        {/* slogan 骨架 */}
+        <Skeleton className="h-5 w-80 mb-10" />
+        {/* CTA 按钮骨架 */}
+        <Skeleton className="h-12 w-40 rounded-full" />
       </main>
     </div>
   );
