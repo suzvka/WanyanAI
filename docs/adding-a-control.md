@@ -112,29 +112,35 @@ export function MyControlRenderer({ definition, value, onChange }: Props) {
 - 值从 `props.value` 派生
 - 变更通过 `props.onChange` 通知父组件
 
-### 4. 注册到清单
+### 4. 注册到内置控件清单
 
-编辑 `src/features/controls/manifest.ts`：
+编辑 `src/features/controls/manifest.ts`，在 `registerBuiltinControls()` 中调用新模块的 `register()`：
 
 ```ts
-import { myControlModule } from './my-control/module';
-import { MyControlRenderer } from './my-control/renderer';
+// src/features/controls/manifest.ts
+import { register as registerMyControl } from './my-control/module';
 
-export function getControlManifest(): ControlManifestItem[] {
-  return [
-    // ...
-    {
-      id: 'my-control',
-      module: myControlModule,
-      renderer: MyControlRenderer,
-    },
-  ];
+// 在 registerBuiltinControls() 中添加：
+export function registerBuiltinControls(): void {
+  registerSelect();
+  registerMultiSelect();
+  registerMyControl();
 }
 ```
 
-### 5. 在 Registry 中注册
+### 5. 在模块内注册
 
-编辑 `src/features/controls/registry.ts` — 在 `initializeFromManifest()` 中无需改动（自动扫描 manifest），但需确保 `getDefinitions` 和 `compile` 方法中的分发逻辑覆盖新类型。
+`src/features/controls/my-control/module.ts` 需导出 `register()` 函数，内部调用注册表单例：
+
+```ts
+import { controlRegistry } from '../registry';
+
+export function register(): void {
+  controlRegistry.register(myControlModule);
+}
+```
+
+注册表采用延迟初始化：框架启动时调用 `initializeControls()`（内部调用 `registerBuiltinControls()`），无需其他改动。
 
 ### 6. 使用
 

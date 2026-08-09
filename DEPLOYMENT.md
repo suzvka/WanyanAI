@@ -1,102 +1,107 @@
-# AI 文本完成度诊断系统 - 部署指南
+# WanyanAI - 部署指南
 
 ## 项目概述
 
-这是一个基于 Next.js 的 AI 文本完成度诊断系统，为创作者提供投稿/发布前的专业文本质量评估。
+WanyanAI 是 AI 驱动的文本诊断平台，支持小说点评、高考作文评分、歌词评审等模块。技术栈：Next.js 16 (App Router) + React 19 + TypeScript 5 + pnpm。
 
-## 技术栈
+## 构建与运行方式（重要）
 
-- **框架**: Next.js 16 (App Router)
-- **语言**: TypeScript 5
-- **UI 组件**: shadcn/ui
-- **样式**: Tailwind CSS 4
-- **包管理器**: pnpm
+本项目**不使用**标准 Next.js 独立部署方式（`next start`），而是通过**自定义 Node.js 入口**提供服务：
+
+1. `pnpm build` 分两步完成构建：
+   - `next build`：构建前端页面与 API 路由
+   - `tsup src/server.ts`：将自定义服务端入口打包为 `dist/server.js`（CJS，Node 20 目标）
+2. `pnpm start` 校验 `dist/server.js` 存在后执行 `node dist/server.js`：
+   - 创建 `http.Server` 并挂载 Next.js 请求处理器
+   - 默认监听 `0.0.0.0:5000`（`PORT` 环境变量可覆盖）
+   - 开发/生产模式由 `COZE_PROJECT_ENV` 决定（非 `PROD` 时视为开发模式）
 
 ## 前置要求
 
-确保您的服务器已安装以下软件：
-
-- Node.js 20+ 
+- Node.js 20+
 - pnpm 9+
 
 ## 部署步骤
 
 ### 1. 上传项目文件
 
-将整个项目文件夹上传到您的服务器。
+将整个项目上传到服务器（保留 `package.json`、`pnpm-lock.yaml`、`src/`、`public/`、`app-modules/`、`platform-config/`、`keys/` 等）。
 
 ### 2. 安装依赖
-
-在项目根目录下执行：
 
 ```bash
 pnpm install
 ```
 
-### 3. 构建项目
+> 依赖锁定在 `pnpm-lock.yaml`，建议使用 `pnpm install --frozen-lockfile`。
+
+### 3. 配置模型密钥
+
+模型密钥位于 `keys/` 目录（JSON 格式），部署时需提供有效的密钥文件：
+
+```
+keys/
+├── deepseek.json
+├── qwen3.json
+└── qwen3.5.json
+```
+
+密钥通过 `platform-config/forward.json` 等平台配置被引用，缺失密钥会导致模型调用失败。
+
+### 4. 构建
 
 ```bash
 pnpm run build
 ```
 
-### 4. 启动生产环境
+产物：
+- `.next/`：Next.js 构建输出
+- `dist/server.js`：自定义服务端入口（`pnpm start` 依赖此文件）
+
+### 5. 启动生产环境
 
 ```bash
 pnpm run start
 ```
 
-默认情况下，服务将在 `http://localhost:5000` 启动。
+默认服务地址：`http://localhost:5000`。
 
-## 环境变量配置
+### 6.（可选）环境变量
 
-如需修改端口或其他配置，可以创建 `.env` 文件：
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `PORT` | HTTP 监听端口 | `5000` |
+| `HOSTNAME` | 监听地址 | `localhost` |
+| `COZE_PROJECT_ENV` | `PROD` 表示生产模式（否则视为开发模式） | 无 |
+| `COZE_WORKSPACE_PATH` | 工作区路径（Coze 平台脚本使用，默认当前目录） | `$(pwd)` |
 
-```env
-# 服务端口
-PORT=5000
+## Coze 平台部署
 
-# 其他环境变量
-NODE_ENV=production
+`scripts/` 下提供了 Coze 平台兼容的部署脚本：
+
+```bash
+./scripts/prepare.sh    # 安装依赖（pnpm install）
+./scripts/build.sh      # 安装依赖 + next build + tsup 打包
+./scripts/start.sh      # 启动 dist/server.js（PORT=5000）
 ```
 
 ## 使用 PM2 进行进程管理（推荐）
 
-为了确保服务持续运行，推荐使用 PM2：
-
-### 安装 PM2
-
 ```bash
 npm install -g pm2
-```
 
-### 启动服务
+# 启动服务
+pm2 start "pnpm run start" --name wanyanai
 
-```bash
-pm2 start "pnpm run start" --name ai-text-diagnosis
-```
-
-### 查看状态
-
-```bash
+# 常用命令
 pm2 status
-```
-
-### 查看日志
-
-```bash
-pm2 logs ai-text-diagnosis
-```
-
-### 设置开机自启
-
-```bash
-pm2 startup
+pm2 logs wanyanai
+pm2 restart wanyanai
 pm2 save
+pm2 startup   # 开机自启（按提示执行输出命令）
 ```
 
-## 反向代理配置（推荐使用 Nginx）
-
-### Nginx 配置示例
+## 反向代理（Nginx）
 
 ```nginx
 server {
@@ -109,117 +114,39 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        
-        # WebSocket 支持（如需要）
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
     }
 }
 ```
 
-### 启用 HTTPS（推荐）
-
-使用 Let's Encrypt 免费证书：
+HTTPS 可使用 certbot：
 
 ```bash
 sudo apt-get install certbot python3-certbot-nginx
 sudo certbot --nginx -d your-domain.com
 ```
 
-## Docker 部署（可选）
-
-如果您 prefer Docker 部署，可以创建以下文件：
-
-### Dockerfile
-
-```dockerfile
-FROM node:20-alpine AS deps
-WORKDIR /app
-COPY package.json pnpm-lock.yaml* ./
-RUN npm install -g pnpm && pnpm install
-
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN npm install -g pnpm && pnpm run build
-
-FROM node:20-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV production
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-
-EXPOSE 5000
-CMD ["node", "server.js"]
-```
-
-### docker-compose.yml
-
-```yaml
-version: '3.8'
-services:
-  app:
-    build: .
-    ports:
-      - "5000:5000"
-    environment:
-      - NODE_ENV=production
-    restart: unless-stopped
-```
-
-## 功能说明
-
-### 主要功能
-
-1. **文本输入**: 支持粘贴各种类型的文本内容
-2. **分析配置**: 
-   - 文本类型选择（网络连载、短篇小说、文学投稿等）
-   - 文本完整度设置
-   - 评价目标选择
-   - 读者偏好配置
-   - 反馈风格调整
-3. **AI 分析**: 模拟多维度文本质量评估
-4. **结构化报告**: 生成包含评分、问题、建议的完整报告
-5. **报告导出**: 支持 JSON 格式导出
-
-### 报告结构
-
-- 总体评分和等级
-- 发布建议
-- 核心问题列表（按优先级）
-- 分维度详细分析
-- 优势和改进空间
-
-## 自定义配置
-
-### 修改默认端口
-
-编辑 `next.config.ts` 或 `.env` 文件中的端口配置。
-
-### 调整 AI 分析逻辑
-
-修改 `src/services/aiAnalysis.ts` 文件来自定义分析算法。
-
-### 自定义主题和样式
-
-修改 `src/app/globals.css` 和组件中的 Tailwind 类名。
-
 ## 故障排除
 
 ### 端口被占用
-
-如果 5000 端口被占用，可以修改为其他端口：
 
 ```bash
 PORT=3000 pnpm run start
 ```
 
-### 依赖安装失败
+### `dist/server.js` 不存在
 
-尝试清除缓存后重新安装：
+`pnpm start` 会直接报错退出，需先执行 `pnpm run build`。
+
+### 模型调用失败
+
+- 检查 `keys/` 下的密钥文件是否有效
+- 检查 `platform-config/forward.json` 转发配置
+- 检查权限服务（`platform-config/permission-service.json`）是否可达（认证服务不可用时系统自动降级为游客访问）
+
+### 依赖安装失败
 
 ```bash
 rm -rf node_modules pnpm-lock.yaml
@@ -228,25 +155,17 @@ pnpm install
 
 ### 构建失败
 
-确保 Node.js 版本符合要求：
-
-```bash
-node -v
-# 应该 >= 20
-```
+- 确认 Node.js >= 20：`node -v`
+- 确认使用 pnpm（npm/yarn 会被 `preinstall` 拦截）
 
 ## 安全建议
 
-1. **使用 HTTPS**: 生产环境务必启用 HTTPS
-2. **防火墙配置**: 只开放必要的端口
-3. **定期更新**: 保持依赖包和系统的更新
-4. **日志监控**: 定期检查应用日志
-5. **备份策略**: 定期备份重要数据
+1. **使用 HTTPS**：生产环境务必启用
+2. **防火墙配置**：只开放必要的端口（默认 5000）
+3. **密钥保护**：`keys/` 目录包含敏感信息，勿提交到公开仓库或暴露在静态目录
+4. **日志监控**：定期检查应用日志（服务端使用 pino 日志）
 
-## 许可证
+## 相关文档
 
-本项目仅供学习和个人使用。
-
-## 技术支持
-
-如有问题，请查看项目文档或提交 Issue。
+- Windows 部署：`WINDOWS_DEPLOYMENT.md`
+- 快速开始：`QUICKSTART.md`

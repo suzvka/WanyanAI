@@ -6,10 +6,13 @@
 
 ```
 app-modules/<module-id>/
-├── main.json          # 模块注册（必填）
-├── controls.json      # 控件定义（按需）
-└── site.json          # 页面文案（按需）
+├── main.json              # 模块注册（必填）
+├── controls.json          # 控件定义（按需）
+├── analysis-controls.json # 分析控制配置（按需）
+└── site.json              # 页面文案（按需）
 ```
+
+参考现有模块（`app-modules/novel-evaluate/`），`analysis-controls.json` 用于声明分析控制选项（与 `controls.json` 分工），部分模块可能只使用其中一个。
 
 ## 步骤
 
@@ -68,7 +71,11 @@ app-modules/<module-id>/
 
 也可直接在 `main.json` 中使用 `"controls": [...]` 内联。
 
-### 3. 页面文案（可选）
+### 3. 分析控制配置（可选）
+
+创建 `analysis-controls.json` 声明分析控制选项（若模块使用分析控制容器），格式与 `controls.json` 一致。
+
+### 4. 页面文案（可选）
 
 创建 `site.json` 覆盖默认 UI 文本。键名见现有模块的 `site.json`。
 

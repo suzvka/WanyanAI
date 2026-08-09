@@ -9,6 +9,7 @@ AI 驱动的文本诊断平台。提交文本后，系统从多维度生成结�
 | novel-evaluate | 小说作品多维度评审（语言表达、结构逻辑、人物塑造等 6 个维度） |
 | gaokao-essay | 高考作文评分（满分 60 分，6 个评分维度） |
 | lyrics-evaluate | 歌词创作评审 |
+| novel-evaluate-agent | 小说点评（Agent 编排模式） |
 
 每个模块独立配置，运行时自动扫描 `app-modules/` 目录加载。
 
@@ -37,30 +38,43 @@ Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS 4 · shadcn/
 src/
 ├── app/                        # 页面路由
 │   ├── (landing)/               # 首页（模块选择）
-│   └── (evaluate)/evaluate/[moduleId]/  # 评测页面
+│   ├── (evaluate)/evaluate/[moduleId]/  # 评测页面
+│   └── api/                     # API 路由（v1/chat/completions、v1/models）
 ├── components/
 │   ├── evaluate/                # 评测页组件
 │   ├── layout/                  # 应用框架（侧栏、顶栏）
 │   └── ui/                      # shadcn/ui 基础组件
 ├── containers/                  # 容器注册表（analysis-controls、text-blocks）
 ├── features/
+│   ├── agent/                   # Agent 编排（LangChain）
 │   ├── controls/                # 控件模块（select、multi-select）
-│   ├── output-modes/            # 输出模式（literary-review、gaokao-essay）
+│   ├── output-modes/            # 输出模式（literary-review、gaokao-essay 等）
 │   └── analysis-controls/       # 分析控制逻辑
-├── mcp/                         # 流式 MCP 客户端（单次连接多工具调用）
+├── mcp/                         # 流式 MCP 客户端（<call> 标签解析 + 工具执行）
 ├── server/                      # 服务端：模块加载、指令编译、输出模式注册表
-└── types/                       # 全局类型定义
+├── stations/                    # 模型中转站适配（openai-forward、coze）
+├── types/                       # 全局类型定义
+└── server.ts                    # 自定义 Node.js 服务入口（next + http）
 
 app-modules/<module-id>/         # 功能模块配置
 ├── main.json                    # 模块注册（路由、容器、输出模式）
 ├── controls.json                # 控件定义（选项、默认值、提示词）
+├── analysis-controls.json       # 分析控制配置
 └── site.json                    # 页面文案
 
 platform-config/                 # 平台级配置
 ├── manifest.json                # 版本信息
 ├── appearance.json              # 品牌与主题
-└── feature-flags.json           # 功能开关
+├── feature-flags.json           # 功能开关
+├── forward.json                 # 模型转发配置
+├── permission-service.json      # 权限服务配置
+├── rate-limit.json              # 限流配置
+└── prompt-blocks/               # 提示词片段（任务总览）
+
+keys/                            # 模型密钥配置（deepseek.json、qwen3.json 等）
 ```
+
+> 注意：本项目通过自定义 Node.js 入口 `src/server.ts`（`pnpm dev` / `pnpm start` 均走此入口）提供 HTTP 服务，并使用 `keys/` 目录下的 JSON 文件管理模型密钥（非 `.env`）。
 
 ## 开发规范
 

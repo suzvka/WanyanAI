@@ -49,18 +49,22 @@ Props 来自 `ContainerComponentProps<TParams, TData>`：
 
 ### 2. 注册容器
 
-编辑 `src/containers/registry.tsx`：
+编辑 `src/containers/index.ts`，在 `registerBuiltinContainers()` 中添加：
 
 ```tsx
 import { MyContainerRenderer } from '@/containers/my-container';
 
-// 在 registerAll() 中添加：
+// 在 registerBuiltinContainers() 中添加：
 containerRegistry.register({
   type: 'my-container',
   component: MyContainerRenderer,
   defaultParams: { title: '默认标题' },
+  // validateParams?: (params: unknown) => params is MyContainerParams  // 可选
 });
 ```
+
+- 容器类型清单（`type` + 默认参数）在 `src/containers/manifest.ts` 中声明，注册时从 `getBuiltInContainerManifest()` 读取
+- 注册表采用延迟初始化：`renderContainer()` 首次渲染时自动触发 `initializeContainers()`，无需手动调用
 
 ### 3. 在模块配置中使用
 
@@ -76,5 +80,6 @@ containerRegistry.register({
 ## 约束
 
 - 组件必须用 `'use client'` 标记
-- `register()` 的 `type` 值即为 `main.json` 中引用的标识
+- `register()` 的 `type` 值即为 `main.json` 中引用的标识，且应在 `src/containers/manifest.ts` 中同步声明
 - `defaultParams` 与 `validateParams` 可选
+- 注册入口统一在 `registerBuiltinContainers()`（`src/containers/index.ts`）中，不要在模块加载副作用中注册

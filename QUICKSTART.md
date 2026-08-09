@@ -1,160 +1,100 @@
-# AI 文本完成度诊断系统 - 快速开始
+# WanyanAI - 快速开始
 
-## 📦 项目已完成！
+AI 驱动的文本诊断平台：提交文本后，从多维度生成结构化评审报告（小说点评、高考作文评分、歌词评审等）。
 
-您的AI文本完成度诊断系统已经准备就绪！
+## 环境要求
 
-## 🚀 快速部署
+- Node.js 20+
+- pnpm 9+（`package.json` 的 `preinstall` 强制仅允许 pnpm）
 
-### 方法一：使用部署脚本（推荐）
-
-```bash
-# 1. 解压压缩包
-tar -xzf ai-text-diagnosis-system.tar.gz
-cd ai-text-diagnosis-system
-
-# 2. 运行自动部署脚本
-chmod +x deploy.sh
-./deploy.sh
-
-# 3. 启动服务
-pnpm run start
-```
-
-### 方法二：手动部署
+## 快速启动
 
 ```bash
-# 1. 解压并进入项目目录
-tar -xzf ai-text-diagnosis-system.tar.gz
-cd ai-text-diagnosis-system
-
-# 2. 安装依赖
+# 1. 安装依赖
 pnpm install
 
-# 3. 构建项目
-pnpm run build
-
-# 4. 启动服务
-pnpm run start
+# 2. 启动开发服务器（自定义 Node 入口，端口 5000）
+pnpm dev
 ```
 
-## 🌐 访问应用
+访问 http://localhost:5000。
 
-启动成功后，在浏览器中访问：
-
-```
-http://localhost:5000
-```
-
-## 📋 功能特性
-
-✅ **文本输入** - 支持粘贴各种类型的文本内容  
-✅ **智能配置** - 可选择文本类型、完整度、评价目标等  
-✅ **多维度分析** - 结构、节奏、人物、冲突等7个维度  
-✅ **结构化报告** - 直观的仪表盘、评分、问题列表  
-✅ **报告导出** - 支持JSON格式导出  
-
-## 📁 项目结构
-
-```
-ai-text-diagnosis-system/
-├── src/
-│   ├── app/              # Next.js App Router
-│   │   ├── page.tsx      # 主页面
-│   │   ├── layout.tsx    # 布局
-│   │   └── globals.css   # 全局样式
-│   ├── components/        # React组件
-│   │   └── ReportView.tsx # 报告查看组件
-│   ├── services/          # 业务逻辑
-│   │   └── aiAnalysis.ts  # AI分析服务
-│   └── types/             # TypeScript类型
-│       └── report.ts      # 报告类型定义
-├── public/                # 静态资源
-├── package.json           # 项目配置
-├── DEPLOYMENT.md          # 详细部署文档
-├── QUICKSTART.md          # 本文档
-└── deploy.sh              # 自动部署脚本
-```
-
-## 🛠️ 技术栈
-
-- **框架**: Next.js 16 (App Router)
-- **语言**: TypeScript 5
-- **UI组件**: shadcn/ui + Radix UI
-- **样式**: Tailwind CSS 4
-- **包管理**: pnpm
-
-## 🔧 配置说明
-
-### 修改端口
-
-在项目根目录创建 `.env` 文件：
-
-```env
-PORT=3000
-```
-
-### 使用PM2进程管理
+## 生产构建与启动
 
 ```bash
-# 安装PM2
-npm install -g pm2
+# 构建（安装依赖 → next build → tsup 打包 src/server.ts 为 dist/server.js）
+pnpm build
 
-# 启动服务
-pm2 start "pnpm run start" --name ai-text-diagnosis
-
-# 查看状态
-pm2 status
-
-# 查看日志
-pm2 logs ai-text-diagnosis
-
-# 设置开机自启
-pm2 startup
-pm2 save
+# 启动生产服务器（校验 dist/server.js 存在后执行）
+pnpm start
 ```
 
-## 📖 详细文档
+## 模型密钥配置
 
-- **部署指南**: 请查看 `DEPLOYMENT.md` 获取完整的部署说明
-- **项目说明**: 请查看 `README.md` 了解项目详情
+模型密钥放在 `keys/` 目录下，以 JSON 文件形式管理（非 `.env`）：
 
-## 🎯 使用流程
+```json
+// keys/deepseek.json
+{
+  "apiKey": "sk-xxx",
+  "baseUrl": "https://api.deepseek.com/v1",
+  "model": "deepseek-chat"
+}
+```
 
-1. **输入文本** - 在文本框中粘贴您的作品
-2. **配置分析** - 选择文本类型、评价目标等参数
-3. **开始分析** - 点击"开始分析"按钮
-4. **查看报告** - 浏览结构化的分析报告
-5. **导出保存** - 下载JSON格式的报告文件
+- 参考现有文件：`keys/deepseek.json`、`keys/qwen3.json`、`keys/qwen3.5.json`
+- 平台配置入口：`platform-config/forward.json`（模型转发配置）、`platform-config/manifest.json`（版本信息）
 
-## 💡 常见问题
+## 常用脚本
+
+| 命令 | 说明 |
+|------|------|
+| `pnpm dev` | 开发模式（`tsx watch src/server.ts`，自动清理 5000 端口占用） |
+| `pnpm build` | 生产构建（next build + tsup 服务端打包） |
+| `pnpm start` | 生产启动（`node dist/server.js`） |
+| `pnpm lint` | ESLint 检查 |
+| `pnpm ts-check` | TypeScript 类型检查 |
+
+## 目录速览
+
+```
+src/
+├── app/           # Next.js App Router 页面与 API 路由
+├── containers/    # 容器注册表（analysis-controls、text-blocks）
+├── features/      # 业务功能（agent、controls、output-modes 等）
+├── mcp/           # 流式 MCP 客户端（<call> 标签解析 + 工具执行）
+├── server/        # 服务端：模块加载、指令编译、输出模式注册表
+├── stations/      # 模型中转站适配
+├── types/         # 全局类型定义
+└── server.ts      # 自定义 Node.js 服务入口
+```
+
+模块配置（`app-modules/<module-id>/`）与平台配置（`platform-config/`）均为 JSON 驱动，详见 [README.md](./README.md)。
+
+## 常见问题
 
 **Q: 端口被占用怎么办？**
 
-A: 修改 `.env` 文件中的端口号，或使用：
+A: `pnpm dev` 会自动清理 5000 端口占用；也可通过环境变量覆盖：
+
 ```bash
-PORT=3000 pnpm run start
+$env:PORT=3000; pnpm dev   # PowerShell
 ```
+
+**Q: 如何新增一个评估模块？**
+
+A: 在 `app-modules/` 下创建目录并编写 `main.json` 即可被自动加载，详细步骤见 [docs/adding-a-module.md](./docs/adding-a-module.md)。
 
 **Q: 如何更新依赖？**
 
-A: 运行：
+A: 使用 pnpm（禁止 npm/yarn）：
+
 ```bash
 pnpm update
 ```
 
-**Q: 支持哪些文本类型？**
+## 详细文档
 
-A: 支持网络连载、短篇小说、轻小说、文学投稿、通用文本等多种类型。
-
-## 📞 获取帮助
-
-如有问题，请查看：
-1. `DEPLOYMENT.md` - 详细部署文档
-2. `README.md` - 项目说明文档
-
-## 🎉 开始使用
-
-现在，您可以运行 `./deploy.sh` 开始部署您的AI文本诊断系统了！
-
-祝您使用愉快！
+- 部署：`DEPLOYMENT.md`（Linux/通用）、`WINDOWS_DEPLOYMENT.md`（Windows）
+- 扩展指南：`docs/adding-a-module.md`、`docs/adding-a-control.md`、`docs/adding-a-container.md`、`docs/adding-an-output-mode.md`
+- 架构：`ARCHITECTURE_ANALYSIS.md`、`OUTPUT_MODES_ARCHITECTURE.md`
