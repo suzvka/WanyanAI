@@ -45,6 +45,10 @@ const globalRequestsByLevel = new Map<number, number[]>();
 // Map<permissionLevel, Map<subjectId, timestamp[]>>
 const userRequestsByLevel = new Map<number, Map<string, number[]>>();
 
+// 按模型隔离的全局请求记录（配额由子站通过 StationModel.maxCallsPerHour 声明）
+// Map<modelId, timestamp[]>
+const modelRequests = new Map<string, number[]>();
+
 // ========== 工具函数 ==========
 
 /**
@@ -222,6 +226,64 @@ function checkUserRateLimit(
   };
 }
 
+// ========== 模型级限流 ==========
+
+/**
+ * 检查模型级全局限流
+ *
+ * 配额由子站在模型元数据中声明（StationModel.maxCallsPerHour），
+ * 未声明（或非法值）时不限制。裁决在主入口执行，子站不参与。
+ *
+ * @param modelId - 模型 ID
+ * @param maxCallsPerHour - 子站声明的每小时最大调用次数
+ */
+export function checkModelRateLimit(
+  modelId: string,
+  maxCallsPerHour?: number
+): RateLimitResult {
+  if (!maxCallsPerHour || maxCallsPerHour <= 0) {
+    return { allowed: true };
+  }
+
+  const now = Date.now();
+  const windowMs = 60 * 60 * 1000; // 1 小时
+
+  let requests = modelRequests.get(modelId) || [];
+  requests = cleanupOldRequests(requests, windowMs);
+
+  const remaining = Math.max(0, maxCallsPerHour - requests.length);
+  const oldestRequest = requests.length > 0 ? Math.min(...requests) : now;
+  const reset = Math.floor((oldestRequest + windowMs) / 1000);
+
+  if (requests.length >= maxCallsPerHour) {
+    const retryAfter = calculateRetryAfter(requests, maxCallsPerHour, windowMs);
+
+    logWarn('[RateLimit] 模型级限流触发', {
+      modelId,
+      current: requests.length,
+      limit: maxCallsPerHour,
+      timeWindow: '1 hour',
+      retryAfter,
+    });
+
+    return {
+      allowed: false,
+      reason: `Model rate limit exceeded for model ${modelId}`,
+      errorCode: 'MODEL_RATE_LIMIT_EXCEEDED',
+      retryAfter,
+      quota: { limit: maxCallsPerHour, remaining: 0, reset },
+    };
+  }
+
+  requests.push(now);
+  modelRequests.set(modelId, requests);
+
+  return {
+    allowed: true,
+    quota: { limit: maxCallsPerHour, remaining: remaining - 1, reset },
+  };
+}
+
 // ========== 主入口函数 ==========
 
 /**
@@ -336,8 +398,19 @@ export function cleanupExpiredRecords(): void {
     }
   }
 
+  // 清理模型级记录
+  for (const [modelId, requests] of modelRequests.entries()) {
+    const cleaned = cleanupOldRequests(requests, hourMs);
+    if (cleaned.length === 0) {
+      modelRequests.delete(modelId);
+    } else {
+      modelRequests.set(modelId, cleaned);
+    }
+  }
+
   logInfo('[RateLimit] 过期记录清理完成', {
     globalLevels: globalRequestsByLevel.size,
     userLevels: userRequestsByLevel.size,
+    models: modelRequests.size,
   });
 }

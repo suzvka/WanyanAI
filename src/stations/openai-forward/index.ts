@@ -131,6 +131,7 @@ export function createOpenAIForwardStation(options?: { configDir?: string; logge
         name: m.name,
         description: m.description,
         maxCallsPerHour: m.maxCallsPerHour,
+        minPermissionLevel: m.minPermissionLevel,
       }));
     },
 

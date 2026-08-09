@@ -78,6 +78,14 @@ class StationRegistryImpl implements IStationRegistry {
   }
 
   /**
+   * 查找指定模型的元数据（含 minPermissionLevel 等策略声明）
+   */
+  async findModel(modelId: string): Promise<StationModel | null> {
+    const models = await this.getAllModels();
+    return models.find(m => m.id === modelId) ?? null;
+  }
+
+  /**
    * 获取所有已注册的中转站
    */
   getStations(): Station[] {

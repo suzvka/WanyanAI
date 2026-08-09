@@ -4,6 +4,9 @@
  * 中转站（Station）是自包含的 LLM 转发器，仅负责将请求转发到具体的模型服务。
  * 权限解析与限流由主入口（src/app/api/v1/chat/completions/route.ts）统一处理，
  * 中转站不再参与权限解析和限流决策。
+ *
+ * 职责边界：中转站仅通过模型元数据（StationModel）声明静态策略信息
+ * （如 minPermissionLevel、maxCallsPerHour），由主入口在聚合层统一裁决。
  * 
  * authKey 透传给子站：openai-forward 站将其用作用户自持 API Key 直接调用上游服务，
  * coze 站忽略 authKey（使用 Coze SDK 内置凭证）。
@@ -22,8 +25,14 @@ export interface StationModel {
   /** 模型描述（可选） */
   description?: string;
   
-  /** 每小时最大调用次数（可选，用于限流） */
+  /** 每小时最大调用次数（可选，由主入口执行模型级全局限流） */
   maxCallsPerHour?: number;
+
+  /**
+   * 最低权限等级门槛（可选，由子站声明、主入口裁决）
+   * 请求者 permissionLevel 低于此值时拒绝访问；缺省表示对所有等级开放
+   */
+  minPermissionLevel?: number;
 }
 
 /**
@@ -118,6 +127,12 @@ export interface StationRegistry {
    * @returns 中转站实例，如果没有找到返回 null
    */
   findStation(modelId: string): Station | null;
+  
+  /**
+   * 查找指定模型的元数据（含 minPermissionLevel 等策略声明）
+   * @returns 模型元数据，如果没有找到返回 null
+   */
+  findModel(modelId: string): Promise<StationModel | null>;
   
   /**
    * 获取所有已注册的中转站

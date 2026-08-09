@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolvePermission } from '@/lib/api-station/permissionClient';
-import { checkRateLimit } from '@/lib/api-station/rateLimit';
+import { checkRateLimit, checkModelRateLimit } from '@/lib/api-station/rateLimit';
 import { executeHooks, HookContext } from '@/lib/api-station/hooks';
 import { createErrorResponse } from '@/lib/api-station/mockResponse';
 import { logInfo, logError, logWarn, generateRequestId } from '@/lib/api-station/logger';
@@ -14,7 +14,8 @@ import { validateRequestKey } from '@/app/api/v1/guard';
  * 接收 OpenAI 格式请求，通过中转站转发到目标服务。
  *
  * 流程：
- * 1. 提取 key → 2. 权限解析（key → 权限等级）→ 3. 限流检查 → 4. 查找中转站 → 5. 转发请求
+ * 1. 提取 key → 2. 权限解析（key → 权限等级）→ 3. 模型门槛检查（子站声明、入口裁决）
+ * → 4. 限流检查（权限等级级 + 模型级）→ 5. 查找中转站 → 6. 转发请求
  */
 export async function POST(request: NextRequest) {
   const requestId = generateRequestId();
@@ -75,6 +76,40 @@ export async function POST(request: NextRequest) {
       identityId: permissionResult.identityId,
     });
 
+    // === 模型权限门槛检查（子站声明、入口裁决；放在限流前，拒绝时不消耗配额）===
+    const modelMeta = await stationRegistry.findModel(model);
+
+    if (!modelMeta) {
+      logError('[API:Chat] 未找到可处理该模型的中转站', null, { requestId, model });
+      return NextResponse.json(
+        createErrorResponse(
+          `Model not found: ${model}`,
+          'invalid_request_error',
+          'MODEL_NOT_FOUND',
+          { requestId },
+        ),
+        { status: 404 },
+      );
+    }
+
+    if (modelMeta.minPermissionLevel !== undefined && permissionLevel < modelMeta.minPermissionLevel) {
+      logWarn('[API:Chat] 模型权限门槛未达标', {
+        requestId,
+        model,
+        permissionLevel,
+        minPermissionLevel: modelMeta.minPermissionLevel,
+      });
+      return NextResponse.json(
+        createErrorResponse(
+          `Insufficient permission level for model: ${model}`,
+          'permission_error',
+          'INSUFFICIENT_PERMISSION',
+          { requestId },
+        ),
+        { status: 403 },
+      );
+    }
+
     // === 限流检查 ===
     const subjectId = `key:${key}`;
     const rateLimitResult = checkRateLimit({ subjectId, permissionLevel });
@@ -101,12 +136,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 构建限流响应头
+    // === 模型级限流检查（配额由子站元数据声明）===
+    const modelRateLimitResult = checkModelRateLimit(model, modelMeta.maxCallsPerHour);
+
+    if (!modelRateLimitResult.allowed) {
+      logWarn('[API:Chat] 模型级限流触发', {
+        requestId,
+        model,
+        reason: modelRateLimitResult.reason,
+      });
+      const retryAfter = modelRateLimitResult.retryAfter || 60;
+      return NextResponse.json(
+        createErrorResponse(
+          modelRateLimitResult.reason || 'Model rate limit exceeded',
+          'rate_limit_error',
+          modelRateLimitResult.errorCode || 'MODEL_RATE_LIMIT_EXCEEDED',
+          { requestId },
+        ),
+        {
+          status: 429,
+          headers: { 'Retry-After': String(retryAfter) },
+        },
+      );
+    }
+
+    // 构建限流响应头（权限等级级与模型级配额取更严格的一方）
+    const effectiveQuota =
+      (modelRateLimitResult.quota?.remaining ?? Infinity) < (rateLimitResult.quota?.remaining ?? Infinity)
+        ? modelRateLimitResult.quota
+        : rateLimitResult.quota;
     const rateLimitHeaders: Record<string, string> = {};
-    if (rateLimitResult.quota) {
-      rateLimitHeaders['X-RateLimit-Limit'] = String(rateLimitResult.quota.limit);
-      rateLimitHeaders['X-RateLimit-Remaining'] = String(rateLimitResult.quota.remaining);
-      rateLimitHeaders['X-RateLimit-Reset'] = String(rateLimitResult.quota.reset);
+    if (effectiveQuota) {
+      rateLimitHeaders['X-RateLimit-Limit'] = String(effectiveQuota.limit);
+      rateLimitHeaders['X-RateLimit-Remaining'] = String(effectiveQuota.remaining);
+      rateLimitHeaders['X-RateLimit-Reset'] = String(effectiveQuota.reset);
     }
 
     // === 查找中转站 ===
