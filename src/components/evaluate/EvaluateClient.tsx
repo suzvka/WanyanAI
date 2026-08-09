@@ -28,6 +28,7 @@ import { NavigationGuardProvider, useNavigationGuard } from '@/providers/Navigat
 import { renderContainer } from '@/containers';
 import { renderOutputMode } from '@/features/output-modes';
 import { validateEvaluationInput } from '@/lib/validation/evaluationInput';
+import { preloadAnalysisEngine } from '@/features/analysis-tasks/engineLoader';
 import { useHasUnsavedContent } from '@/hooks/useHasUnsavedContent';
 import type { ProgressSnapshot } from '@/features/analysis-progress';
 import { ReportErrorBoundary } from '@/components/evaluate/ReportErrorBoundary';
@@ -262,6 +263,16 @@ function EvaluateContent({
       clearTimeout(showTimer);
     };
   }, [pathname]);
+
+  // 空闲时预热分析引擎：用户点击“开始分析”时通常已命中缓存，无感知延迟
+  useEffect(() => {
+    if (typeof requestIdleCallback === 'function') {
+      const idleId = requestIdleCallback(() => preloadAnalysisEngine(), { timeout: 3000 });
+      return () => cancelIdleCallback(idleId);
+    }
+    const timer = setTimeout(() => preloadAnalysisEngine(), 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // === 容器数据状态（通用数据通道）===
   // 按容器 ID 分组存储各类型容器的数据

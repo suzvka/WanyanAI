@@ -76,6 +76,10 @@ const defaultHistoryQuery: ReportHistoryQuery = {
   sortDirection: 'desc',
 };
 
+// 服务端快照必须返回稳定引用：每次调用返回新数组会导致 hydration 无限循环
+const EMPTY_REPORTS: CachedReportRecord[] = [];
+const getServerReports = () => EMPTY_REPORTS;
+
 export default function ReportHistoryPageClient({
   platformConfig,
   modules,
@@ -85,7 +89,7 @@ export default function ReportHistoryPageClient({
   const records = useSyncExternalStore(
     reportHistoryStore.subscribe,
     useCallback(() => reportHistoryStore.listReports(defaultHistoryQuery), []),
-    () => [],
+    getServerReports,
   );
   const [recordPendingDelete, setRecordPendingDelete] = useState<CachedReportRecord | null>(null);
   const [recordPendingRename, setRecordPendingRename] = useState<CachedReportRecord | null>(null);

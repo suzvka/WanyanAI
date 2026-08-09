@@ -10,8 +10,7 @@ import type {
   CreateAnalysisTaskInput,
   TaskSubscriptionListener,
 } from '@/features/analysis-tasks/types';
-import { runClientAnalysis, DEFAULT_PROGRESS_STAGES } from '@/features/analysis-tasks/clientAnalysisRunner';
-import { runAgent } from '@/features/agent/AgentRunner';
+import { loadAnalysisEngine, type AnalysisEngine } from '@/features/analysis-tasks/engineLoader';
 import type { AgentProgressSnapshot } from '@/features/agent/types';
 
 const logger = createLogger('AnalysisTaskProvider');
@@ -73,7 +72,7 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
 
   const processQueue = useCallback((schedulerKey: string) => {
     // 队列处理以内部函数递归，避免 useCallback 自引用（React Compiler 规则）
-    const run = () => {
+    const run = async () => {
     if (runningTasksRef.current.has(schedulerKey)) {
       return;
     }
@@ -92,11 +91,50 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const progressController = new ProgressController();
-    progressController.registerStages(DEFAULT_PROGRESS_STAGES);
+    // 先占用调度位，防止引擎加载期间同一队列被重复调度
     runningTasksRef.current.set(schedulerKey, nextTaskId);
 
     logger.info('Starting task execution', { taskId: nextTaskId });
+
+    // 引擎按需加载期间的进度展示
+    reportHistoryStore.updateTaskRecord(nextTaskId, {
+      status: 'running',
+      progressSnapshot: {
+        progress: 0,
+        currentStage: 'prepare',
+        currentLabel: '任务启动中',
+        currentEventLabel: '正在加载分析引擎...',
+        status: 'running',
+      },
+      taskMeta: {
+        phase: 'prepare',
+        message: '任务启动中...',
+        model: taskInput.modelConfig.selectedModel,
+        baseUrl: taskInput.modelConfig.baseUrl,
+        schedulerKey,
+      },
+    });
+    notifyTaskListeners(nextTaskId);
+
+    // 按需加载分析引擎：仅在首次开始分析时下载，预热过则直接命中缓存
+    let engine: AnalysisEngine;
+    try {
+      engine = await loadAnalysisEngine();
+    } catch (error) {
+      logger.error('Analysis engine failed to load', error, { taskId: nextTaskId });
+      const message = error instanceof Error ? error.message : '分析引擎加载失败，请检查网络后重试';
+      reportHistoryStore.failTask(nextTaskId, message);
+      // 保留 taskInputs 以支持“重新生成”，仅清理调度状态
+      runningTasksRef.current.delete(schedulerKey);
+      notifyTaskListeners(nextTaskId);
+      run();
+      return;
+    }
+
+    const { runAgent, runClientAnalysis } = engine;
+
+    const progressController = new ProgressController();
+    progressController.registerStages(engine.DEFAULT_PROGRESS_STAGES);
 
     reportHistoryStore.updateTaskRecord(nextTaskId, {
       status: 'running',

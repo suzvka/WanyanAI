@@ -13,17 +13,22 @@ type UseModelConfigControllerOptions = {
 
 type RefreshModelsResult = Awaited<ReturnType<typeof modelConfigService.refreshModels>>;
 
+// 服务端快照必须返回稳定引用：每次调用返回新数组会导致 hydration 无限循环
+const EMPTY_API_CONFIGS: ApiConfigRecord[] = [];
+const getServerApiConfigs = () => EMPTY_API_CONFIGS;
+const getServerSelectedConfigId = () => null;
+
 export function useModelConfigController({ onConfigInteraction }: UseModelConfigControllerOptions = {}) {
   // 订阅 modelConfigStore：store 写入（含其他模块）后自动同步，无需手动 setState
   const apiConfigs = useSyncExternalStore(
     modelConfigStore.subscribe,
     () => modelConfigService.listConfigs(),
-    () => [],
+    getServerApiConfigs,
   );
   const selectedConfigId = useSyncExternalStore(
     modelConfigStore.subscribe,
     () => modelConfigService.getSelectedConfig()?.id ?? null,
-    () => null,
+    getServerSelectedConfigId,
   );
   const [isConfigMutating, setIsConfigMutating] = useState(false);
   const [isModelRefreshing, setIsModelRefreshing] = useState(false);

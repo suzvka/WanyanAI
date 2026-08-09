@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import { CircleHelp, Settings2, UserRound } from 'lucide-react';
 import AppSidebar from '@/components/layout/AppSidebar';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
@@ -14,8 +15,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import ModelSelector from '@/features/model-config/components/ModelSelector';
-import ApiConfigManagerDialog from '@/features/model-config/components/ApiConfigManagerDialog';
 import { useModelConfig } from '@/providers/ModelConfigProvider';
+
+// 配置管理对话框按需加载：仅在首次打开时才下载相关代码
+const ApiConfigManagerDialog = dynamic(
+  () => import('@/features/model-config/components/ApiConfigManagerDialog'),
+  { ssr: false },
+);
 
 interface AppShellProps {
   siteTitle: string;
@@ -123,25 +129,28 @@ export default function AppShell({
         </SidebarInset>
       </SidebarProvider>
 
-      <ApiConfigManagerDialog
-        open={isConfigDialogOpen}
-        selectedConfigId={selectedConfigId}
-        configs={apiConfigs}
-        busy={isConfigBusy}
-        onOpenChange={setIsConfigDialogOpen}
-        onSelectConfig={selectConfig}
-        onCreateConfig={createConfig}
-        onUpdateConfig={updateConfig}
-        onDeleteConfig={deleteConfig}
-        // 内置模式
-        useBuiltInMode={useBuiltInMode}
-        setUseBuiltInMode={setUseBuiltInMode}
-        builtInModels={builtInModels}
-        builtInSelectedModel={builtInSelectedModel}
-        builtInValidationStatus={builtInValidationStatus}
-        onSelectBuiltInModel={selectBuiltInModel}
-        onRefreshBuiltInModels={refreshBuiltInModels}
-      />
+      {/* 仅在打开时挂载，配合 dynamic() 实现首次打开才下载 */}
+      {isConfigDialogOpen && (
+        <ApiConfigManagerDialog
+          open={isConfigDialogOpen}
+          selectedConfigId={selectedConfigId}
+          configs={apiConfigs}
+          busy={isConfigBusy}
+          onOpenChange={setIsConfigDialogOpen}
+          onSelectConfig={selectConfig}
+          onCreateConfig={createConfig}
+          onUpdateConfig={updateConfig}
+          onDeleteConfig={deleteConfig}
+          // 内置模式
+          useBuiltInMode={useBuiltInMode}
+          setUseBuiltInMode={setUseBuiltInMode}
+          builtInModels={builtInModels}
+          builtInSelectedModel={builtInSelectedModel}
+          builtInValidationStatus={builtInValidationStatus}
+          onSelectBuiltInModel={selectBuiltInModel}
+          onRefreshBuiltInModels={refreshBuiltInModels}
+        />
+      )}
     </>
   );
 }
