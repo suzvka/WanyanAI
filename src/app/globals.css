@@ -39,6 +39,8 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -47,9 +49,9 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
   --font-sans:
-    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', ui-sans-serif,
-    system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+    var(--font-inter), 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
     'Courier New', monospace;
@@ -65,14 +67,15 @@
   --motion-duration-slow: 280ms;
   --motion-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
   --motion-ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --theme-primary: oklch(0.205 0 0);
-  --theme-primary-foreground: oklch(0.985 0 0);
+  --background: oklch(0.985 0.002 260);
+  --foreground: oklch(0.21 0.02 260);
+  --card: oklch(0.997 0.001 260);
+  --card-foreground: oklch(0.21 0.02 260);
+  --popover: oklch(0.997 0.001 260);
+  --popover-foreground: oklch(0.21 0.02 260);
+  --theme-primary: oklch(0.585 0.2 277);
+  --theme-primary-foreground: oklch(0.99 0 0);
+  --brand-violet: oklch(0.62 0.21 300);
   --primary: var(--theme-primary);
   --primary-foreground: var(--theme-primary-foreground);
   --primary-soft: color-mix(in oklab, var(--theme-primary) 14%, transparent);
@@ -82,26 +85,31 @@
   --secondary: color-mix(in oklab, var(--theme-primary) 6%, var(--background));
   --secondary-foreground: var(--foreground);
   --muted: color-mix(in oklab, var(--theme-primary) 4%, var(--background));
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.55 0.02 260);
   --accent: color-mix(in oklab, var(--theme-primary) 8%, var(--background));
   --accent-foreground: var(--foreground);
   --destructive: var(--report-score-dark-red);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.908 0.006 260);
+  --input: oklch(0.908 0.006 260);
+  --ring: oklch(0.72 0.04 265);
   --chart-1: color-mix(in oklab, var(--theme-primary) 92%, var(--foreground));
   --chart-2: color-mix(in oklab, var(--theme-primary) 74%, var(--foreground));
   --chart-3: color-mix(in oklab, var(--theme-primary) 56%, var(--foreground));
   --chart-4: color-mix(in oklab, var(--theme-primary) 38%, var(--foreground));
   --chart-5: color-mix(in oklab, var(--theme-primary) 22%, var(--foreground));
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar: oklch(0.98 0.003 260);
+  --sidebar-foreground: oklch(0.21 0.02 260);
   --sidebar-primary: var(--theme-primary);
   --sidebar-primary-foreground: var(--theme-primary-foreground);
   --sidebar-accent: var(--primary-soft);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--primary-ring);
+  --accent-gradient: linear-gradient(135deg, var(--theme-primary) 0%, var(--brand-violet) 100%);
+  --shadow-card:
+    0 1px 2px oklch(0.21 0.02 260 / 0.04), 0 4px 16px oklch(0.21 0.02 260 / 0.05);
+  --shadow-pop:
+    0 2px 6px oklch(0.21 0.02 260 / 0.07), 0 12px 32px oklch(0.21 0.02 260 / 0.12);
   --report-score-gold: oklch(0.78 0.14 84);
   --report-score-gold-soft: color-mix(in oklab, var(--report-score-gold) 14%, transparent);
   --report-score-purple: oklch(0.62 0.19 305);
@@ -138,14 +146,15 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --theme-primary: oklch(0.922 0 0);
-  --theme-primary-foreground: oklch(0.205 0 0);
+  --background: oklch(0.17 0.012 265);
+  --foreground: oklch(0.96 0.004 260);
+  --card: oklch(0.215 0.016 265);
+  --card-foreground: oklch(0.96 0.004 260);
+  --popover: oklch(0.215 0.016 265);
+  --popover-foreground: oklch(0.96 0.004 260);
+  --theme-primary: oklch(0.72 0.15 277);
+  --theme-primary-foreground: oklch(0.99 0 0);
+  --brand-violet: oklch(0.74 0.16 300);
   --primary: var(--theme-primary);
   --primary-foreground: var(--theme-primary-foreground);
   --primary-soft: color-mix(in oklab, var(--theme-primary) 16%, transparent);
@@ -155,26 +164,31 @@
   --secondary: color-mix(in oklab, var(--theme-primary) 8%, var(--background));
   --secondary-foreground: var(--foreground);
   --muted: color-mix(in oklab, var(--theme-primary) 6%, var(--background));
-  --muted-foreground: oklch(0.708 0 0);
+  --muted-foreground: oklch(0.7 0.015 260);
   --accent: color-mix(in oklab, var(--theme-primary) 10%, var(--background));
   --accent-foreground: var(--foreground);
   --destructive: var(--report-score-dark-red);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: oklch(0.985 0.004 260 / 10%);
+  --input: oklch(0.985 0.004 260 / 15%);
+  --ring: oklch(0.56 0.06 270);
   --chart-1: color-mix(in oklab, var(--theme-primary) 92%, var(--foreground));
   --chart-2: color-mix(in oklab, var(--theme-primary) 74%, var(--foreground));
   --chart-3: color-mix(in oklab, var(--theme-primary) 56%, var(--foreground));
   --chart-4: color-mix(in oklab, var(--theme-primary) 38%, var(--foreground));
   --chart-5: color-mix(in oklab, var(--theme-primary) 22%, var(--foreground));
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar: oklch(0.2 0.016 265);
+  --sidebar-foreground: oklch(0.96 0.004 260);
   --sidebar-primary: var(--theme-primary);
   --sidebar-primary-foreground: var(--theme-primary-foreground);
   --sidebar-accent: var(--primary-soft);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--primary-ring);
+  --accent-gradient: linear-gradient(135deg, var(--theme-primary) 0%, var(--brand-violet) 100%);
+  --shadow-card:
+    0 1px 2px oklch(0 0 0 / 0.25), 0 4px 16px oklch(0 0 0 / 0.3);
+  --shadow-pop:
+    0 2px 6px oklch(0 0 0 / 0.35), 0 12px 32px oklch(0 0 0 / 0.45);
   --report-score-gold: oklch(0.84 0.13 84);
   --report-score-gold-soft: color-mix(in oklab, var(--report-score-gold) 18%, transparent);
   --report-score-purple: oklch(0.78 0.16 305);
@@ -238,7 +252,39 @@ body {
     text-size-adjust: 100%;
   }
 
-  /* Better touch target sizing for all interactive elements */
+  /* Better touch target sizing for all interactive elements
+     仅在触控设备生效，避免桌面端控件被撑大 */
+  @media (pointer: coarse) {
+    button,
+    a,
+    input,
+    textarea,
+    select,
+    [role="button"],
+    [role="link"],
+    [role="checkbox"],
+    [role="radio"],
+    [role="switch"],
+    [role="tab"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    /* Improve touch targets for icon buttons */
+    button[class*="icon"],
+    button:has(> svg:only-child) {
+      min-height: 48px;
+      min-width: 48px;
+    }
+
+    /* Prevent zoom on input focus on iOS */
+    input,
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
+
   button,
   a,
   input,
@@ -250,23 +296,7 @@ body {
   [role="radio"],
   [role="switch"],
   [role="tab"] {
-    min-height: 44px;
-    min-width: 44px;
     touch-action: manipulation;
-  }
-
-  /* Improve touch targets for icon buttons */
-  button[class*="icon"],
-  button:has(> svg:only-child) {
-    min-height: 48px;
-    min-width: 48px;
-  }
-
-  /* Prevent zoom on input focus on iOS */
-  input,
-  textarea,
-  select {
-    font-size: 16px;
   }
 
   /* Safe area insets for notch devices */
@@ -313,6 +343,18 @@ body {
   
   .text-brand {
     color: var(--brand-text-color);
+  }
+
+  /* 品牌渐变（靛蓝 → 紫罗兰） */
+  .bg-accent-gradient {
+    background-image: var(--accent-gradient);
+  }
+
+  .text-accent-gradient {
+    background-image: var(--accent-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   @keyframes ui-overlay-in {

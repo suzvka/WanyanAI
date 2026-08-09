@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useTheme } from 'next-themes';
 import type { AppearanceConfig } from '@/server/config/types';
 
@@ -10,57 +10,55 @@ interface BrandBackgroundProps {
 
 /**
  * 品牌背景组件
- * 
- * 在页面黄金分割位置（从底部算起 61.8%）显示品牌名称
- * 作为背景层，可被其他控件覆盖
- * 
- * 品牌名透明度与背景透明度联动，实现低遮挡效果
+ *
+ * 低透明度径向光晕（靛蓝偏左上、紫罗兰偏右下）+ 顶部渐变高光线，
+ * 为页面营造安静的空间层次，不抢占内容焦点。
+ *
+ * 光晕不透明度与 appearance.json 的 backgroundOpacity 联动。
  */
 export default function BrandBackground({ appearance }: BrandBackgroundProps) {
-  const { brand, theme } = appearance;
+  const { theme } = appearance;
   const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === 'dark';
-  const bgOpacity = isDark ? theme.backgroundOpacity.dark : theme.backgroundOpacity.light;
-  const colorOffset = isDark ? theme.brandColorOffset.dark : theme.brandColorOffset.light;
-  const mixTarget = colorOffset >= 0 ? 'white' : 'black';
-  const mixStrength = Math.max(0, Math.min(100, 100 - Math.abs(colorOffset) * 100));
-  const textColor = `color-mix(in oklab, var(--brand-primary) ${mixStrength}%, ${mixTarget})`;
-  const overlayColor = `color-mix(in oklab, var(--brand-primary) ${bgOpacity * 100}%, transparent)`;
-  const brandOpacity = bgOpacity;
-  
+  // Hydration 安全：首帧（含 SSR）统一按浅色渲染，挂载后再过渡到实际主题
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const isDark = mounted && resolvedTheme === 'dark';
+  const glowOpacity = isDark
+    ? theme.backgroundOpacity.dark
+    : theme.backgroundOpacity.light;
+
   return (
     <div
       className="fixed inset-0 pointer-events-none z-0 overflow-hidden"
       aria-hidden="true"
-      style={{
-        '--brand-primary': theme.primary,
-        '--brand-overlay-color': overlayColor,
-        '--brand-text-color': textColor,
-      } as CSSProperties}
+      style={{ '--brand-primary': theme.primary } as CSSProperties}
     >
+      {/* 左上：主色径向光晕 */}
       <div
-        className="bg-brand-overlay absolute inset-0 transition-opacity duration-500"
-      />
-      <div
-        className="absolute left-1/2 bottom-[61.8%] -translate-x-1/2 translate-y-1/2 flex flex-col items-center gap-2 select-none transition-opacity duration-500"
+        className="absolute -top-48 -left-48 h-[40rem] w-[40rem] rounded-full transition-opacity duration-500"
         style={{
-          fontFamily: brand.fontFamily || 'var(--font-serif)',
-          opacity: brandOpacity,
+          background:
+            'radial-gradient(closest-side, var(--brand-primary), transparent)',
+          opacity: glowOpacity,
         }}
-      >
-        <span
-          className="text-brand text-[clamp(3rem,10vw,8rem)] font-bold tracking-tight leading-none"
-        >
-          {brand.name}
-        </span>
-        {brand.slogan && (
-          <span
-            className="text-brand text-[clamp(0.875rem,2vw,1.25rem)] tracking-wide opacity-70"
-          >
-            {brand.slogan}
-          </span>
-        )}
-      </div>
+      />
+      {/* 右下：紫罗兰径向光晕 */}
+      <div
+        className="absolute -bottom-56 -right-56 h-[42rem] w-[42rem] rounded-full transition-opacity duration-500"
+        style={{
+          background:
+            'radial-gradient(closest-side, var(--brand-violet), transparent)',
+          opacity: glowOpacity * 0.8,
+        }}
+      />
+      {/* 顶部渐变高光线 */}
+      <div
+        className="absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            'linear-gradient(90deg, transparent, color-mix(in oklab, var(--brand-primary) 40%, transparent), transparent)',
+        }}
+      />
     </div>
   );
 }

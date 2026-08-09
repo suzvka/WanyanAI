@@ -6,8 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { reportRatingDisplayLabels } from '@/config/reportScoring';
+import {
+  ReportGradePill,
+  ReportInfoRow,
+  ReportParagraphDot,
+  ReportScorePanel,
+  ReportSectionCard,
+  ReportSideColumn,
+  ReportTotalScore,
+} from '@/components/report/report-ui';
 import type { GaokaoEssayData, GaokaoSubscore, GaokaoSection, GaokaoSectionGroup } from '../types';
-import { formatNumber, getScoreColor, getGradeColor } from './utils';
+import { formatNumber, getGradeColor } from './utils';
 import { GradeProgressBar } from './GradeProgressBar';
 
 interface GaokaoEssayViewProps {
@@ -23,15 +32,6 @@ function splitParagraphs(body: string) {
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
-}
-
-function ReportInfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <span className="shrink-0 text-[color:var(--report-text-subtle)]">{label}</span>
-      <span className="text-right text-[color:var(--report-text-heading)]">{value}</span>
-    </div>
-  );
 }
 
 function SubscoreCard({ subscore }: { subscore: GaokaoSubscore }) {
@@ -108,35 +108,25 @@ export function GaokaoEssayView({ report, onStartNew, onBackToEdit }: GaokaoEssa
                 </div>
                 
                 {/* 右侧：评分展示 */}
-                <div className="p-6 bg-muted/20 border-l border-border/50">
+                <ReportScorePanel>
                   <div className="space-y-6">
                     {/* 大号评分展示 */}
                     <div className="text-center">
-                      <div 
-                        className="text-6xl font-bold tracking-tight"
-                        style={{ color: getScoreColor(report.dashboard.grade) }}
-                      >
+                      <ReportTotalScore>
                         {formatNumber(report.dashboard.totalScore)}
-                      </div>
+                      </ReportTotalScore>
                       <div className="mt-2 text-sm text-muted-foreground">
                         满分 {report.dashboard.maxScore} 分
                       </div>
                       <div className="mt-3 flex items-center justify-center gap-2">
-                        <Badge 
-                          className={cn(
-                            'text-lg font-bold px-4 py-1.5',
-                            getGradeColor(report.dashboard.grade)
-                          )}
-                        >
-                          {report.dashboard.grade}
-                        </Badge>
+                        <ReportGradePill grade={report.dashboard.grade} />
                         <span className="text-sm text-muted-foreground">
                           {reportRatingDisplayLabels[report.dashboard.grade]}
                         </span>
                       </div>
                     </div>
                   </div>
-                </div>
+                </ReportScorePanel>
               </div>
             </CardContent>
           </Card>
@@ -172,72 +162,62 @@ export function GaokaoEssayView({ report, onStartNew, onBackToEdit }: GaokaoEssa
           {/* 分组内容 */}
           {groups.length > 0 ? (
             <div className="space-y-6">
-              {groups.map((group: GaokaoSectionGroup) => (
-                <Card key={group.id}>
-                  <CardContent className="pb-6 px-6">
-                    <h2 className="text-xl font-semibold text-[color:var(--report-text-heading)] mb-5">
-                      {group.title}
-                    </h2>
-                    <div className="space-y-6">
-                      {group.sections.map((section, sectionIndex) => {
-                        const paragraphs = splitParagraphs(section.body);
+              {groups.map((group: GaokaoSectionGroup, groupIndex) => (
+                <ReportSectionCard key={group.id} index={groupIndex} title={group.title}>
+                  <div className="space-y-6">
+                    {group.sections.map((section, sectionIndex) => {
+                      const paragraphs = splitParagraphs(section.body);
 
-                        return (
-                          <div key={section.id}>
-                            {sectionIndex > 0 && (
-                              <div className="border-t border-[color:var(--report-border)] mb-5" />
-                            )}
-                            <div className="space-y-3">
-                              <div className="flex items-center gap-2">
-                                <div className="h-2 w-2 rounded-full bg-[color:var(--report-accent-dot)]" />
-                                <h3 className="text-base font-semibold text-[color:var(--report-text-heading)]">{section.title}</h3>
-                              </div>
-                              {paragraphs.length > 0 ? (
-                                paragraphs.map((paragraph, paragraphIndex) => (
-                                  <p key={`${section.id}-${paragraphIndex}`} className="text-sm leading-7 text-[color:var(--report-text-subtle)]">
-                                    {paragraph}
-                                  </p>
-                                ))
-                              ) : (
-                                <p className="whitespace-pre-line text-sm leading-7 text-[color:var(--report-text-subtle)]">{section.body}</p>
-                              )}
+                      return (
+                        <div key={section.id}>
+                          {sectionIndex > 0 && (
+                            <div className="border-t border-[color:var(--report-border)]/60 mb-5" />
+                          )}
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <ReportParagraphDot />
+                              <h3 className="text-base font-semibold text-[color:var(--report-text-heading)]">{section.title}</h3>
                             </div>
+                            {paragraphs.length > 0 ? (
+                              paragraphs.map((paragraph, paragraphIndex) => (
+                                <p key={`${section.id}-${paragraphIndex}`} className="text-sm leading-7 text-[color:var(--report-text-subtle)]">
+                                  {paragraph}
+                                </p>
+                              ))
+                            ) : (
+                              <p className="whitespace-pre-line text-sm leading-7 text-[color:var(--report-text-subtle)]">{section.body}</p>
+                            )}
                           </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ReportSectionCard>
               ))}
             </div>
           ) : sections.length === 0 ? (
-            <div className="rounded-lg border border-[color:var(--report-border)] bg-background p-6 text-sm text-[color:var(--report-text-subtle)]">
+            <div className="rounded-2xl border border-[color:var(--report-border)] bg-background p-6 text-sm text-[color:var(--report-text-subtle)]">
               暂无可展示的报告正文。
             </div>
           ) : (
             <div className="space-y-6">
-              {sections.map((section: GaokaoSection) => {
+              {sections.map((section: GaokaoSection, sectionIndex) => {
                 const paragraphs = splitParagraphs(section.body);
 
                 return (
-                  <Card key={section.id}>
-                    <CardContent className="pt-5 pb-6 px-6">
-                      <h2 className="text-xl font-semibold text-[color:var(--report-text-heading)] mb-5">
-                        {section.title}
-                      </h2>
-                      <div className="space-y-4">
-                        {paragraphs.length > 0 ? (
-                          paragraphs.map((paragraph, paragraphIndex) => (
-                            <p key={`${section.id}-${paragraphIndex}`} className="text-sm leading-7 text-[color:var(--report-text-subtle)]">
-                              {paragraph}
-                            </p>
-                          ))
-                        ) : (
-                          <p className="whitespace-pre-line text-sm leading-7 text-[color:var(--report-text-subtle)]">{section.body}</p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <ReportSectionCard key={section.id} index={sectionIndex} title={section.title}>
+                    <div className="space-y-4">
+                      {paragraphs.length > 0 ? (
+                        paragraphs.map((paragraph, paragraphIndex) => (
+                          <p key={`${section.id}-${paragraphIndex}`} className="text-sm leading-7 text-[color:var(--report-text-subtle)]">
+                            {paragraph}
+                          </p>
+                        ))
+                      ) : (
+                        <p className="whitespace-pre-line text-sm leading-7 text-[color:var(--report-text-subtle)]">{section.body}</p>
+                      )}
+                    </div>
+                  </ReportSectionCard>
                 );
               })}
             </div>
@@ -245,7 +225,7 @@ export function GaokaoEssayView({ report, onStartNew, onBackToEdit }: GaokaoEssa
         </div>
 
         {/* 侧边栏 */}
-        <div className="space-y-6">
+        <ReportSideColumn>
           <Card>
             <CardContent className="p-4">
               <div className="space-y-3 text-sm text-[color:var(--report-text-subtle)]">
@@ -281,7 +261,7 @@ export function GaokaoEssayView({ report, onStartNew, onBackToEdit }: GaokaoEssa
               </div>
             </CardContent>
           </Card>
-        </div>
+        </ReportSideColumn>
       </div>
     </main>
   );

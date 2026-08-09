@@ -2,10 +2,10 @@
   "brand": {
     "name": "WanyanAI",
     "slogan": "AI 驱动的文本诊断专家",
-    "fontFamily": "var(--font-serif)"
+    "fontFamily": "var(--font-sans)"
   },
   "theme": {
-    "primary": "#425066",
+    "primary": "#5E6AD2",
     "backgroundOpacity": {
       "light": 0.08,
       "dark": 0.15

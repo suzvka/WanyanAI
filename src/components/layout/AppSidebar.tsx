@@ -56,8 +56,12 @@ export default function AppSidebar({ title, primaryColor, modules = [] }: AppSid
       <SidebarHeader className="px-4 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <div
-            className="rounded-lg p-1.5"
-            style={{ backgroundColor: primaryColor || 'var(--primary)' }}
+            className="rounded-lg p-1.5 shadow-xs"
+            style={{
+              backgroundImage: primaryColor
+                ? `linear-gradient(135deg, ${primaryColor}, var(--brand-violet))`
+                : 'var(--accent-gradient)',
+            }}
           >
             <Sparkles className="h-4 w-4 text-white sm:h-5 sm:w-5" />
           </div>

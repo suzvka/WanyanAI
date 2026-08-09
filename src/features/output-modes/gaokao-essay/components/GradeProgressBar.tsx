@@ -10,12 +10,12 @@ interface GradeProgressBarProps {
   className?: string;
 }
 
-const gradeColors: Record<ReportRating, { bar: string }> = {
-  S: { bar: 'bg-[color:var(--report-grade-s)]' },
-  A: { bar: 'bg-[color:var(--report-grade-a)]' },
-  B: { bar: 'bg-[color:var(--report-grade-b)]' },
-  C: { bar: 'bg-[color:var(--report-grade-c)]' },
-  D: { bar: 'bg-[color:var(--report-grade-d)]' },
+const gradeBarColors: Record<ReportRating, string> = {
+  S: 'var(--report-grade-s)',
+  A: 'var(--report-grade-a)',
+  B: 'var(--report-grade-b)',
+  C: 'var(--report-grade-c)',
+  D: 'var(--report-grade-d)',
 };
 
 export function GradeProgressBar({ 
@@ -25,12 +25,12 @@ export function GradeProgressBar({
   className 
 }: GradeProgressBarProps) {
   const percentage = Math.round((score / maxScore) * 100);
-  const colors = gradeColors[grade];
+  const barColor = gradeBarColors[grade];
 
   return (
     <div className={cn('', className)}>
       {/* 进度条 */}
-      <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted/50">
+      <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
         {/* 背景刻度线 */}
         <div className="absolute inset-0 flex">
           {[20, 40, 60, 80].map((pos) => (
@@ -41,13 +41,13 @@ export function GradeProgressBar({
             />
           ))}
         </div>
-        {/* 进度填充 */}
+        {/* 进度填充（等级色渐变） */}
         <div 
-          className={cn(
-            'h-full rounded-full transition-all duration-500 ease-out',
-            colors.bar,
-          )}
-          style={{ width: `${Math.min(percentage, 100)}%` }}
+          className="h-full rounded-full transition-all duration-500 ease-out"
+          style={{
+            width: `${Math.min(percentage, 100)}%`,
+            backgroundImage: `linear-gradient(90deg, ${barColor}, color-mix(in oklab, ${barColor} 65%, white))`,
+          }}
         />
       </div>
     </div>

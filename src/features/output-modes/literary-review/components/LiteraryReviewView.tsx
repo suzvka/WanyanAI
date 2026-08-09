@@ -6,8 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { reportRatingDisplayLabels } from '@/config/reportScoring';
+import {
+  ReportGradePill,
+  ReportInfoRow,
+  ReportParagraphDot,
+  ReportScorePanel,
+  ReportSectionCard,
+  ReportSideColumn,
+  ReportTotalScore,
+} from '@/components/report/report-ui';
 import type { LiteraryReviewData, LiteraryReviewSubscore, LiteraryReviewSection } from '../types';
-import { formatNumber, getScoreColor, getGradeColor } from './utils';
+import { formatNumber, getGradeColor } from './utils';
 import { SubscoreRadarChart } from './SubscoreRadarChart';
 import { GradeProgressBar } from './GradeProgressBar';
 
@@ -24,15 +33,6 @@ function splitParagraphs(body: string) {
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
-}
-
-function ReportInfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <span className="shrink-0 text-[color:var(--report-text-subtle)]">{label}</span>
-      <span className="text-right text-[color:var(--report-text-heading)]">{value}</span>
-    </div>
-  );
 }
 
 function SubscoreCard({ subscore }: { subscore: LiteraryReviewSubscore }) {
@@ -100,25 +100,15 @@ export function LiteraryReviewView({ report, onStartNew, onBackToEdit }: Literar
                 </div>
                 
                 {/* 右侧：评分展示 + 雷达图 */}
-                <div className="p-6 bg-muted/20 border-l border-border/50">
+                <ReportScorePanel>
                   <div className="space-y-6">
                     {/* 大号评分展示 */}
                     <div className="text-center">
-                      <div 
-                        className="text-6xl font-bold tracking-tight"
-                        style={{ color: getScoreColor(report.dashboard.grade) }}
-                      >
+                      <ReportTotalScore>
                         {formatNumber(report.dashboard.totalScore)}
-                      </div>
+                      </ReportTotalScore>
                       <div className="mt-3 flex items-center justify-center gap-2">
-                        <Badge 
-                          className={cn(
-                            'text-lg font-bold px-4 py-1.5',
-                            getGradeColor(report.dashboard.grade)
-                          )}
-                        >
-                          {report.dashboard.grade}
-                        </Badge>
+                        <ReportGradePill grade={report.dashboard.grade} />
                         <span className="text-sm text-muted-foreground">
                           {reportRatingDisplayLabels[report.dashboard.grade]}
                         </span>
@@ -130,7 +120,7 @@ export function LiteraryReviewView({ report, onStartNew, onBackToEdit }: Literar
                       <SubscoreRadarChart subscores={subscores} />
                     )}
                   </div>
-                </div>
+                </ReportScorePanel>
               </div>
             </CardContent>
           </Card>
@@ -162,44 +152,39 @@ export function LiteraryReviewView({ report, onStartNew, onBackToEdit }: Literar
 
           {/* 章节内容（按 sectionTitle 分组） */}
           {sections.length === 0 ? (
-            <div className="rounded-lg border border-[color:var(--report-border)] bg-background p-6 text-sm text-[color:var(--report-text-subtle)]">
+            <div className="rounded-2xl border border-[color:var(--report-border)] bg-background p-6 text-sm text-[color:var(--report-text-subtle)]">
               暂无可展示的报告正文。
             </div>
           ) : (
             <div className="space-y-6">
               {Array.from(new Map(
                 sections.map((s) => [s.sectionTitle, null])
-              ).keys()).map((sectionTitle) => {
+              ).keys()).map((sectionTitle, sectionIndex) => {
                 const sectionParagraphs = sections.filter((s) => s.sectionTitle === sectionTitle);
 
                 return (
-                  <Card key={sectionTitle}>
-                    <CardContent className="pt-5 pb-6 px-6">
-                      <h2 className="text-xl font-semibold text-[color:var(--report-text-heading)] mb-5">
-                        {sectionTitle}
-                      </h2>
-                      <div className="space-y-6">
-                        {sectionParagraphs.map((paragraph, index) => (
-                          <div key={`${paragraph.paragraphTitle}-${index}`}>
-                            {index > 0 && (
-                              <div className="border-t border-[color:var(--report-border)] mb-5" />
-                            )}
-                            <div className="space-y-3">
-                              <div className="flex items-center gap-2">
-                                <div className="h-2 w-2 rounded-full bg-[color:var(--report-accent-dot)]" />
-                                <h3 className="text-base font-semibold text-[color:var(--report-text-heading)]">
-                                  {paragraph.paragraphTitle}
-                                </h3>
-                              </div>
-                              <p className="text-sm leading-7 text-[color:var(--report-text-subtle)]">
-                                {paragraph.body}
-                              </p>
+                  <ReportSectionCard key={sectionTitle} index={sectionIndex} title={sectionTitle}>
+                    <div className="space-y-6">
+                      {sectionParagraphs.map((paragraph, index) => (
+                        <div key={`${paragraph.paragraphTitle}-${index}`}>
+                          {index > 0 && (
+                            <div className="border-t border-[color:var(--report-border)]/60 mb-5" />
+                          )}
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <ReportParagraphDot />
+                              <h3 className="text-base font-semibold text-[color:var(--report-text-heading)]">
+                                {paragraph.paragraphTitle}
+                              </h3>
                             </div>
+                            <p className="text-sm leading-7 text-[color:var(--report-text-subtle)]">
+                              {paragraph.body}
+                            </p>
                           </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
+                        </div>
+                      ))}
+                    </div>
+                  </ReportSectionCard>
                 );
               })}
             </div>
@@ -207,7 +192,7 @@ export function LiteraryReviewView({ report, onStartNew, onBackToEdit }: Literar
         </div>
 
         {/* 侧边栏 */}
-        <div className="space-y-6">
+        <ReportSideColumn>
           <Card>
             <CardContent className="p-4">
               <div className="space-y-3 text-sm text-[color:var(--report-text-subtle)]">
@@ -243,7 +228,7 @@ export function LiteraryReviewView({ report, onStartNew, onBackToEdit }: Literar
               </div>
             </CardContent>
           </Card>
-        </div>
+        </ReportSideColumn>
       </div>
     </main>
   );

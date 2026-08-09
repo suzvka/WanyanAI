@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ArrowRight, BookOpen } from 'lucide-react';
+import { ArrowRight, BookOpen, Sparkles } from 'lucide-react';
 import BrandBackground from '@/components/ui/brand-background';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import AppShell from '@/components/layout/AppShell';
 import { NavigationGuardProvider } from '@/providers/NavigationGuardContext';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
@@ -101,7 +101,7 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
           modules={modules}
         >
         <main 
-          className="mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8"
+          className="mx-auto w-full max-w-4xl px-4 py-16 sm:px-6 lg:px-8"
           style={{
             opacity: isPageVisible ? 1 : 0,
             transform: isPageVisible ? 'translateY(0)' : 'translateY(16px)',
@@ -109,16 +109,20 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
                          transform var(--motion-duration-slow) var(--motion-ease-emphasized)`,
           }}
         >
-          {/* 品牌区域 */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold tracking-tight text-foreground mb-4">
+          {/* Hero 区域 */}
+          <div className="mb-14 text-center">
+            {brand.slogan && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-border bg-primary-soft px-3.5 py-1.5 text-sm font-medium text-primary">
+                <Sparkles className="h-3.5 w-3.5" />
+                {brand.slogan}
+              </span>
+            )}
+            <h1 className="mt-6 text-5xl font-bold tracking-tight text-foreground sm:text-6xl">
               {brand.name}
             </h1>
-            {brand.slogan && (
-              <p className="text-xl text-muted-foreground">
-                {brand.slogan}
-              </p>
-            )}
+            <p className="mt-4 text-lg text-muted-foreground">
+              选择一个诊断模块，开始你的文本评估之旅
+            </p>
           </div>
 
           {/* 模块入口区域 */}
@@ -128,41 +132,34 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
 
               return (
                 <Link key={module.slug} href={getModuleHref(module.slug)}>
-                  <Card 
-                    className="h-full cursor-pointer transition-all hover:shadow-lg hover:border-primary/50 group"
+                  <Card
+                    className="group h-full cursor-pointer hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-pop"
                     style={{
                       opacity: isPageVisible ? 1 : 0,
                       transform: isPageVisible ? 'translateY(0)' : 'translateY(12px)',
                       transition: `opacity var(--motion-duration-standard) var(--motion-ease-emphasized) ${100 + index * 60}ms,
                                    transform var(--motion-duration-standard) var(--motion-ease-emphasized) ${100 + index * 60}ms,
+                                   translate 200ms ease,
                                    box-shadow 200ms ease,
                                    border-color 200ms ease`,
                     }}
                   >
-                    <CardHeader>
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="flex h-12 w-12 items-center justify-center rounded-lg"
-                          style={{ backgroundColor: appearance.theme.primary }}
-                        >
-                          <IconComponent className="h-6 w-6 text-white" />
+                    <div className="flex flex-col gap-5 px-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-soft">
+                          <IconComponent className="h-5 w-5 text-primary" />
                         </div>
-                        <div>
-                          <CardTitle className="text-xl group-hover:text-primary transition-colors">
-                            {module.title}
-                          </CardTitle>
-                        </div>
+                        <ArrowRight className="mt-1 h-4 w-4 -translate-x-1 text-primary opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100" />
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <CardDescription className="text-base">
-                        {module.description || '点击进入功能模块'}
-                      </CardDescription>
-                      <div className="mt-4 flex items-center text-sm text-primary">
-                        <span>开始使用</span>
-                        <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                      <div>
+                        <h3 className="text-lg font-semibold text-foreground">
+                          {module.title}
+                        </h3>
+                        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                          {module.description || '点击进入功能模块'}
+                        </p>
                       </div>
-                    </CardContent>
+                    </div>
                   </Card>
                 </Link>
               );
@@ -174,6 +171,13 @@ export default function LandingClient({ platformConfig, modules }: LandingClient
             <div className="text-center py-12">
               <p className="text-muted-foreground">暂无可用的功能模块</p>
             </div>
+          )}
+
+          {/* 底部脚注 */}
+          {modules.length > 0 && (
+            <p className="mt-16 text-center text-sm text-muted-foreground">
+              {brand.name} · 已提供 {modules.length} 个诊断模块
+            </p>
           )}
         </main>
       </AppShell>

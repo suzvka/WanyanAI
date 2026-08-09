@@ -60,9 +60,9 @@ export function SubscoreRadarChart({ subscores, className }: SubscoreRadarChartP
           <Radar
             name="得分"
             dataKey="percentage"
-            stroke="var(--report-score-blue)"
-            fill="var(--report-score-blue)"
-            fillOpacity={0.25}
+            stroke="var(--theme-primary)"
+            fill="var(--theme-primary)"
+            fillOpacity={0.18}
             strokeWidth={2}
             // 禁用 Recharts 默认动画
             isAnimationActive={false}

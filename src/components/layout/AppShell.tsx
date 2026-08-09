@@ -58,7 +58,7 @@ export default function AppShell({
       <SidebarProvider defaultOpen={false}>
         <AppSidebar title={siteTitle} primaryColor={primaryColor} modules={modules} />
         <SidebarInset className="min-h-screen bg-transparent">
-          <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <header className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
             <div className="mx-auto max-w-7xl px-2.5 py-2 sm:px-6 lg:px-8">
               <div className="flex min-h-12 items-center gap-2 sm:gap-3">
                 <div className="flex shrink-0 items-center">
@@ -112,6 +112,15 @@ export default function AppShell({
                 </div>
               </div>
             </div>
+            {/* 底部渐变分隔线（透明→边框色→透明），弱化生硬边线 */}
+            <div
+              aria-hidden="true"
+              className="h-px w-full"
+              style={{
+                background:
+                  'linear-gradient(90deg, transparent, var(--border) 20%, var(--border) 80%, transparent)',
+              }}
+            />
           </header>
           {children}
         </SidebarInset>

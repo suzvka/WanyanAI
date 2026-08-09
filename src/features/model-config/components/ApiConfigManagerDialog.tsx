@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, CheckCircle2, ChevronDown, Loader2, Plus, Server, Settings, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Check, CheckCircle2, ChevronDown, Loader2, Plus, Server, Settings, ToggleLeft, ToggleRight, X } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,8 +21,8 @@ import {
 } from '@/components/ui/collapsible';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -177,17 +177,25 @@ export default function ApiConfigManagerDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-w-lg p-0 sm:max-w-lg" showCloseButton={!busy}>
-          <DialogHeader className="border-b px-4 py-4 sm:px-6">
+        <DialogContent className="max-w-lg p-0 sm:max-w-lg" showCloseButton={false}>
+          {/* 标题栏：flex 行内布局，标题与关闭按钮结构性对齐 */}
+          <DialogHeader className="flex-row items-center justify-between gap-2 border-b px-4 py-3 sm:px-6">
             <DialogTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
               API 配置管理
             </DialogTitle>
-            <DialogDescription>
-              {useCustomEndpoint
-                ? ''
-                : ''}
-            </DialogDescription>
+            <DialogClose asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-9 shrink-0"
+                disabled={busy}
+              >
+                <X className="h-4 w-4" />
+                <span className="sr-only">关闭</span>
+              </Button>
+            </DialogClose>
           </DialogHeader>
 
           {/* 端点切换开关 */}
