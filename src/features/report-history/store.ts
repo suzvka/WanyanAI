@@ -18,12 +18,20 @@ const emptyState: ReportHistoryStoreState = {
   order: [],
 };
 
+// 内存状态缓存：getState 返回稳定引用（供 useSyncExternalStore 订阅使用），
+// persistState 写入后同步更新缓存，保证与 localStorage 内容一致
+let stateCache: ReportHistoryStoreState | null = null;
+let lastListState: ReportHistoryStoreState | null = null;
+let lastListQuery: ReportHistoryQuery | undefined;
+let lastListResult: CachedReportRecord[] | null = null;
+
 function persistState(state: ReportHistoryStoreState) {
   logger.debug('persistState called', {
     recordCount: Object.keys(state.recordsById).length,
     orderLength: state.order.length,
   });
   localStorage.setItem(REPORT_HISTORY_STORAGE_KEY, JSON.stringify(state));
+  stateCache = state;
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(REPORT_HISTORY_UPDATED_EVENT));
@@ -141,11 +149,16 @@ export const reportHistoryStore = {
       return emptyState;
     }
 
+    if (stateCache) {
+      return stateCache;
+    }
+
     try {
       const stored = localStorage.getItem(REPORT_HISTORY_STORAGE_KEY);
       if (!stored) {
         logger.debug('getState: No stored data found');
-        return emptyState;
+        stateCache = emptyState;
+        return stateCache;
       }
 
       logger.debug('getState: Parsing stored data');
@@ -153,7 +166,8 @@ export const reportHistoryStore = {
       if (!parsed.success) {
         logger.error('getState: Validation failed, removing storage', undefined, { error: parsed.error });
         localStorage.removeItem(REPORT_HISTORY_STORAGE_KEY);
-        return emptyState;
+        stateCache = emptyState;
+        return stateCache;
       }
 
       const normalized = normalizeState(parsed.data);
@@ -161,10 +175,12 @@ export const reportHistoryStore = {
         recordCount: Object.keys(normalized.recordsById).length,
         orderLength: normalized.order.length,
       });
-      return normalized;
+      stateCache = normalized;
+      return stateCache;
     } catch (error) {
       logger.error('getState: Error', error);
-      return emptyState;
+      stateCache = emptyState;
+      return stateCache;
     }
   },
 
@@ -441,6 +457,12 @@ export const reportHistoryStore = {
 
   listReports(query: ReportHistoryQuery = {}): CachedReportRecord[] {
     const state = this.getState();
+
+    // 同一状态 + 同一查询时返回缓存结果（保持引用稳定，供 useSyncExternalStore 使用）
+    if (lastListState === state && lastListQuery === query && lastListResult) {
+      return lastListResult;
+    }
+
     let records = state.order
       .map((id) => state.recordsById[id])
       .filter((record): record is CachedReportRecord => Boolean(record));
@@ -469,7 +491,12 @@ export const reportHistoryStore = {
     }
 
     const sorted = sortRecords(records, query);
-    return typeof query.limit === 'number' ? sorted.slice(0, query.limit) : sorted;
+    const result = typeof query.limit === 'number' ? sorted.slice(0, query.limit) : sorted;
+
+    lastListState = state;
+    lastListQuery = query;
+    lastListResult = result;
+    return result;
   },
 
   removeReport(reportId: string): void {

@@ -264,7 +264,7 @@ export function checkRateLimit(params: RateLimitParams): RateLimitResult {
     return {
       ...userResult,
       // 合并配额信息：取更严格的
-      quota: globalResult.quota?.remaining! < (userResult.quota?.remaining ?? Infinity)
+      quota: (globalResult.quota?.remaining ?? Infinity) < (userResult.quota?.remaining ?? Infinity)
         ? globalResult.quota
         : userResult.quota,
     };

@@ -1,22 +1,26 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { createElement, Suspense, type ReactNode } from 'react';
+import { createElement, Suspense, type ComponentType, type ReactNode } from 'react';
 import { getOutputModeManifest, getOutputModeMcpTools } from './manifest';
 
 // 导出渲染器类型
 export type { RendererProps } from './renderer';
 
 /**
+ * 渲染器组件类型。
+ * 各渲染器接受的具体 props 类型不同（如 LiteraryReviewRawInput vs GaokaoEssayRawInput），
+ * 但运行时这些类型互相兼容，此处使用宽松类型跳过编译期类型检查。
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RendererComponent = ComponentType<any>;
+
+/**
  * 懒加载渲染器定义。
  * 每个输出模式的渲染器在此注册其 dynamic import 路径。
  * 新增输出模式只需在此添加一条映射。
- *
- * 注意：各渲染器接受的具体 props 类型不同（如 LiteraryReviewRawInput vs GaokaoEssayRawInput），
- * 但运行时这些类型互相兼容，此处使用 `any` 跳过编译期类型检查。
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const LAZY_RENDERER_LOADERS: Record<string, () => Promise<React.ComponentType<any>>> = {
+const LAZY_RENDERER_LOADERS: Record<string, () => Promise<RendererComponent>> = {
   'literary-review': () =>
     import('./literary-review/renderer').then((m) => m.LiteraryReviewRenderer),
   'gaokao-essay': () =>
@@ -24,10 +28,9 @@ const LAZY_RENDERER_LOADERS: Record<string, () => Promise<React.ComponentType<an
 };
 
 /** dynamic() 包装后的组件缓存，避免重复创建 wrapper */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const dynamicCache = new Map<string, React.ComponentType<any>>();
+const dynamicCache = new Map<string, RendererComponent>();
 
-function getLazyRenderer(outputModeId: string): React.ComponentType<any> | undefined {
+function getLazyRenderer(outputModeId: string): RendererComponent | undefined {
   const loader = LAZY_RENDERER_LOADERS[outputModeId];
   if (!loader) return undefined;
 
@@ -46,7 +49,7 @@ function getLazyRenderer(outputModeId: string): React.ComponentType<any> | undef
  * 返回 dynamic() 包装后的组件，首次渲染时触发代码下载。
  * 历史记录页面用此检查输出模式是否有对应的渲染器。
  */
-export function getOutputModeRenderer(outputModeId: string): React.ComponentType<any> | undefined {
+export function getOutputModeRenderer(outputModeId: string): RendererComponent | undefined {
   return getLazyRenderer(outputModeId);
 }
 

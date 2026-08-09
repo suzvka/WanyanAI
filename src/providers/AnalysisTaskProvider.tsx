@@ -72,6 +72,8 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const processQueue = useCallback((schedulerKey: string) => {
+    // 队列处理以内部函数递归，避免 useCallback 自引用（React Compiler 规则）
+    const run = () => {
     if (runningTasksRef.current.has(schedulerKey)) {
       return;
     }
@@ -86,7 +88,7 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
 
     const taskInput = taskInputsRef.current.get(nextTaskId);
     if (!taskInput) {
-      processQueue(schedulerKey);
+      run();
       return;
     }
 
@@ -203,7 +205,7 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
           unsubscribe();
           runningTasksRef.current.delete(schedulerKey);
           notifyTaskListeners(nextTaskId);
-          processQueue(schedulerKey);
+          run();
         });
     } else {
       // === 单步分析模式 ===
@@ -243,9 +245,11 @@ export function AnalysisTaskProvider({ children }: { children: ReactNode }) {
           unsubscribe();
           runningTasksRef.current.delete(schedulerKey);
           notifyTaskListeners(nextTaskId);
-          processQueue(schedulerKey);
+          run();
         });
     }
+    };
+    run();
   }, [notifyTaskListeners]);
 
   const createTask = useCallback(async (input: CreateAnalysisTaskInput): Promise<string | null> => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ArrowLeft, FileWarning, List, SquarePen } from 'lucide-react';
@@ -28,8 +28,12 @@ export default function ReportHistoryDetailPageClient({
 }: ReportHistoryDetailPageClientProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [record, setRecord] = useState<CachedReportRecord | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
+  // 订阅 reportHistoryStore：初始同步读取缓存快照，store 变更（含其他标签页）后自动更新
+  const record = useSyncExternalStore(
+    reportHistoryStore.subscribe,
+    useCallback(() => reportHistoryStore.getRecord(reportId), [reportId]),
+    () => null,
+  );
 
   // 页面过渡状态
   const [isPageVisible, setIsPageVisible] = useState(false);
@@ -44,19 +48,6 @@ export default function ReportHistoryDetailPageClient({
       clearTimeout(showTimer);
     };
   }, [pathname]);
-
-  const refreshRecord = useCallback(() => {
-    setRecord(reportHistoryStore.getRecord(reportId));
-    setIsLoaded(true);
-  }, [reportId]);
-
-  useEffect(() => {
-    refreshRecord();
-
-    return reportHistoryStore.subscribe(() => {
-      refreshRecord();
-    });
-  }, [refreshRecord]);
 
   const moduleRoute = useMemo(() => {
     if (!record) {
@@ -116,18 +107,7 @@ export default function ReportHistoryDetailPageClient({
           </Button>
         </div>
 
-        {!isLoaded ? (
-          <Card style={{
-            opacity: isPageVisible ? 1 : 0,
-            transform: isPageVisible ? 'translateY(0)' : 'translateY(12px)',
-            transition: `opacity var(--motion-duration-standard) var(--motion-ease-emphasized) 120ms,
-                         transform var(--motion-duration-standard) var(--motion-ease-emphasized) 120ms`,
-          }}>
-            <CardContent className="flex min-h-52 items-center justify-center text-sm text-muted-foreground">
-              正在读取报告快照...
-            </CardContent>
-          </Card>
-        ) : !record ? (
+        {!record ? (
           <Card style={{
             opacity: isPageVisible ? 1 : 0,
             transform: isPageVisible ? 'translateY(0)' : 'translateY(12px)',

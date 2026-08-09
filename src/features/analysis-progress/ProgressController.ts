@@ -99,9 +99,7 @@ export class ProgressController {
           eventWeights.push(1);
           eventLabels.push(null);
         } else if (ev && typeof ev === 'object' && 'weight' in ev) {
-          // @ts-ignore - ev 类型来自 registered stage, runtime check
           eventWeights.push((ev.weight ?? 1));
-          // @ts-ignore
           eventLabels.push(ev.label ?? null);
         } else {
           eventWeights.push(1);

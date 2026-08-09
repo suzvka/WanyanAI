@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { PageModuleConfig as ModuleConfig } from '@/types/module';
 import {
   buildActiveControlSelections,
@@ -27,11 +27,14 @@ export function useAnalysisControls({
     [moduleConfig],
   );
 
-  useEffect(() => {
+  // 控件配置变化时同步选择状态（渲染期调整，避免 effect 级联渲染）
+  const [prevControls, setPrevControls] = useState(dynamicControls);
+  if (prevControls !== dynamicControls) {
+    setPrevControls(dynamicControls);
     setControlSelections((prev) =>
       synchronizeControlSelections(dynamicControls, prev),
     );
-  }, [dynamicControls]);
+  }
 
   function handleControlChange(controlId: string, value: string) {
     setControlSelections((prev) => ({

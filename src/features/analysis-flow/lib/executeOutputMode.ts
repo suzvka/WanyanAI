@@ -262,12 +262,11 @@ async function executeIntermediate(params: {
     containers: moduleConfig.manifest.containers,
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = await modelClient.chat({
     model: modelConfig.selectedModel,
     messages,
     temperature: 0.7,
-  }) as any;
+  }) as { choices?: Array<{ message?: { content?: string } }> };
 
   const content: string = result?.choices?.[0]?.message?.content ?? '';
 

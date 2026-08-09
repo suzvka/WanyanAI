@@ -43,6 +43,8 @@ export interface ConfigValidationResult {
 export interface ModelConfigStore {
   getState(): ApiConfigStoreState;
   saveState(state: ApiConfigStoreState): void;
+  /** 订阅 store 变更（写入后同步通知，返回取消订阅函数） */
+  subscribe(listener: () => void): () => void;
 }
 
 // Chat Completions 请求体（OpenAI 格式）

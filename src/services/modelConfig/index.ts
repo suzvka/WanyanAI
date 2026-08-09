@@ -36,12 +36,22 @@ export class ModelConfigService {
     private readonly provider: ModelConfigProvider = modelConfigProvider,
   ) {}
 
+  // service 层状态缓存：clone 后缓存稳定引用（供 useSyncExternalStore 订阅使用），
+  // saveState 写入后失效，下次读取时重新 clone
+  private stateCache: ApiConfigStoreState | null = null;
+
   private getState(): ApiConfigStoreState {
-    return cloneState(this.store.getState());
+    if (this.stateCache) {
+      return this.stateCache;
+    }
+
+    this.stateCache = cloneState(this.store.getState());
+    return this.stateCache;
   }
 
   private saveState(state: ApiConfigStoreState): ApiConfigStoreState {
     this.store.saveState(state);
+    this.stateCache = null;
     return state;
   }
 

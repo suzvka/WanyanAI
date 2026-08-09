@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { ArrowRight, BookOpen, Sparkles } from 'lucide-react';
 import BrandBackground from '@/components/ui/brand-background';
 import { Card } from '@/components/ui/card';
@@ -10,12 +10,23 @@ import AppShell from '@/components/layout/AppShell';
 import { NavigationGuardProvider } from '@/providers/NavigationGuardContext';
 import { usePageFirstLoad } from '@/hooks/usePageFirstLoad';
 import type { AppearanceConfig } from '@/server/config/types';
+import type { PageModulePublicMeta } from '@/types/module';
+
+// 图标映射表
+const ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
+  BookOpen,
+};
 
 interface LandingClientProps {
   appearance: AppearanceConfig;
+  modules: PageModulePublicMeta[];
 }
 
-export default function LandingClient({ appearance }: LandingClientProps) {
+function getModuleHref(slug: string): string {
+  return `/evaluate/${slug}`;
+}
+
+export default function LandingClient({ appearance, modules }: LandingClientProps) {
   const { brand } = appearance;
   const pathname = usePathname();
 

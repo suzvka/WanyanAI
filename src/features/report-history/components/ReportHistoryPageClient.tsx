@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowRight, Clock3, FileClock, MoreHorizontal, PencilLine, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
@@ -81,8 +81,12 @@ export default function ReportHistoryPageClient({
   modules,
 }: ReportHistoryPageClientProps) {
   const pathname = usePathname();
-  const [records, setRecords] = useState<CachedReportRecord[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
+  // 订阅 reportHistoryStore：初始同步读取缓存快照，store 变更（含其他标签页）后自动更新
+  const records = useSyncExternalStore(
+    reportHistoryStore.subscribe,
+    useCallback(() => reportHistoryStore.listReports(defaultHistoryQuery), []),
+    () => [],
+  );
   const [recordPendingDelete, setRecordPendingDelete] = useState<CachedReportRecord | null>(null);
   const [recordPendingRename, setRecordPendingRename] = useState<CachedReportRecord | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
@@ -101,19 +105,6 @@ export default function ReportHistoryPageClient({
       clearTimeout(showTimer);
     };
   }, [pathname]);
-
-  const refreshRecords = useCallback(() => {
-    setRecords(reportHistoryStore.listReports(defaultHistoryQuery));
-    setIsLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    refreshRecords();
-
-    return reportHistoryStore.subscribe(() => {
-      refreshRecords();
-    });
-  }, [refreshRecords]);
 
   const renameDialogOpen = Boolean(recordPendingRename);
   const deleteDialogOpen = Boolean(recordPendingDelete);
@@ -147,12 +138,11 @@ export default function ReportHistoryPageClient({
 
     try {
       reportHistoryStore.renameReport(recordPendingRename.id, trimmedDraftTitle);
-      refreshRecords();
       handleRenameClose(false);
     } catch (error) {
       setRenameError(error instanceof Error ? error.message : '重命名失败');
     }
-  }, [handleRenameClose, recordPendingRename, refreshRecords, trimmedDraftTitle]);
+  }, [handleRenameClose, recordPendingRename, trimmedDraftTitle]);
 
   const handleDeleteConfirm = useCallback(() => {
     if (!recordPendingDelete) {
@@ -160,9 +150,8 @@ export default function ReportHistoryPageClient({
     }
 
     reportHistoryStore.removeReport(recordPendingDelete.id);
-    refreshRecords();
     setRecordPendingDelete(null);
-  }, [recordPendingDelete, refreshRecords]);
+  }, [recordPendingDelete]);
 
   return (
     <HistoryAppShell platformConfig={platformConfig} modules={modules}>
@@ -205,13 +194,7 @@ export default function ReportHistoryPageClient({
             </CardHeader>
           </Card>
 
-          {!isLoaded ? (
-            <Card>
-              <CardContent className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
-                正在读取历史报告...
-              </CardContent>
-            </Card>
-          ) : records.length === 0 ? (
+          {records.length === 0 ? (
             <Card style={{
               opacity: isPageVisible ? 1 : 0,
               transform: isPageVisible ? 'translateY(0)' : 'translateY(12px)',

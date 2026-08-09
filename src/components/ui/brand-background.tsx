@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useSyncExternalStore, type CSSProperties } from 'react';
 import { useTheme } from 'next-themes';
 import type { AppearanceConfig } from '@/server/config/types';
 
@@ -19,9 +19,12 @@ interface BrandBackgroundProps {
 export default function BrandBackground({ appearance }: BrandBackgroundProps) {
   const { theme } = appearance;
   const { resolvedTheme } = useTheme();
-  // Hydration 安全：首帧（含 SSR）统一按浅色渲染，挂载后再过渡到实际主题
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // Hydration 安全：SSR 视为未挂载，客户端挂载后立即为 true，再过渡到实际主题
+  const mounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
   const isDark = mounted && resolvedTheme === 'dark';
   const glowOpacity = isDark
     ? theme.backgroundOpacity.dark

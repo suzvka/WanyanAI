@@ -1,6 +1,6 @@
 'use client';
 
-import { ChangeEvent, useEffect, useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import { AlertCircle, Key, Link2, PencilLine, Save, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -36,10 +36,13 @@ export default function ApiConfigEditor({
   const [draft, setDraft] = useState<ApiConfigDraft>(initialValue || emptyDraft);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  // 当 initialValue 变化时同步重置草稿（渲染期调整，避免 effect 级联渲染）
+  const [prevInitialValue, setPrevInitialValue] = useState(initialValue);
+  if (prevInitialValue !== initialValue) {
+    setPrevInitialValue(initialValue);
     setDraft(initialValue || emptyDraft);
     setError(null);
-  }, [initialValue]);
+  }
 
   const handleSubmit = async () => {
     const result = validateApiConfigDraft(draft);

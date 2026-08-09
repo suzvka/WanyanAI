@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 import { showError, showSuccess } from '@/lib/alert';
 import { modelConfigService } from '@/services/modelConfig';
 import { toAppErrorPayload } from '@/types/errors';
 import type { ApiConfigDraft, ApiConfigRecord, ModelConfig } from '@/types/modelConfig';
+import { modelConfigStore } from '@/services/modelConfig/store';
 
 type UseModelConfigControllerOptions = {
   onConfigInteraction?: () => void;
@@ -13,19 +14,19 @@ type UseModelConfigControllerOptions = {
 type RefreshModelsResult = Awaited<ReturnType<typeof modelConfigService.refreshModels>>;
 
 export function useModelConfigController({ onConfigInteraction }: UseModelConfigControllerOptions = {}) {
-  const [apiConfigs, setApiConfigs] = useState<ApiConfigRecord[]>([]);
-  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
+  // 订阅 modelConfigStore：store 写入（含其他模块）后自动同步，无需手动 setState
+  const apiConfigs = useSyncExternalStore(
+    modelConfigStore.subscribe,
+    () => modelConfigService.listConfigs(),
+    () => [],
+  );
+  const selectedConfigId = useSyncExternalStore(
+    modelConfigStore.subscribe,
+    () => modelConfigService.getSelectedConfig()?.id ?? null,
+    () => null,
+  );
   const [isConfigMutating, setIsConfigMutating] = useState(false);
   const [isModelRefreshing, setIsModelRefreshing] = useState(false);
-
-  const syncConfigState = () => {
-    setApiConfigs(modelConfigService.listConfigs());
-    setSelectedConfigId(modelConfigService.getSelectedConfig()?.id || null);
-  };
-
-  useEffect(() => {
-    syncConfigState();
-  }, []);
 
   const selectedConfig = useMemo(
     () => apiConfigs.find((config: ApiConfigRecord) => config.id === selectedConfigId) || null,
@@ -49,10 +50,8 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
 
     try {
       const refreshTask = modelConfigService.refreshModels(configId);
-      syncConfigState();
 
       const result = await refreshTask;
-      syncConfigState();
 
       if (showToast) {
         if (result.validation.success) {
@@ -82,7 +81,6 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
       };
     } finally {
       setIsModelRefreshing(false);
-      syncConfigState();
     }
   };
 
@@ -91,7 +89,6 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
 
     try {
       const createdConfig = modelConfigService.createConfig(value);
-      syncConfigState();
       onConfigInteraction?.();
       await refreshModels(createdConfig.id);
     } catch (error) {
@@ -102,7 +99,6 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
       showError(payload.message);
     } finally {
       setIsConfigMutating(false);
-      syncConfigState();
     }
   };
 
@@ -111,7 +107,6 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
 
     try {
       modelConfigService.updateConfig(configId, value);
-      syncConfigState();
       onConfigInteraction?.();
       await refreshModels(configId);
     } catch (error) {
@@ -122,7 +117,6 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
       showError(payload.message);
     } finally {
       setIsConfigMutating(false);
-      syncConfigState();
     }
   };
 
@@ -131,7 +125,6 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
 
     try {
       modelConfigService.removeConfig(configId);
-      syncConfigState();
       showSuccess('API 配置已删除。');
     } catch (error) {
       const payload = toAppErrorPayload(error, {
@@ -141,13 +134,11 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
       showError(payload.message);
     } finally {
       setIsConfigMutating(false);
-      syncConfigState();
     }
   };
 
   const selectConfig = async (configId: string) => {
     modelConfigService.selectConfig(configId);
-    syncConfigState();
     onConfigInteraction?.();
     await refreshModels(configId);
   };
@@ -159,7 +150,6 @@ export function useModelConfigController({ onConfigInteraction }: UseModelConfig
 
     modelConfigService.saveSelectedModel(selectedConfig.id, value);
     onConfigInteraction?.();
-    syncConfigState();
   };
 
   return {
