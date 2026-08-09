@@ -41,7 +41,8 @@ export async function ensureServerRegistriesInitialized(): Promise<void> {
 
   initializeControls();
   initializeOutputModes();
-  initializeStations();
+  // 注入项目 logger（pino），保持中转站模块无项目依赖的同时日志行为不变
+  initializeStations({ logger: createLogger('Stations') });
 
   serverInitialized = true;
 

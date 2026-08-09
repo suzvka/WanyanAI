@@ -9,8 +9,6 @@
  * coze 站忽略 authKey（使用 Coze SDK 内置凭证）。
  */
 
-import type { NextRequest } from 'next/server';
-
 /**
  * 中转站提供的模型信息
  */
@@ -61,20 +59,6 @@ export interface ForwardRequest {
 
   /** 从 Authorization 头提取的用户 key（由主入口权限解析后透传，子站按需使用） */
   authKey?: string;
-}
-
-/**
- * 转发响应
- */
-export interface ForwardResponse {
-  /** 响应状态 */
-  status: number;
-  
-  /** 响应头 */
-  headers: Headers;
-  
-  /** 响应体（流式时为 ReadableStream，非流式时为 JSON） */
-  body: ReadableStream<Uint8Array> | string;
 }
 
 /**

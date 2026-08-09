@@ -2,32 +2,41 @@
  * 中转站注册表
  *
  * 管理所有已注册的中转站，提供模型查找和请求转发能力。
- * 继承 BaseRegistry 统一生命周期管理。
+ * 自包含实现：不依赖项目内部注册表基类，仅依赖本模块的日志抽象。
  */
 
 import type { Station, StationModel, StationRegistry as IStationRegistry } from './types';
-import { BaseRegistry } from '@/lib/registry/BaseRegistry';
-import { createLogger } from '@/lib/api-station/logger';
-
-const logger = createLogger('StationRegistry');
+import { createLogger, type Logger } from './logger';
 
 /**
  * 中转站注册表实现
  */
-class StationRegistryImpl extends BaseRegistry<Station> implements IStationRegistry {
+class StationRegistryImpl implements IStationRegistry {
+  private modules = new Map<string, Station>();
   private modelsCache: StationModel[] | null = null;
+  private logger: Logger;
 
-  constructor() {
-    super('StationRegistry');
+  constructor(options?: { logger?: Logger }) {
+    this.logger = options?.logger ?? createLogger('StationRegistry');
   }
 
   /**
-   * 注册中转站（覆盖基类以清除模型缓存）
+   * 运行时注入 logger（单例在模块加载时创建，由 loader 注入宿主 logger）
+   */
+  setLogger(logger: Logger): void {
+    this.logger = logger;
+  }
+
+  /**
+   * 注册中转站（重复注册同一 id 时输出警告并覆盖，同时清除模型缓存）
    */
   register(station: Station): void {
-    super.register(station);
+    if (this.modules.has(station.id)) {
+      this.logger.warn('中转站已存在，将被覆盖', { stationId: station.id });
+    }
+    this.modules.set(station.id, station);
     this.modelsCache = null;
-    logger.info('中转站已注册', { stationId: station.id, stationName: station.name });
+    this.logger.info('中转站已注册', { stationId: station.id, stationName: station.name });
   }
 
   /**
@@ -45,12 +54,12 @@ class StationRegistryImpl extends BaseRegistry<Station> implements IStationRegis
         const stationModels = await station.getModels();
         models.push(...stationModels);
       } catch (error) {
-        logger.error(`获取中转站 ${station.id} 的模型列表失败`, error);
+        this.logger.error(`获取中转站 ${station.id} 的模型列表失败`, error);
       }
     }
 
     this.modelsCache = models;
-    logger.info('模型列表已更新', { totalModels: models.length });
+    this.logger.info('模型列表已更新', { totalModels: models.length });
 
     return models;
   }
@@ -76,12 +85,12 @@ class StationRegistryImpl extends BaseRegistry<Station> implements IStationRegis
   }
 
   /**
-   * 重置注册表（覆盖基类以清除模型缓存）
+   * 重置注册表（清空所有中转站 + 清除模型缓存）
    */
   reset(): void {
-    super.reset();
+    this.modules.clear();
     this.modelsCache = null;
-    logger.info('注册表已重置');
+    this.logger.info('注册表已重置');
   }
 }
 
