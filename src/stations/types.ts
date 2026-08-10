@@ -109,7 +109,86 @@ export interface Station {
 }
 
 /**
- * 中转站注册表接口
+ * 凭证字段定义（用于 Admin 页面动态渲染表单）
+ */
+export interface CredentialField {
+  /** 字段标识 */
+  key: string;
+  /** 字段显示名称 */
+  label: string;
+  /** 字段类型 */
+  type: 'text' | 'password' | 'url' | 'number' | 'group';
+  /** 是否必填 */
+  required: boolean;
+  /** 字段描述（用于提示） */
+  description?: string;
+  /** 占位符 */
+  placeholder?: string;
+  /** 当前值（用于回显） */
+  value?: string;
+  /** 子字段（仅 type='group' 时使用） */
+  children?: CredentialField[];
+}
+
+/**
+ * 模型启停状态
+ */
+export interface ModelToggle {
+  /** 模型 ID */
+  id: string;
+  /** 模型显示名称 */
+  name: string;
+  /** 模型描述 */
+  description?: string;
+  /** 是否启用 */
+  enabled: boolean;
+}
+
+/**
+ * Admin 可管理子站接口（可选）
+ *
+ * 子站选择实现此接口表示"接受 Admin 管理"。
+ * 主入口（Admin 页面 + API）只负责发现和透传，不关心子站内部实现。
+ */
+export interface AdminManagedStation {
+  /** 子站 id（与 Station.id 一致） */
+  readonly id: string;
+  /** 子站显示名称 */
+  readonly name: string;
+  /** 是否需要凭证配置 */
+  readonly hasCredentialConfig: boolean;
+  /** 是否有模型启停开关 */
+  readonly hasModelToggle: boolean;
+
+  /**
+   * 获取凭证配置 schema（字段定义，用于 Admin 页面动态渲染表单）
+   */
+  getCredentialSchema(): Promise<CredentialField[]>;
+
+  /**
+   * 获取当前凭证配置值
+   */
+  getCredentialConfig(): Promise<CredentialField[]>;
+
+  /**
+   * 更新凭证配置
+   * 子站自行实现持久化和运行时生效
+   */
+  updateCredentialConfig(fields: CredentialField[]): Promise<void>;
+
+  /**
+   * 获取模型启停状态列表
+   */
+  getModelToggles(): Promise<ModelToggle[]>;
+
+  /**
+   * 更新单个模型的启停状态
+   */
+  updateModelToggle(modelId: string, enabled: boolean): Promise<void>;
+}
+
+/**
+ * 注册表增加：获取所有实现了 AdminManagedStation 的子站
  */
 export interface StationRegistry {
   /**
@@ -138,6 +217,11 @@ export interface StationRegistry {
    * 获取所有已注册的中转站
    */
   getStations(): Station[];
+
+  /**
+   * 获取所有实现了 AdminManagedStation 的子站
+   */
+  getAdminManagedStations(): AdminManagedStation[];
   
   /**
    * 重置注册表（用于测试）

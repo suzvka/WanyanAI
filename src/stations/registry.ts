@@ -5,7 +5,7 @@
  * 自包含实现：不依赖项目内部注册表基类，仅依赖本模块的日志抽象。
  */
 
-import type { Station, StationModel, StationRegistry as IStationRegistry } from './types';
+import type { Station, StationModel, StationRegistry as IStationRegistry, AdminManagedStation } from './types';
 import { createLogger, type Logger } from './logger';
 
 /**
@@ -90,6 +90,19 @@ class StationRegistryImpl implements IStationRegistry {
    */
   getStations(): Station[] {
     return Array.from(this.modules.values());
+  }
+
+  /**
+   * 获取所有实现了 AdminManagedStation 的子站
+   */
+  getAdminManagedStations(): AdminManagedStation[] {
+    const stations: AdminManagedStation[] = [];
+    for (const station of this.modules.values()) {
+      if ('getCredentialSchema' in station && 'updateCredentialConfig' in station) {
+        stations.push(station as unknown as AdminManagedStation);
+      }
+    }
+    return stations;
   }
 
   /**

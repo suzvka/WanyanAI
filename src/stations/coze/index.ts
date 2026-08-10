@@ -5,9 +5,10 @@
  * 自包含实现：logger 由工厂注入，不依赖项目内部日志设施。
  */
 
-import type { Station, StationModel, ForwardRequest } from '../types';
+import type { Station, StationModel, ForwardRequest, AdminManagedStation, ModelToggle, CredentialField } from '../types';
 import { LLMClient, Config, HeaderUtils, type Message } from 'coze-coding-dev-sdk';
 import { createLogger, type Logger } from '../logger';
+import { getConfigStore } from '../../config-store';
 
 /**
  * 检测是否运行在 Coze 内部环境
@@ -18,106 +19,136 @@ export function isCozeEnvironment(): boolean {
 }
 
 /**
- * Coze 内部模型配置
+ * Coze 内部模型完整列表（所有可用模型定义）
  */
-const COZE_MODELS: StationModel[] = [
-  // {
-  //   id: 'coze://doubao-seed-2-0-pro-260215',
-  //   name: 'Doubao Seed 2.0 Pro',
-  //   description: '旗舰级全能通用模型，面向 Agent 时代的复杂推理与长链路任务执行场景',
-  //   maxCallsPerHour: 1000,
-  // },
+const ALL_COZE_MODELS: StationModel[] = [
+  {
+    id: 'coze://doubao-seed-2-0-pro-260215',
+    name: 'Doubao Seed 2.0 Pro',
+    description: '旗舰级全能通用模型，面向 Agent 时代的复杂推理与长链路任务执行场景',
+    maxCallsPerHour: 1000,
+  },
   {
     id: 'coze://doubao-seed-2-0-lite-260215',
     name: 'Doubao Seed 2.0',
     description: '均衡型模型，兼顾性能与成本，胜任非结构化信息处理、内容创作、数据分析等',
     maxCallsPerHour: 1000,
   },
-  // {
-  //   id: 'coze://doubao-seed-2-0-mini-260215',
-  //   name: 'Doubao Seed 2.0 Mini',
-  //   description: '轻量级模型，面向低时延、高并发与成本敏感场景',
-  //   maxCallsPerHour: 1000,
-  // },
-  // {
-  //   id: 'coze://doubao-seed-1-8-251228',
-  //   name: 'Doubao Seed 1.8',
-  //   description: '多模态 Agent 优化模型，支持深度思考、视觉理解与 Web 搜索',
-  //   maxCallsPerHour: 1000,
-  // },
-  // {
-  //   id: 'coze://doubao-seed-1-6-251015',
-  //   name: 'Doubao Seed 1.6',
-  //   description: '通用模型，兼顾复杂推理、视觉理解与指令遵循能力',
-  //   maxCallsPerHour: 1000,
-  // },
-  // {
-  //   id: 'coze://doubao-seed-1-6-vision-250815',
-  //   name: 'Doubao Seed 1.6 Vision',
-  //   description: '视觉理解模型，支持图像输入与多模态推理',
-  //   maxCallsPerHour: 1000,
-  // },
-  // {
-  //   id: 'coze://doubao-seed-1-6-lite-251015',
-  //   name: 'Doubao Seed 1.6 Lite',
-  //   description: '轻量级模型，主打低时延、高性价比',
-  //   maxCallsPerHour: 1000,
-  // },
-  // {
-  //   id: 'coze://deepseek-v3-2-251201',
-  //   name: 'DeepSeek V3.2',
-  //   description: '高性能推理模型，擅长代码与数学',
-  //   maxCallsPerHour: 1000,
-  // },
-  // {
-  //   id: 'coze://deepseek-r1-250528',
-  //   name: 'DeepSeek R1',
-  //   description: '深度推理模型，擅长复杂逻辑与数学推理',
-  //   maxCallsPerHour: 1000,
-  // },
-  // {
-  //   id: 'coze://kimi-k2-5-260127',
-  //   name: 'Kimi K2.5',
-  //   description: '多模态推理模型，支持长上下文理解',
-  //   maxCallsPerHour: 1000,
-  // },
-  // {
-  //   id: 'coze://glm-5-0-260211',
-  //   name: 'GLM-5',
-  //   description: '通用大模型，支持长文本生成与复杂任务',
-  //   maxCallsPerHour: 1000,
-  // },
-  // {
-  //   id: 'coze://glm-5-turbo-260316',
-  //   name: 'GLM-5 Turbo',
-  //   description: '高性能通用模型，兼顾速度与质量',
-  //   maxCallsPerHour: 1000,
-  // },
-  // {
-  //   id: 'coze://glm-4-7-251222',
-  //   name: 'GLM-4.7',
-  //   description: '通用大模型，支持长文本生成与复杂任务',
-  //   maxCallsPerHour: 1000,
-  // },
-  // {
-  //   id: 'coze://minimax-m2-5-260212',
-  //   name: 'MiniMax M2.5',
-  //   description: '通用大模型，支持长文本生成与复杂任务',
-  //   maxCallsPerHour: 1000,
-  // },
-  // {
-  //   id: 'coze://minimax-m2-7-260318',
-  //   name: 'MiniMax M2.7',
-  //   description: '通用大模型，支持长文本生成与复杂任务',
-  //   maxCallsPerHour: 1000,
-  // },
-  // {
-  //   id: 'coze://qwen-3-5-plus-260215',
-  //   name: 'Qwen 3.5 Plus',
-  //   description: '通用大模型，支持长文本生成与复杂任务',
-  //   maxCallsPerHour: 1000,
-  // },
+  {
+    id: 'coze://doubao-seed-2-0-mini-260215',
+    name: 'Doubao Seed 2.0 Mini',
+    description: '轻量级模型，面向低时延、高并发与成本敏感场景',
+    maxCallsPerHour: 1000,
+  },
+  {
+    id: 'coze://doubao-seed-1-8-251228',
+    name: 'Doubao Seed 1.8',
+    description: '多模态 Agent 优化模型，支持深度思考、视觉理解与 Web 搜索',
+    maxCallsPerHour: 1000,
+  },
+  {
+    id: 'coze://doubao-seed-1-6-251015',
+    name: 'Doubao Seed 1.6',
+    description: '通用模型，兼顾复杂推理、视觉理解与指令遵循能力',
+    maxCallsPerHour: 1000,
+  },
+  {
+    id: 'coze://doubao-seed-1-6-vision-250815',
+    name: 'Doubao Seed 1.6 Vision',
+    description: '视觉理解模型，支持图像输入与多模态推理',
+    maxCallsPerHour: 1000,
+  },
+  {
+    id: 'coze://doubao-seed-1-6-lite-251015',
+    name: 'Doubao Seed 1.6 Lite',
+    description: '轻量级模型，主打低时延、高性价比',
+    maxCallsPerHour: 1000,
+  },
+  {
+    id: 'coze://deepseek-v3-2-251201',
+    name: 'DeepSeek V3.2',
+    description: '高性能推理模型，擅长代码与数学',
+    maxCallsPerHour: 1000,
+  },
+  {
+    id: 'coze://deepseek-r1-250528',
+    name: 'DeepSeek R1',
+    description: '深度推理模型，擅长复杂逻辑与数学推理',
+    maxCallsPerHour: 1000,
+  },
+  {
+    id: 'coze://kimi-k2-5-260127',
+    name: 'Kimi K2.5',
+    description: '多模态推理模型，支持长上下文理解',
+    maxCallsPerHour: 1000,
+  },
+  {
+    id: 'coze://glm-5-0-260211',
+    name: 'GLM-5',
+    description: '通用大模型，支持长文本生成与复杂任务',
+    maxCallsPerHour: 1000,
+  },
+  {
+    id: 'coze://glm-5-turbo-260316',
+    name: 'GLM-5 Turbo',
+    description: '高性能通用模型，兼顾速度与质量',
+    maxCallsPerHour: 1000,
+  },
+  {
+    id: 'coze://glm-4-7-251222',
+    name: 'GLM-4.7',
+    description: '通用大模型，支持长文本生成与复杂任务',
+    maxCallsPerHour: 1000,
+  },
+  {
+    id: 'coze://minimax-m2-5-260212',
+    name: 'MiniMax M2.5',
+    description: '通用大模型，支持长文本生成与复杂任务',
+    maxCallsPerHour: 1000,
+  },
+  {
+    id: 'coze://minimax-m2-7-260318',
+    name: 'MiniMax M2.7',
+    description: '通用大模型，支持长文本生成与复杂任务',
+    maxCallsPerHour: 1000,
+  },
+  {
+    id: 'coze://qwen-3-5-plus-260215',
+    name: 'Qwen 3.5 Plus',
+    description: '通用大模型，支持长文本生成与复杂任务',
+    maxCallsPerHour: 1000,
+  },
 ];
+
+/** ConfigStore 中存储 Coze 模型启停状态的键 */
+const TOGGLES_STORE_KEY = 'station:coze:toggles';
+
+/**
+ * 读取模型启停状态（从 ConfigStore）
+ */
+async function loadModelToggles(): Promise<Map<string, boolean>> {
+  try {
+    const store = getConfigStore();
+    const raw = await store.get(TOGGLES_STORE_KEY);
+    if (raw) {
+      const map = new Map<string, boolean>(Object.entries(JSON.parse(raw)));
+      return map;
+    }
+  } catch {
+    // 首次使用或读取失败时，全部禁用
+  }
+  return new Map();
+}
+
+/**
+ * 持久化模型启停状态
+ */
+async function saveModelToggles(toggles: Map<string, boolean>): Promise<void> {
+  const store = getConfigStore();
+  const obj: Record<string, boolean> = {};
+  toggles.forEach((v, k) => { obj[k] = v; });
+  await store.set(TOGGLES_STORE_KEY, JSON.stringify(obj));
+}
 
 /**
  * 将 OpenAI 消息格式转换为 Coze SDK 消息格式
@@ -160,19 +191,61 @@ function formatSSEChunk(id: string, model: string, content: string): string {
 export function createCozeStation(options?: { logger?: Logger }): Station {
   const logger = options?.logger ?? createLogger('Station:Coze');
 
+  /** 缓存模型启停状态 */
+  let togglesCache: Map<string, boolean> | null = null;
+
+  /**
+   * 获取已启用的模型列表（根据 ConfigStore 中的启停状态过滤）
+   */
+  async function getEnabledModels(): Promise<StationModel[]> {
+    // 非 Coze 环境返回空列表（中转站禁用）
+    if (!isCozeEnvironment()) {
+      logger.info('非 Coze 环境，中转站禁用');
+      return [];
+    }
+
+    const toggles = togglesCache ?? await loadModelToggles();
+    togglesCache = toggles;
+
+    // 如果没有任何启停记录，默认全部启用
+    if (toggles.size === 0) {
+      logger.info('Coze 模型启停未配置，默认全部启用', { modelCount: ALL_COZE_MODELS.length });
+      return ALL_COZE_MODELS;
+    }
+
+    const enabled = ALL_COZE_MODELS.filter(m => {
+      const enabled = toggles.get(m.id);
+      // 未配置的模型默认启用
+      return enabled === undefined || enabled === true;
+    });
+
+    logger.info('Coze 模型列表（已过滤启停）', {
+      total: ALL_COZE_MODELS.length,
+      enabled: enabled.length,
+    });
+
+    return enabled;
+  }
+
   return {
     id: 'coze-internal',
     name: 'Coze Internal',
 
     getModels(): StationModel[] {
-      // 非 Coze 环境返回空列表（中转站禁用）
+      // 同步返回当前缓存的模型列表
+      // 首次调用时，返回全部模型（后续由 Admin 页面控制启停）
       if (!isCozeEnvironment()) {
-        logger.info('非 Coze 环境，中转站禁用');
         return [];
       }
-
-      logger.info('Coze 环境检测到，返回模型列表', { modelCount: COZE_MODELS.length });
-      return COZE_MODELS;
+      if (togglesCache) {
+        const enabled = ALL_COZE_MODELS.filter(m => {
+          const e = togglesCache!.get(m.id);
+          return e === undefined || e === true;
+        });
+        return enabled;
+      }
+      // 首次加载，默认返回全部
+      return ALL_COZE_MODELS;
     },
 
     canHandle(modelId: string): boolean {
@@ -195,6 +268,23 @@ export function createCozeStation(options?: { logger?: Logger }): Station {
             },
           }),
           { status: 503, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // 检查模型是否已启用
+      const enabledModels = await getEnabledModels();
+      if (!enabledModels.find(m => m.id === model)) {
+        logger.error('模型未启用或不存在', null, { requestId, model });
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: `Model not enabled or not found: ${model}`,
+              type: 'invalid_request_error',
+              code: 'MODEL_NOT_ENABLED',
+              requestId,
+            },
+          }),
+          { status: 404, headers: { 'Content-Type': 'application/json' } }
         );
       }
 
@@ -313,7 +403,46 @@ export function createCozeStation(options?: { logger?: Logger }): Station {
         );
       }
     },
-  };
+
+    // ---- AdminManagedStation 实现 ----
+
+    hasCredentialConfig: false,
+    hasModelToggle: true,
+
+    getCredentialSchema(): Promise<CredentialField[]> {
+      return Promise.resolve([]);
+    },
+
+    async getCredentialConfig(): Promise<CredentialField[]> {
+      return [];
+    },
+
+    async updateCredentialConfig() {
+      // Coze 站无凭证配置
+    },
+
+    async getModelToggles(): Promise<ModelToggle[]> {
+      const toggles = togglesCache ?? await loadModelToggles();
+      togglesCache = toggles;
+
+      return ALL_COZE_MODELS.map(m => ({
+        id: m.id,
+        name: m.name ?? m.id,
+        description: m.description,
+        enabled: toggles.get(m.id) ?? true, // 默认启用
+      }));
+    },
+
+    async updateModelToggle(modelId: string, enabled: boolean): Promise<void> {
+      const toggles = togglesCache ?? await loadModelToggles();
+      togglesCache = toggles;
+
+      toggles.set(modelId, enabled);
+      await saveModelToggles(toggles);
+
+      logger.info('Coze 模型启停状态已更新', { modelId, enabled });
+    },
+  } as unknown as Station & AdminManagedStation;
 }
 
 export default createCozeStation;
