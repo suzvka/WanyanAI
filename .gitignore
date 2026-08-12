@@ -92,3 +92,6 @@ logs/
 /keys
 /.qoder
 tsconfig.tsbuildinfo
+
+# Preview files
+.preview
