@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 /** 用户信息 */
 export interface AuthUser {
@@ -83,6 +83,22 @@ function readInitialState(): AuthState {
 
 export function useAuth() {
   const [state, setState] = useState<AuthState>(readInitialState);
+
+  /**
+   * 客户端挂载后重新从 sessionStorage 读取登录状态。
+   *
+   * 原因：在 Next.js App Router 中，useState 初始化器在服务端 SSR/RSC 渲染时执行，
+   * 此时 typeof window === 'undefined'，无法读取 sessionStorage。
+   * 服务端序列化的状态在客户端水合时直接使用，初始化器不会再次执行。
+   * 因此需要 useEffect 在客户端重新读取，否则用户登录后页面仍显示未登录。
+   */
+  useEffect(() => {
+    const clientState = readInitialState();
+    if (clientState.loaded !== state.loaded || clientState.loggedIn !== state.loggedIn) {
+      setState(clientState);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** 登录成功后保存状态 */
   const login = useCallback(

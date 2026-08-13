@@ -104,3 +104,15 @@
       → { active, userId, claims.membershipLevel }
       → 映射为 permissionLevel
 ```
+
+---
+
+## 已知问题与修复记录
+
+### SSR 场景下 `useAuth` 读取不到 sessionStorage（2026-08-13）
+
+**问题**：用户登录后页面仍显示"未登录状态"。
+
+**根因**：`useAuth` 使用 `useState(readInitialState)` 初始化，但 Next.js App Router 中 `useState` 初始化器在服务端 SSR/RSC 渲染时执行，此时 `typeof window === 'undefined'`，无法读取 `sessionStorage`。服务端序列化的状态在客户端水合时直接使用，初始化器不会再次执行。
+
+**修复**：在 `useAuth` 中添加 `useEffect`，客户端挂载后重新调用 `readInitialState()` 从 `sessionStorage` 读取实际状态，与服务端状态不一致时更新 React state。
