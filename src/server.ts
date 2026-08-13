@@ -4,7 +4,7 @@ import next from 'next';
 
 const dev = process.env.COZE_PROJECT_ENV !== 'PROD';
 const hostname = process.env.HOSTNAME || 'localhost';
-const port = parseInt(process.env.PORT || '5000', 10);
+const port = parseInt(process.env.DEPLOY_RUN_PORT || process.env.PORT || '5000', 10);
 
 // Create Next.js app
 const app = next({ dev, hostname, port });
