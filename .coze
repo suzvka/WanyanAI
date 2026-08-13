@@ -1,10 +1,14 @@
 [project]
-requires = ["nodejs-24"]
+requires = [ "nodejs-24" ]
+template = "nextjs"
+version = "legacy"
+appliedPatches = [ "nextjs/validate@0.0.20" ]
 
 [dev]
-build = ["pnpm", "install"]
-run = ["sh", "-c", "ADMIN_TOKEN=debug123 pnpm run dev"]
+build = [ "pnpm", "install" ]
+run = [ "sh", "-c", "ADMIN_TOKEN=debug123 pnpm run dev" ]
+validate = [ "bash", "./scripts/validate.sh" ]
 
 [deploy]
-build = ["pnpm", "run", "build"]
-run = ["pnpm", "run", "start"]
+build = [ "pnpm", "run", "build" ]
+run = [ "pnpm", "run", "start" ]
