@@ -11,4 +11,4 @@ validate = [ "bash", "./scripts/validate.sh" ]
 
 [deploy]
 build = [ "pnpm", "run", "build" ]
-run = [ "sh", "-c", "PORT=${DEPLOY_RUN_PORT} node dist/server.js" ]
+run = [ "sh", "-c", "npx next start -p ${DEPLOY_RUN_PORT} -H 0.0.0.0" ]
