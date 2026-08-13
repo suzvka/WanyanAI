@@ -78,8 +78,16 @@ export default function LoginPage() {
               return;
             }
 
-            // 存储 token 到 sessionStorage
+            // 存储 token 和用户信息到 sessionStorage
             sessionStorage.setItem('station_token', data.token);
+            sessionStorage.setItem('station_user', JSON.stringify(payload.user));
+            if (data.membership) {
+              sessionStorage.setItem('station_membership', JSON.stringify({
+                level: data.membershipLevel,
+                permissionLevel: data.permissionLevel,
+                expiresAt: data.expiresAt,
+              }));
+            }
             setStatus('success');
             setStatusMessage(`登录成功！欢迎回来，${payload.user.name}`);
 

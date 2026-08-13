@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react';
 import dynamic from 'next/dynamic';
-import { CircleHelp, Settings2, UserRound } from 'lucide-react';
+import Link from 'next/link';
+import { CircleHelp, Settings2, UserRound, LogIn } from 'lucide-react';
 import AppSidebar from '@/components/layout/AppSidebar';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import ModelSelector from '@/features/model-config/components/ModelSelector';
 import { useModelConfig } from '@/providers/ModelConfigProvider';
+import { useAuth } from '@/hooks/useAuth';
 
 // 配置管理对话框按需加载：仅在首次打开时才下载相关代码
 const ApiConfigManagerDialog = dynamic(
@@ -56,6 +58,8 @@ export default function AppShell({
     refreshBuiltInModels,
   } = useModelConfig();
 
+  const { loggedIn, user } = useAuth();
+
   return (
     <>
       <SidebarProvider defaultOpen={false}>
@@ -93,10 +97,21 @@ export default function AppShell({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56">
                       <DropdownMenuLabel>更多功能</DropdownMenuLabel>
-                      <DropdownMenuItem disabled>
-                        <UserRound className="mr-2 h-4 w-4" />
-                        个人中心（预留）
-                      </DropdownMenuItem>
+                      {loggedIn && user ? (
+                        <DropdownMenuItem asChild>
+                          <Link href="/account">
+                            <UserRound className="mr-2 h-4 w-4" />
+                            个人中心（{user.name}）
+                          </Link>
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem asChild>
+                          <Link href="/login">
+                            <LogIn className="mr-2 h-4 w-4" />
+                            登录
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem disabled>
                         <Settings2 className="mr-2 h-4 w-4" />
                         偏好设置（预留）

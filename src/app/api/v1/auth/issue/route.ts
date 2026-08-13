@@ -16,6 +16,13 @@ import { logInfo, logError } from '@/lib/api-station/logger';
 
 // ============ 会员等级映射 ============
 
+const MEMBERSHIP_TO_PERMISSION: Record<string, number> = {
+  free: 1,
+  vip: 2,
+  svip: 3,
+  admin: 99,
+};
+
 /**
  * 根据用户信息确定会员等级。
  * 当前简单实现：所有登录用户默认 "free"。
@@ -74,6 +81,12 @@ export async function POST(request: NextRequest) {
       token: result.token,
       expiresAt: result.expiresAt,
       membershipLevel,
+      permissionLevel: MEMBERSHIP_TO_PERMISSION[membershipLevel] ?? 1,
+      membership: {
+        level: membershipLevel,
+        permissionLevel: MEMBERSHIP_TO_PERMISSION[membershipLevel] ?? 1,
+        expiresAt: result.expiresAt,
+      },
     });
   } catch (error) {
     logError('[Auth:Issue] Token 签发失败', error);
