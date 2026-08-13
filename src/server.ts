@@ -22,7 +22,7 @@ app.prepare().then(() => {
     }
   });
   server.once('error', err => {
-    console.error(err);
+    console.error('Server error:', err);
     process.exit(1);
   });
   server.listen(port, () => {
@@ -32,4 +32,7 @@ app.prepare().then(() => {
       }`,
     );
   });
+}).catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });
