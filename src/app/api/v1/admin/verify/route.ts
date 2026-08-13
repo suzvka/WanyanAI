@@ -18,9 +18,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const expectedToken = process.env.ADMIN_TOKEN;
+    const expectedToken = process.env.ADMIN_PASSWORD;
 
-    // 未配置 ADMIN_TOKEN 时，禁止访问
+    // 未配置 ADMIN_PASSWORD 时，禁止访问
     if (!expectedToken) {
       return NextResponse.json(
         { error: 'Admin access not configured', code: 'ADMIN_NOT_CONFIGURED' },

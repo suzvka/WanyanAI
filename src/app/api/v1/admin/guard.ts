@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
  * 验证请求是否来自已认证的 Admin 会话
  */
 export async function validateAdminSession(): Promise<{ valid: true } | { valid: false; response: Response }> {
-  const expectedToken = process.env.ADMIN_TOKEN;
+  const expectedToken = process.env.ADMIN_PASSWORD;
 
   if (!expectedToken) {
     return {

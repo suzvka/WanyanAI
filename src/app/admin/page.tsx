@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -379,42 +379,59 @@ export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [stations, setStations] = useState<StationInfo[]>([]);
   const [activeStationId, setActiveStationId] = useState<string | null>(null);
+  const activeStationIdRef = useRef(activeStationId);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const loadStations = useCallback(async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const res = await fetch('/api/v1/admin/stations');
-      if (!res.ok) {
-        if (res.status === 401) {
-          setAuthenticated(false);
-          return;
-        }
-        const data = await res.json();
-        setError(data.error || '加载失败');
-        return;
-      }
-
-      const data = await res.json();
-      setStations(data.stations);
-      if (data.stations.length > 0 && !activeStationId) {
-        setActiveStationId(data.stations[0].id);
-      }
-    } catch {
-      setError('网络错误，请重试');
-    } finally {
-      setLoading(false);
-    }
+  // 同步 ref 与 state
+  useEffect(() => {
+    activeStationIdRef.current = activeStationId;
   }, [activeStationId]);
 
+  // 认证通过后加载中转站列表
   useEffect(() => {
-    if (authenticated) {
-      loadStations();
+    if (!authenticated) return;
+
+    let cancelled = false;
+
+    async function fetchStations() {
+      setLoading(true);
+      setError('');
+
+      try {
+        const res = await fetch('/api/v1/admin/stations');
+        if (cancelled) return;
+
+        if (!res.ok) {
+          if (res.status === 401) {
+            setAuthenticated(false);
+            return;
+          }
+          const data = await res.json();
+          setError(data.error || '加载失败');
+          return;
+        }
+
+        const data = await res.json();
+        if (cancelled) return;
+
+        setStations(data.stations);
+        if (data.stations.length > 0 && !activeStationIdRef.current) {
+          setActiveStationId(data.stations[0].id);
+        }
+      } catch {
+        if (!cancelled) setError('网络错误，请重试');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
-  }, [authenticated, loadStations]);
+
+    fetchStations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authenticated]);
 
   const handleLogin = (token: string) => {
     setAuthenticated(true);
