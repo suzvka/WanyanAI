@@ -7,7 +7,7 @@
     "dev": "npx kill-port 5000 && cross-env PORT=5000 pnpm tsx watch src/server.ts",
     "preinstall": "npx only-allow pnpm",
     "lint": "eslint",
-    "start": "node -e \"const fs=require('fs');if(!fs.existsSync('dist/server.js')){console.log('dist/server.js 不存在，请先运行 pnpm run build 构建项目');process.exit(1)}\" && node dist/server.js",
+    "start": "node dist/server.js",
     "ts-check": "tsc -p tsconfig.json",
     "lint:build": "eslint . --quiet",
     "validate": "pnpm run --parallel '/^(ts-check|lint:build)$/'"
