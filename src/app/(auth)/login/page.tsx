@@ -29,8 +29,6 @@ type LoginStatus = 'idle' | 'loading' | 'issuing' | 'success' | 'error';
 
 // ============ 常量 ============
 
-const USER_CENTER_ORIGIN = process.env.NEXT_PUBLIC_USER_CENTER_URL || '';
-const POPUP_SRC = `${USER_CENTER_ORIGIN}/embed/sign-in`;
 const POPUP_WIDTH = 480;
 const POPUP_HEIGHT = 600;
 
@@ -41,6 +39,21 @@ export default function LoginPage() {
   const popupRef = useRef<Window | null>(null);
   const [status, setStatus] = useState<LoginStatus>('idle');
   const [statusMessage, setStatusMessage] = useState('');
+  const [userCenterUrl, setUserCenterUrl] = useState('');
+  const [configLoaded, setConfigLoaded] = useState(false);
+
+  // 加载运行时配置（避免 NEXT_PUBLIC_* 构建时内联问题）
+  useEffect(() => {
+    fetch('/api/v1/config')
+      .then((r) => r.json())
+      .then((cfg) => {
+        setUserCenterUrl(cfg.userCenterUrl || '');
+        setConfigLoaded(true);
+      })
+      .catch(() => {
+        setConfigLoaded(true);
+      });
+  }, []);
 
   // 签发 station token
   const issueToken = useCallback(async (accountToken: string, user: UserInfo) => {
@@ -80,7 +93,7 @@ export default function LoginPage() {
   // 监听 postMessage（来自弹窗）
   const handleMessage = useCallback(
     (e: MessageEvent<PostMessageEvent>) => {
-      if (!USER_CENTER_ORIGIN || e.origin !== USER_CENTER_ORIGIN) return;
+      if (!userCenterUrl || e.origin !== userCenterUrl) return;
 
       const { type, payload } = e.data;
       if (!type) return;
@@ -105,7 +118,7 @@ export default function LoginPage() {
           break;
       }
     },
-    [issueToken],
+    [issueToken, userCenterUrl],
   );
 
   useEffect(() => {
@@ -129,7 +142,7 @@ export default function LoginPage() {
 
   // 打开登录弹窗
   const openLoginPopup = useCallback(() => {
-    if (!USER_CENTER_ORIGIN) {
+    if (!userCenterUrl) {
       setStatus('error');
       setStatusMessage('未配置用户中心地址，请联系管理员');
       return;
@@ -142,7 +155,7 @@ export default function LoginPage() {
     const top = window.screenY + (window.outerHeight - POPUP_HEIGHT) / 2;
 
     popupRef.current = window.open(
-      POPUP_SRC,
+      `${userCenterUrl}/embed/sign-in`,
       'login-popup',
       `width=${POPUP_WIDTH},height=${POPUP_HEIGHT},left=${left},top=${top}`,
     );
@@ -151,7 +164,7 @@ export default function LoginPage() {
       setStatus('error');
       setStatusMessage('弹窗被浏览器拦截，请允许弹窗后重试');
     }
-  }, []);
+  }, [userCenterUrl]);
 
   const isBusy = status === 'loading' || status === 'issuing';
 
@@ -178,17 +191,17 @@ export default function LoginPage() {
           )}
 
           {/* 加载中 */}
-          {isBusy && (
+          {(!configLoaded || isBusy) && (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           )}
 
           {/* 登录按钮 */}
-          {!isBusy && status !== 'success' && (
+          {configLoaded && !isBusy && status !== 'success' && (
             <Button
               onClick={openLoginPopup}
-              disabled={!USER_CENTER_ORIGIN}
+              disabled={!userCenterUrl}
               className="w-full"
               size="lg"
             >
@@ -197,7 +210,7 @@ export default function LoginPage() {
             </Button>
           )}
 
-          {status === 'error' && !isBusy && (
+          {configLoaded && status === 'error' && !isBusy && (
             <Button
               onClick={openLoginPopup}
               variant="outline"
@@ -208,11 +221,11 @@ export default function LoginPage() {
           )}
 
           {/* 未配置提示 */}
-          {!USER_CENTER_ORIGIN && (
+          {configLoaded && !userCenterUrl && (
             <Alert variant="destructive">
               <AlertTitle>配置缺失</AlertTitle>
               <AlertDescription>
-                未配置用户中心地址（NEXT_PUBLIC_USER_CENTER_URL），请联系管理员。
+                未配置用户中心地址（USER_CENTER_URL），请联系管理员。
               </AlertDescription>
             </Alert>
           )}
