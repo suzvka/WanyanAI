@@ -100,9 +100,7 @@
 ```
 客户端 Authorization: Bearer <token>
   → resolvePermission(key)
-    → [鉴权中心模式] POST /api/v1/token/introspect { token }
+    → POST /api/v1/token/introspect { token }
       → { active, userId, claims.membershipLevel }
       → 映射为 permissionLevel
-    → [旧版兼容] POST /api/auth/verify { key }
-      → { permissionLevel, identityId }
 ```

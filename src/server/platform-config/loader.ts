@@ -214,7 +214,7 @@ export function loadPermissionServiceConfig(): PermissionServiceConfig {
   try {
     const parsed = readPlatformJsonFileSync<Partial<PermissionServiceConfig>>('permission-service.json');
     const normalized: PermissionServiceConfig = {
-      url: parsed.url || process.env.AUTH_SERVICE_URL || process.env.ACCOUNT_SERVICE_URL || undefined,
+      url: parsed.url || undefined,
       healthCheckIntervalMs: parsed.healthCheckIntervalMs ?? DEFAULT_PERMISSION_SERVICE_CONFIG.healthCheckIntervalMs,
       healthCheckTimeoutMs: parsed.healthCheckTimeoutMs ?? DEFAULT_PERMISSION_SERVICE_CONFIG.healthCheckTimeoutMs,
       verifyTimeoutMs: parsed.verifyTimeoutMs ?? DEFAULT_PERMISSION_SERVICE_CONFIG.verifyTimeoutMs,
@@ -227,7 +227,7 @@ export function loadPermissionServiceConfig(): PermissionServiceConfig {
     // 文件不存在或解析失败时使用默认值
     const fallback: PermissionServiceConfig = {
       ...DEFAULT_PERMISSION_SERVICE_CONFIG,
-      url: process.env.AUTH_SERVICE_URL || process.env.ACCOUNT_SERVICE_URL || undefined,
+      url: undefined,
     };
     permissionServiceCache = { key: cacheKey, value: fallback };
     return fallback;

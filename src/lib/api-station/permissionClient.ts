@@ -1,32 +1,26 @@
 /**
  * 权限查询服务客户端
  *
- * 核心逻辑：
- * 1. 优先使用鉴权中心（AUTH_CENTER_URL）进行 Token 校验
- * 2. 兼容旧版权限查询服务（AUTH_SERVICE_URL）
- * 3. 定期探活检查权限查询服务可用性
- * 4. 只有权限查询服务可用时才进行权限等级查询
- * 5. 权限查询服务不可用时返回 fallback 权限
+ * 通过鉴权中心（Token Authority Service）进行 Token 校验。
  *
- * 注意：此模块使用动态导入加载配置，避免循环依赖
+ * 流程：
+ * 1. 客户端提交 token → 鉴权中心 introspect
+ * 2. 从返回的 claims 中提取 membershipLevel → 映射为 permissionLevel
+ * 3. 鉴权中心不可用时返回 fallback 权限
  */
 
 import { logInfo, logWarn, logError } from './logger';
-import { verifyAuthResponse } from './authPlugins';
 import { getPermissionLevelFromClaims } from '@/lib/auth-center/types';
 
 export interface PermissionQueryResult {
   identityId?: string;
   permissionLevel: number;
-  source: 'permission-service' | 'auth-center' | 'offline-fallback' | 'invalid-key-fallback' | 'no-key';
-  /** 认证服务器返回的额外字段（原样透传给 auth-verifiers） */
+  source: 'auth-center' | 'offline-fallback' | 'invalid-key-fallback' | 'no-key';
+  /** 鉴权中心返回的 claims（原样透传） */
   authPayload?: Record<string, unknown> | null;
 }
 
-// ============ 鉴权中心模式 ============
-
 interface AuthCenterState {
-  mode: 'auth-center';
   url: string;
   apiKey: string;
   verifyTimeoutMs: number;
@@ -38,33 +32,17 @@ interface AuthCenterState {
   healthCheckIntervalMs: number;
 }
 
-// ============ 旧版模式 ============
-
-interface LegacyServiceState {
-  mode: 'legacy';
-  url: string;
-  verifyTimeoutMs: number;
-  fallbackPermissionLevel: number;
-  enableHealthCheck: boolean;
-  healthCheckTimeoutMs: number;
-  isAvailable: boolean;
-  lastHealthCheckTime: number;
-  healthCheckIntervalMs: number;
-}
-
-type PermissionServiceState = AuthCenterState | LegacyServiceState;
-
-// 全局状态（单例）
-let state: PermissionServiceState | null = null;
+let state: AuthCenterState | null = null;
 
 // ============ 初始化 ============
 
-async function initializeState(): Promise<PermissionServiceState> {
+async function initializeState(): Promise<AuthCenterState> {
   if (state) return state;
 
-  // 动态导入配置，避免循环依赖
+  const authCenterUrl = process.env.AUTH_CENTER_URL;
+  const authCenterApiKey = process.env.AUTH_CENTER_API_KEY;
+
   let config: {
-    url?: string;
     verifyTimeoutMs?: number;
     fallbackPermissionLevel?: number;
     enableHealthCheck?: boolean;
@@ -76,134 +54,101 @@ async function initializeState(): Promise<PermissionServiceState> {
     const { loadPermissionServiceConfig } = await import('@/server/platform-config/loader');
     config = loadPermissionServiceConfig();
   } catch {
-    logWarn('[PermissionClient] 无法加载权限查询服务配置，使用环境变量');
+    logWarn('[PermissionClient] 无法加载权限查询服务配置，使用默认值');
   }
 
-  const authCenterUrl = process.env.AUTH_CENTER_URL;
-  const authCenterApiKey = process.env.AUTH_CENTER_API_KEY;
-  const legacyUrl = config.url || process.env.AUTH_SERVICE_URL || process.env.ACCOUNT_SERVICE_URL || null;
-
-  // 优先使用鉴权中心
-  if (authCenterUrl && authCenterApiKey) {
+  if (!authCenterUrl) {
+    logWarn('[PermissionClient] 未配置 AUTH_CENTER_URL，无鉴权中心可用');
     state = {
-      mode: 'auth-center',
-      url: authCenterUrl.replace(/\/$/, ''),
-      apiKey: authCenterApiKey,
+      url: '',
+      apiKey: '',
       verifyTimeoutMs: config.verifyTimeoutMs ?? 5000,
       fallbackPermissionLevel: config.fallbackPermissionLevel ?? 1,
-      enableHealthCheck: config.enableHealthCheck ?? true,
+      enableHealthCheck: false,
       healthCheckTimeoutMs: config.healthCheckTimeoutMs ?? 3000,
       isAvailable: false,
       lastHealthCheckTime: 0,
       healthCheckIntervalMs: config.healthCheckIntervalMs ?? 30000,
     };
-
-    if (state.enableHealthCheck) {
-      await performHealthCheck();
-    }
     return state;
   }
 
-  // 兼容旧版
-  if (legacyUrl) {
-    state = {
-      mode: 'legacy',
-      url: legacyUrl.replace(/\/$/, ''),
-      verifyTimeoutMs: config.verifyTimeoutMs ?? 5000,
-      fallbackPermissionLevel: config.fallbackPermissionLevel ?? 1,
-      enableHealthCheck: config.enableHealthCheck ?? true,
-      healthCheckTimeoutMs: config.healthCheckTimeoutMs ?? 3000,
-      isAvailable: false,
-      lastHealthCheckTime: 0,
-      healthCheckIntervalMs: config.healthCheckIntervalMs ?? 30000,
-    };
-
-    if (state.enableHealthCheck) {
-      await performHealthCheck();
-    }
-    return state;
-  }
-
-  // 无配置：用空 legacy 模式
   state = {
-    mode: 'legacy',
-    url: '',
-    verifyTimeoutMs: 5000,
-    fallbackPermissionLevel: 1,
-    enableHealthCheck: false,
-    healthCheckTimeoutMs: 3000,
+    url: authCenterUrl.replace(/\/$/, ''),
+    apiKey: authCenterApiKey || '',
+    verifyTimeoutMs: config.verifyTimeoutMs ?? 5000,
+    fallbackPermissionLevel: config.fallbackPermissionLevel ?? 1,
+    enableHealthCheck: config.enableHealthCheck ?? true,
+    healthCheckTimeoutMs: config.healthCheckTimeoutMs ?? 3000,
     isAvailable: false,
     lastHealthCheckTime: 0,
-    healthCheckIntervalMs: 30000,
+    healthCheckIntervalMs: config.healthCheckIntervalMs ?? 30000,
   };
 
-  logWarn('[PermissionClient] 未配置任何权限查询服务地址');
+  if (state.enableHealthCheck) {
+    await performHealthCheck();
+  }
+
   return state;
 }
 
 // ============ 探活 ============
 
 async function performHealthCheck(): Promise<boolean> {
-  if (!state || !('url' in state) || !state.url) return false;
+  if (!state || !state.url) return false;
 
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), state.healthCheckTimeoutMs);
 
-    let healthUrl: string;
-    let headers: Record<string, string> = {};
-
-    if (state.mode === 'auth-center') {
-      healthUrl = `${state.url}/api/healthz`;
-    } else {
-      healthUrl = `${state.url}/api/auth/health`;
-    }
-
-    const response = await fetch(healthUrl, {
+    const response = await fetch(`${state.url}/api/healthz`, {
       method: 'GET',
-      headers,
       signal: controller.signal,
     });
 
     clearTimeout(timeoutId);
 
-    const isAvailable = response.ok;
-    state.isAvailable = isAvailable;
+    state.isAvailable = response.ok;
     state.lastHealthCheckTime = Date.now();
 
-    if (isAvailable) {
-      logInfo(`[PermissionClient] 权限查询服务可用 (${state.mode})`);
+    if (response.ok) {
+      logInfo('[PermissionClient] 鉴权中心可用');
     } else {
-      logWarn(`[PermissionClient] 权限查询服务不可用 (${state.mode})`, { status: response.status });
+      logWarn('[PermissionClient] 鉴权中心不可用', { status: response.status });
     }
 
-    return isAvailable;
+    return response.ok;
   } catch (error) {
     state.isAvailable = false;
     state.lastHealthCheckTime = Date.now();
 
     if (error instanceof Error && error.name === 'AbortError') {
-      logWarn('[PermissionClient] 权限查询服务探活超时');
+      logWarn('[PermissionClient] 鉴权中心探活超时');
     } else {
-      logWarn('[PermissionClient] 权限查询服务探活失败', { error: String(error) });
+      logWarn('[PermissionClient] 鉴权中心探活失败', { error: String(error) });
     }
 
     return false;
   }
 }
 
-async function checkAndRefreshAvailability(): Promise<boolean> {
+async function getState(): Promise<AuthCenterState> {
   if (!state) await initializeState();
+  return state!;
+}
 
-  if (!state!.url) return false;
-  if (!state!.enableHealthCheck) return true;
+async function checkAndRefreshAvailability(): Promise<boolean> {
+  const s = await getState();
+
+  if (!s.url) return false;
+  if (!s.enableHealthCheck) return true;
 
   const now = Date.now();
-  if (now - state!.lastHealthCheckTime >= state!.healthCheckIntervalMs) {
+  if (now - s.lastHealthCheckTime >= s.healthCheckIntervalMs) {
     return performHealthCheck();
   }
 
-  return state!.isAvailable;
+  return s.isAvailable;
 }
 
 // ============ 公开 API ============
@@ -213,14 +158,13 @@ export async function isPermissionServiceAvailable(): Promise<boolean> {
 }
 
 export async function getFallbackPermissionLevel(): Promise<number> {
-  if (!state) await initializeState();
-  return state!.fallbackPermissionLevel;
+  const s = await getState();
+  return s.fallbackPermissionLevel;
 }
 
-// ============ 鉴权中心模式：Token 校验 ============
+// ============ Token 校验 ============
 
-async function resolveViaAuthCenter(key: string): Promise<PermissionQueryResult> {
-  const s = state as AuthCenterState;
+async function resolveViaAuthCenter(key: string, s: AuthCenterState): Promise<PermissionQueryResult> {
 
   try {
     const controller = new AbortController();
@@ -256,11 +200,10 @@ async function resolveViaAuthCenter(key: string): Promise<PermissionQueryResult>
       };
     }
 
-    // 从 claims 中提取会员等级 → 权限等级
     const permissionLevel = getPermissionLevelFromClaims(data.claims);
     const identityId = data.userId;
 
-    logInfo('[PermissionClient] Token 鉴权成功（鉴权中心）', {
+    logInfo('[PermissionClient] Token 鉴权成功', {
       identityId,
       permissionLevel,
       membershipLevel: data.claims?.membershipLevel,
@@ -288,131 +231,44 @@ async function resolveViaAuthCenter(key: string): Promise<PermissionQueryResult>
   }
 }
 
-// ============ 旧版模式：Key 校验 ============
-
-async function resolveViaLegacy(key: string): Promise<PermissionQueryResult> {
-  const s = state as LegacyServiceState;
-
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), s.verifyTimeoutMs);
-
-    const response = await fetch(`${s.url}/api/auth/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key }),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      logWarn('[PermissionClient] 权限查询服务返回非 200', { status: response.status });
-      return {
-        permissionLevel: s.fallbackPermissionLevel,
-        source: 'offline-fallback',
-      };
-    }
-
-    const data = await response.json();
-
-    if (typeof data.permissionLevel === 'number') {
-      const { identityId: _id, permissionLevel: _pl, ...authPayload } = data;
-      const payload = Object.keys(authPayload).length > 0 ? authPayload : null;
-
-      const authVerified = verifyAuthResponse({
-        key,
-        permissionLevel: data.permissionLevel,
-        identityId: data.identityId,
-        authPayload: payload,
-      });
-
-      if (!authVerified) {
-        logWarn('[PermissionClient] 鉴权响应验证未通过');
-        return {
-          permissionLevel: s.fallbackPermissionLevel,
-          source: 'invalid-key-fallback',
-        };
-      }
-
-      logInfo('[PermissionClient] key 权限查询成功（旧版）', {
-        identityId: data.identityId,
-        permissionLevel: data.permissionLevel,
-      });
-      return {
-        identityId: data.identityId,
-        permissionLevel: data.permissionLevel,
-        source: 'permission-service',
-        authPayload: payload,
-      };
-    }
-
-    logInfo('[PermissionClient] key 无效（旧版）');
-    return {
-      permissionLevel: s.fallbackPermissionLevel,
-      source: 'invalid-key-fallback',
-    };
-  } catch (error) {
-    s.isAvailable = false;
-
-    if (error instanceof Error && error.name === 'AbortError') {
-      logWarn('[PermissionClient] 权限查询服务请求超时');
-    } else {
-      logError('[PermissionClient] 权限查询服务请求失败', error);
-    }
-
-    return {
-      permissionLevel: s.fallbackPermissionLevel,
-      source: 'offline-fallback',
-    };
-  }
-}
-
 // ============ 统一入口 ============
 
 /**
- * 根据 key（token）查询对应的权限等级
+ * 根据 token 查询对应的权限等级
  *
- * 优先使用鉴权中心（AUTH_CENTER_URL），兼容旧版权限查询服务。
+ * 通过鉴权中心 introspect API 校验 token，从 claims 中提取会员等级。
  *
- * @param key - 客户端持有的访问凭证（token 或 API key）
+ * @param key - 客户端持有的访问凭证（station token）
  * @returns 权限查询结果
  */
 export async function resolvePermission(key: string | null | undefined): Promise<PermissionQueryResult> {
-  if (!state) await initializeState();
+  const s = await getState();
 
-  // 无 key → fallback
   if (!key || key.trim() === '') {
     return {
-      permissionLevel: state!.fallbackPermissionLevel,
+      permissionLevel: s.fallbackPermissionLevel,
       source: 'no-key',
     };
   }
 
-  // 无 URL → fallback
-  if (!state!.url) {
-    logWarn('[PermissionClient] 未配置权限查询服务地址，使用 fallback 权限');
+  if (!s.url) {
+    logWarn('[PermissionClient] 未配置鉴权中心地址，使用 fallback 权限');
     return {
-      permissionLevel: state!.fallbackPermissionLevel,
+      permissionLevel: s.fallbackPermissionLevel,
       source: 'offline-fallback',
     };
   }
 
-  // 检查可用性
   const isAvailable = await checkAndRefreshAvailability();
   if (!isAvailable) {
-    logWarn('[PermissionClient] 权限查询服务不可用，使用 fallback 权限');
+    logWarn('[PermissionClient] 鉴权中心不可用，使用 fallback 权限');
     return {
-      permissionLevel: state!.fallbackPermissionLevel,
+      permissionLevel: s.fallbackPermissionLevel,
       source: 'offline-fallback',
     };
   }
 
-  // 按模式分发
-  if (state!.mode === 'auth-center') {
-    return resolveViaAuthCenter(key);
-  }
-  return resolveViaLegacy(key);
+  return resolveViaAuthCenter(key, s);
 }
 
 /**
