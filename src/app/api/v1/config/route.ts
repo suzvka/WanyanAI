@@ -20,8 +20,15 @@ export async function GET() {
   additionalOrigins.forEach((o) => originSet.add(o));
   const allowedOrigins = Array.from(originSet);
 
+  // OAuth 2.0 配置（云洲用户中心）
+  const oauthProviderUrl = process.env.OAUTH_PROVIDER_URL || '';
+  const oauthClientId = process.env.OAUTH_CLIENT_ID || '';
+
   return NextResponse.json({
     userCenterUrl,
     allowedOrigins,
+    // OAuth 2.0 配置
+    oauthProviderUrl,
+    oauthClientId,
   });
 }
