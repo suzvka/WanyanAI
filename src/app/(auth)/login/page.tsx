@@ -40,6 +40,7 @@ export default function LoginPage() {
   const [status, setStatus] = useState<LoginStatus>('idle');
   const [statusMessage, setStatusMessage] = useState('');
   const [userCenterUrl, setUserCenterUrl] = useState('');
+  const [allowedOrigins, setAllowedOrigins] = useState<string[]>([]);
   const [configLoaded, setConfigLoaded] = useState(false);
 
   // 加载运行时配置（避免 NEXT_PUBLIC_* 构建时内联问题）
@@ -48,6 +49,9 @@ export default function LoginPage() {
       .then((r) => r.json())
       .then((cfg) => {
         setUserCenterUrl(cfg.userCenterUrl || '');
+        // allowedOrigins 包含 userCenterUrl 自身 + 用户配置的额外可信来源
+        // 用于处理用户中心域名重定向到后台域名后 postMessage origin 变更的场景
+        setAllowedOrigins(Array.isArray(cfg.allowedOrigins) ? cfg.allowedOrigins : []);
         setConfigLoaded(true);
       })
       .catch(() => {
@@ -93,7 +97,13 @@ export default function LoginPage() {
   // 监听 postMessage（来自弹窗）
   const handleMessage = useCallback(
     (e: MessageEvent<PostMessageEvent>) => {
-      if (!userCenterUrl || e.origin !== userCenterUrl) return;
+      // 校验消息来源：优先使用 allowedOrigins 列表，兼容重定向场景
+      const isOriginAllowed =
+        allowedOrigins.length > 0
+          ? allowedOrigins.includes(e.origin)
+          : userCenterUrl !== '' && e.origin === userCenterUrl;
+
+      if (!isOriginAllowed) return;
 
       const { type, payload } = e.data;
       if (!type) return;
@@ -118,7 +128,7 @@ export default function LoginPage() {
           break;
       }
     },
-    [issueToken, userCenterUrl],
+    [issueToken, allowedOrigins, userCenterUrl],
   );
 
   useEffect(() => {

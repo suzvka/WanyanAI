@@ -93,7 +93,9 @@
 
 - **登录页面**: `/login`（iframe 嵌入用户中心登录组件）
 - **Token 签发**: `POST /api/v1/auth/issue`（接收 accountToken + user，调用鉴权中心签发 station token）
-- **环境变量**: `NEXT_PUBLIC_USER_CENTER_URL`（用户中心域名，用于 iframe src 和 postMessage origin 校验）
+- **环境变量**: 
+  - `NEXT_PUBLIC_USER_CENTER_URL` / `USER_CENTER_URL`（用户中心域名，用于弹窗 src 和 postMessage origin 校验）
+  - `USER_CENTER_ALLOWED_ORIGINS`（可选，逗号分隔。当用户中心域名会 301 重定向到后台域名时，用于配置额外的允许来源，postMessage 来自这些来源均被接受）
 
 ### 权限解析流程
 
@@ -116,3 +118,16 @@
 **根因**：`useAuth` 使用 `useState(readInitialState)` 初始化，但 Next.js App Router 中 `useState` 初始化器在服务端 SSR/RSC 渲染时执行，此时 `typeof window === 'undefined'`，无法读取 `sessionStorage`。服务端序列化的状态在客户端水合时直接使用，初始化器不会再次执行。
 
 **修复**：在 `useAuth` 中添加 `useEffect`，客户端挂载后重新调用 `readInitialState()` 从 `sessionStorage` 读取实际状态，与服务端状态不一致时更新 React state。
+
+### 登录页 postMessage origin 校验导致第三方登录回调丢失（2026-08-23）
+
+**问题**：外部用户中心登录成功后，页面仍显示"未登录"，无任何日志。
+
+**根因**：登录页面 `src/app/(auth)/login/page.tsx` 的 `handleMessage` 使用 `e.origin !== userCenterUrl` 严格校验 postMessage 来源。当用户中心域名 301 重定向到后台域名时，弹窗页面的实际 origin 变为后台域名，与配置的 `userCenterUrl` 不匹配，消息被静默丢弃。
+
+**修复**：
+1. 新增 `USER_CENTER_ALLOWED_ORIGINS` 环境变量（逗号分隔），允许配置额外的可信来源
+2. 配置端点 `/api/v1/config` 返回 `allowedOrigins` 数组（`userCenterUrl` + 额外配置来源的去重合并）
+3. 登录页面 `handleMessage` 改用 `allowedOrigins` 列表校验，列表非空时优先使用列表
+
+**配置方式**：设置 `USER_CENTER_ALLOWED_ORIGINS=https://重定向后的后台域名.com`
