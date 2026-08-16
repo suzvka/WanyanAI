@@ -104,9 +104,11 @@ export default function LoginPage() {
       const codeChallenge = await computeCodeChallenge(codeVerifier);
       const state = generateState();
 
-      // 2. 存储到 sessionStorage（回调页读取）
-      sessionStorage.setItem(OAUTH_VERIFIER_KEY, codeVerifier);
-      sessionStorage.setItem(OAUTH_STORAGE_KEY, state);
+      // 2. 存储到 localStorage（回调页读取）
+      // 使用 localStorage 而非 sessionStorage，因为 OAuth 弹窗是独立上下文，
+      // sessionStorage 不共享，但 localStorage 在同源窗口间共享。
+      localStorage.setItem(OAUTH_VERIFIER_KEY, codeVerifier);
+      localStorage.setItem(OAUTH_STORAGE_KEY, state);
 
       // 3. 构造 OAuth 授权 URL
       const params = new URLSearchParams({

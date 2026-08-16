@@ -11,10 +11,13 @@ import { Suspense } from 'react';
  * 流程：
  * 1. 读取 URL 中的 code 和 state
  * 2. 校验 state 是否与发起时一致（防 CSRF）
- * 3. 读取 sessionStorage 中的 code_verifier
+ * 3. 读取 localStorage 中的 code_verifier
  * 4. 调用后端 POST /api/v1/oauth/callback 交换 code → station token
  * 5. 将 station token 写入 sessionStorage
  * 6. 跳转首页
+ *
+ * 注意：使用 localStorage 而非 sessionStorage 存储 PKCE 参数，
+ * 因为 OAuth 弹窗/新窗口是独立上下文，sessionStorage 不共享。
  */
 
 const OAUTH_STORAGE_KEY = 'oauth_pkce_state';
@@ -46,8 +49,16 @@ function OAuthCallbackInner() {
     }
 
     // 校验 state（防 CSRF）
-    const savedState = sessionStorage.getItem(OAUTH_STORAGE_KEY);
-    const codeVerifier = sessionStorage.getItem(OAUTH_VERIFIER_KEY);
+    // 使用 localStorage 而非 sessionStorage，因为 OAuth 弹窗是独立上下文，
+    // sessionStorage 在弹窗与主窗口间不共享，但 localStorage 是同源共享的。
+    let savedState = localStorage.getItem(OAUTH_STORAGE_KEY);
+    let codeVerifier = localStorage.getItem(OAUTH_VERIFIER_KEY);
+
+    // 兼容旧版：sessionStorage 兜底（登录页旧代码仍可能写入 sessionStorage）
+    if (!savedState || !codeVerifier) {
+      savedState = sessionStorage.getItem(OAUTH_STORAGE_KEY);
+      codeVerifier = sessionStorage.getItem(OAUTH_VERIFIER_KEY);
+    }
 
     if (!savedState || !codeVerifier) {
       setStatus('error');
@@ -61,7 +72,9 @@ function OAuthCallbackInner() {
       return;
     }
 
-    // 清理临时存储
+    // 清理临时存储（两种都清，兼容新旧）
+    localStorage.removeItem(OAUTH_STORAGE_KEY);
+    localStorage.removeItem(OAUTH_VERIFIER_KEY);
     sessionStorage.removeItem(OAUTH_STORAGE_KEY);
     sessionStorage.removeItem(OAUTH_VERIFIER_KEY);
 

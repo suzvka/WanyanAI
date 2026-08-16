@@ -10,17 +10,19 @@
   - [注册客户端](#注册客户端)
   - [授权登录 (GET /oauth/authorize)](#1-授权登录-get-oauthauthorize)
   - [令牌交换 (POST /api/oauth/token)](#2-令牌交换-post-apioauthtoken)
-  - [用户信息 (GET /api/oauth/userinfo)](#3-用户信息-get-apioauthuserinfo)
-  - [令牌吊销 (POST /api/oauth/revoke)](#4-令牌吊销-post-apioauthrevoke)
+  - [刷新令牌 (POST /api/oauth/token)](#3-刷新令牌-post-apioauthtoken)
+  - [用户信息 (GET /api/oauth/userinfo)](#4-用户信息-get-apioauthuserinfo)
+  - [令牌吊销 (POST /api/oauth/revoke)](#5-令牌吊销-post-apioauthrevoke)
 - [SCIM 2.0 用户管理](#scim-20-用户管理)
   - [鉴权方式](#鉴权方式)
   - [服务配置 (GET /api/scim/v2/ServiceProviderConfig)](#1-服务配置-get-apiscimv2serviceproviderconfig)
-  - [用户列表 (GET /api/scim/v2/Users)](#2-用户列表-get-apiscimv2users)
-  - [创建用户 (POST /api/scim/v2/Users)](#3-创建用户-post-apiscimv2users)
-  - [用户详情 (GET /api/scim/v2/Users/{id})](#4-用户详情-get-apiscimv2usersid)
-  - [全量更新 (PUT /api/scim/v2/Users/{id})](#5-全量更新-put-apiscimv2usersid)
-  - [部分更新 (PATCH /api/scim/v2/Users/{id})](#6-部分更新-patch-apiscimv2usersid)
-  - [删除用户 (DELETE /api/scim/v2/Users/{id})](#7-删除用户-delete-apiscimv2usersid)
+  - [Schema 查询 (GET /api/scim/v2/Schemas)](#2-schema-查询-get-apiscimv2schemas)
+  - [用户列表 (GET /api/scim/v2/Users)](#3-用户列表-get-apiscimv2users)
+  - [创建用户 (POST /api/scim/v2/Users)](#4-创建用户-post-apiscimv2users)
+  - [用户详情 (GET /api/scim/v2/Users/{id})](#5-用户详情-get-apiscimv2usersid)
+  - [全量更新 (PUT /api/scim/v2/Users/{id})](#6-全量更新-put-apiscimv2usersid)
+  - [部分更新 (PATCH /api/scim/v2/Users/{id})](#7-部分更新-patch-apiscimv2usersid)
+  - [删除用户 (DELETE /api/scim/v2/Users/{id})](#8-删除用户-delete-apiscimv2usersid)
 - [接入示例](#接入示例)
   - [用户登录流程](#用户登录流程)
   - [用户管理流程](#用户管理流程)
@@ -38,8 +40,9 @@
 |------|-----|
 | 协议标准 | RFC 6749 + RFC 7636 (PKCE) |
 | 授权方式 | Authorization Code + PKCE (S256) |
-| 令牌格式 | UUID (session token) |
-| 令牌有效期 | 7 天 |
+| Access Token 格式 | Token Authority Service 签发证书 |
+| Access Token 有效期 | 24 小时（用户令牌） |
+| Refresh Token 有效期 | 30 天 |
 | PKCE | **强制**，仅支持 `S256` |
 
 ### 注册客户端
@@ -110,7 +113,7 @@ GET https://yunzone.com/oauth/authorize
        │
        ▼
      云洲处理:
-       1. 验证 client_id / redirect_uri / code_challenge_method
+       1. 验证 response_type / client_id / redirect_uri / code_challenge_method
        2. 未登录 → 302 到 /sign-in
        3. 已登录 → 渲染授权页 (展示客户端名称 + 权限)
        4. 用户点击"授权" → 生成授权码
@@ -167,17 +170,17 @@ POST https://yunzone.com/api/oauth/token
 | `code` | ✅ | 上一步获取的授权码 |
 | `code_verifier` | ✅ | 步骤 1 生成的原始 code_verifier |
 | `redirect_uri` | ✅ | 必须与授权请求一致 |
-| `client_id` | ✅ | 公开客户端必填，机密客户端可选 |
+| `client_id` | ✅ | 客户端标识 |
 | `client_secret` | 视情况 | 机密客户端必填 |
 
 **成功响应 (200)：**
 
 ```json
 {
-  "access_token": "550e8400-e29b-41d4-a716-446655440000",
+  "access_token": "eyJhbGciOiJSUzI1NiIs...",
   "token_type": "Bearer",
-  "expires_in": 604800,
-  "refresh_token": "660e8400-e29b-41d4-a716-446655440001",
+  "expires_in": 86400,
+  "refresh_token": "550e8400-e29b-41d4-a716-446655440000",
   "scope": "openid profile"
 }
 ```
@@ -192,14 +195,14 @@ POST https://yunzone.com/api/oauth/token
 |------|------|------|
 | `grant_type` | ✅ | `client_credentials` |
 | `client_id` | ✅ | 注册时分配的 client_id |
-| `client_secret` | ✅ | 注册时分配的 client_secret |
-| `scope` | 可选 | 默认 `scim` |
+| `client_secret` | 视情况 | 机密客户端必填 |
+| `scope` | 可选 | 仅支持 `scim`，默认 `scim` |
 
 **成功响应 (200)：**
 
 ```json
 {
-  "access_token": "770e8400-e29b-41d4-a716-446655440002",
+  "access_token": "eyJhbGciOiJSUzI1NiIs...",
   "token_type": "Bearer",
   "expires_in": 3600,
   "scope": "scim"
@@ -223,11 +226,50 @@ POST https://yunzone.com/api/oauth/token
 | `invalid_grant` | 授权码无效、已使用、或 code_verifier 不匹配 |
 | `invalid_client` | client_id 或 client_secret 错误 |
 | `unauthorized_client` | 该 grant_type 未被客户端授权 |
+| `unsupported_grant_type` | 不支持的 grant_type |
+| `invalid_scope` | scope 参数无效 |
 | `server_error` | 服务器内部错误 |
 
 ---
 
-### 3. 用户信息 (GET /api/oauth/userinfo)
+### 3. 刷新令牌 (POST /api/oauth/token)
+
+**用途：** 使用 refresh_token 获取新的 access_token，避免用户频繁重新登录。
+
+**请求方式：** Server-to-Server，`application/x-www-form-urlencoded`
+
+**URL：**
+
+```
+POST https://yunzone.com/api/oauth/token
+```
+
+**请求体：**
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `grant_type` | ✅ | `refresh_token` |
+| `refresh_token` | ✅ | 之前获取的 refresh_token |
+| `client_id` | ✅ | 客户端标识 |
+| `client_secret` | 视情况 | 机密客户端必填 |
+
+**成功响应 (200)：**
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIs...",
+  "token_type": "Bearer",
+  "expires_in": 86400,
+  "refresh_token": "660e8400-e29b-41d4-a716-446655440001",
+  "scope": "openid profile"
+}
+```
+
+> 每次刷新会同时签发新的 access_token 和新的 refresh_token，旧的 refresh_token 被吊销。
+
+---
+
+### 4. 用户信息 (GET /api/oauth/userinfo)
 
 **用途：** 凭 access_token 获取已登录用户的基本信息。
 
@@ -258,6 +300,8 @@ Authorization: Bearer {access_token}
 }
 ```
 
+> 邮箱从 `socialAccount` 渠道（`provider=email`）获取，非 `user` 表字段。
+
 **错误响应 (401)：**
 
 ```json
@@ -269,7 +313,7 @@ Authorization: Bearer {access_token}
 
 ---
 
-### 4. 令牌吊销 (POST /api/oauth/revoke)
+### 5. 令牌吊销 (POST /api/oauth/revoke)
 
 **用途：** 主动吊销 access_token 或 refresh_token（如用户登出）。
 
@@ -294,6 +338,8 @@ POST https://yunzone.com/api/oauth/revoke
 {}
 ```
 
+> 按 RFC 7009 规范，无论 token 是否存在，均返回 `200 OK`。
+
 ---
 
 ## SCIM 2.0 用户管理
@@ -305,7 +351,7 @@ POST https://yunzone.com/api/oauth/revoke
 | 协议标准 | RFC 7644 (SCIM 2.0) |
 | 基础路径 | `/api/scim/v2` |
 | 鉴权方式 | `Bearer {access_token}` (来自 client_credentials grant) |
-| Content-Type | `application/json` |
+| Content-Type | `application/scim+json` |
 | 分页参数 | `startIndex` (1-based), `count` (默认 20, 最大 100) |
 | 过滤语法 | 仅支持 `eq` 操作符：`userName eq "xxx"` 或 `emails eq "xxx"` |
 
@@ -355,7 +401,44 @@ Authorization: Bearer {scim-access-token}
 
 ---
 
-### 2. 用户列表 (GET /api/scim/v2/Users)
+### 2. Schema 查询 (GET /api/scim/v2/Schemas)
+
+**用途：** 获取 SCIM 资源类型的 Schema 定义，包含 User 核心 Schema 和企业扩展 Schema。
+
+**成功响应 (200)：**
+
+```json
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+  "totalResults": 2,
+  "Resources": [
+    {
+      "id": "urn:ietf:params:scim:schemas:core:2.0:User",
+      "name": "User",
+      "description": "User Account",
+      "attributes": [
+        { "name": "id", "type": "string", "required": true, "mutability": "readOnly", "return": "always" },
+        { "name": "userName", "type": "string", "required": true, "mutability": "readWrite", "return": "default" },
+        { "name": "displayName", "type": "string", "required": false, "mutability": "readWrite", "return": "default" },
+        { "name": "emails", "type": "complex", "required": false, "mutability": "readWrite", "return": "default" },
+        { "name": "active", "type": "boolean", "required": false, "mutability": "readWrite", "return": "default" }
+      ]
+    },
+    {
+      "id": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+      "name": "EnterpriseUser",
+      "description": "Enterprise User Extension",
+      "attributes": [
+        { "name": "department", "type": "string", "required": false, "mutability": "readWrite", "return": "default" }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### 3. 用户列表 (GET /api/scim/v2/Users)
 
 **用途：** 获取用户列表，支持搜索和分页。
 
@@ -387,11 +470,16 @@ Authorization: Bearer {scim-access-token}
         "resourceType": "User",
         "created": "2024-01-01T00:00:00Z",
         "lastModified": "2024-01-01T00:00:00Z"
+      },
+      "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
+        "department": "User"
       }
     }
   ]
 }
 ```
+
+> 注意：`userName` 和 `emails` 的值来自 `socialAccount` 渠道（`provider=email` 的 `providerOpenid`），而非 `user` 表。
 
 **搜索示例：**
 
@@ -403,7 +491,7 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 
 ---
 
-### 3. 创建用户 (POST /api/scim/v2/Users)
+### 4. 创建用户 (POST /api/scim/v2/Users)
 
 **用途：** 创建新用户。
 
@@ -417,7 +505,7 @@ GET /api/scim/v2/Users?startIndex=1&count=50
   "emails": [{ "value": "newuser@example.com", "primary": true }],
   "active": true,
   "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
-    "department": "User"
+    "department": "Administrator"
   }
 }
 ```
@@ -428,7 +516,7 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 | `displayName` | 可选 | 显示名称 |
 | `emails[0].value` | 可选 | 邮箱地址 |
 | `active` | 可选 | 默认 `true` |
-| `department` | 可选 | `"User"` 或 `"Administrator"`（对应 `role` 字段） |
+| `department` | 可选 | `"User"` 或 `"Administrator"`（对应 `user.role` 字段，默认 `"User"`） |
 
 **成功响应 (201)：**
 
@@ -444,6 +532,9 @@ GET /api/scim/v2/Users?startIndex=1&count=50
     "resourceType": "User",
     "created": "2024-01-01T00:00:00Z",
     "lastModified": "2024-01-01T00:00:00Z"
+  },
+  "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
+    "department": "Administrator"
   }
 }
 ```
@@ -453,14 +544,14 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 ```json
 {
   "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
-  "detail": "User already exists",
+  "detail": "User with this email already exists",
   "status": 409
 }
 ```
 
 ---
 
-### 4. 用户详情 (GET /api/scim/v2/Users/{id})
+### 5. 用户详情 (GET /api/scim/v2/Users/{id})
 
 **用途：** 获取单个用户的详细信息。
 
@@ -478,6 +569,9 @@ GET /api/scim/v2/Users?startIndex=1&count=50
     "resourceType": "User",
     "created": "2024-01-01T00:00:00Z",
     "lastModified": "2024-01-01T00:00:00Z"
+  },
+  "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
+    "department": "User"
   }
 }
 ```
@@ -487,14 +581,14 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 ```json
 {
   "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
-  "detail": "Resource not found",
+  "detail": "User not found",
   "status": 404
 }
 ```
 
 ---
 
-### 5. 全量更新 (PUT /api/scim/v2/Users/{id})
+### 6. 全量更新 (PUT /api/scim/v2/Users/{id})
 
 **用途：** 全量替换用户信息（缺失字段将被重置）。
 
@@ -515,9 +609,11 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 
 **成功响应 (200)：** 返回更新后的完整用户对象。
 
+> 支持更新的字段：`displayName`（映射到 `user.name`）、`active`（映射到 `user.emailVerified`）、`emails`（更新 `socialAccount` 渠道邮箱）、`department`（映射到 `user.role`）。
+
 ---
 
-### 6. 部分更新 (PATCH /api/scim/v2/Users/{id})
+### 7. 部分更新 (PATCH /api/scim/v2/Users/{id})
 
 **用途：** 部分更新用户信息（如修改角色、禁用账号）。
 
@@ -543,6 +639,20 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 | `replace` | 替换指定字段的值 |
 | `add` | 仅支持 `emails` 数组追加 |
 
+**支持路径 (replace)：**
+
+| path | 说明 |
+|------|------|
+| `active` | `true` / `false`，映射到 `user.emailVerified` |
+| `displayName` | 显示名称，映射到 `user.name` |
+| `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department` | 角色，`"User"` 或 `"Administrator"`，映射到 `user.role` |
+
+**支持路径 (add)：**
+
+| path | 说明 |
+|------|------|
+| `emails` | 追加邮箱（替换 `socialAccount` 渠道的邮箱） |
+
 **常用场景：**
 
 ```json
@@ -554,17 +664,20 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 
 // 升级为管理员
 { "Operations": [{ "op": "replace", "path": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department", "value": "Administrator" }] }
+
+// 更新邮箱
+{ "Operations": [{ "op": "add", "path": "emails", "value": { "value": "new-email@example.com" } }] }
 ```
 
 **成功响应 (200)：** 返回更新后的完整用户对象。
 
 ---
 
-### 7. 删除用户 (DELETE /api/scim/v2/Users/{id})
+### 8. 删除用户 (DELETE /api/scim/v2/Users/{id})
 
 **用途：** 删除指定用户。
 
-**注意：** 删除用户会级联删除其关联的会话、账号记录和社交账号绑定。
+**注意：** 删除用户会级联删除其关联的会话、社交账号绑定和 OAuth 令牌记录。
 
 **成功响应：** `204 No Content`（无 body）
 
@@ -573,7 +686,7 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 ```json
 {
   "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
-  "detail": "Resource not found",
+  "detail": "User not found",
   "status": 404
 }
 ```
@@ -622,10 +735,10 @@ GET /api/scim/v2/Users?startIndex=1&count=50
      │
 9.  云洲返回:
      {
-       "access_token": "550e8400-...",
+       "access_token": "eyJhbGciOiJSUzI1NiIs...",
        "token_type": "Bearer",
-       "expires_in": 604800,
-       "refresh_token": "660e8400-...",
+       "expires_in": 86400,
+       "refresh_token": "550e8400-...",
        "scope": "openid profile"
      }
      │
@@ -638,7 +751,8 @@ GET /api/scim/v2/Users?startIndex=1&count=50
        "sub": "user-uuid",
        "name": "张三",
        "email": "zhangsan@example.com",
-       "email_verified": true
+       "email_verified": true,
+       "updated_at": 1704067200
      }
      │
 12. AI 平台创建本地 session，完成登录
@@ -658,7 +772,7 @@ GET /api/scim/v2/Users?startIndex=1&count=50
      │
 2. 云洲返回:
      {
-       "access_token": "770e8400-...",
+       "access_token": "eyJhbGciOiJSUzI1NiIs...",
        "token_type": "Bearer",
        "expires_in": 3600,
        "scope": "scim"
@@ -708,6 +822,8 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 | 400 | `invalid_grant` | 授权码无效、已使用、已过期，或 code_verifier 不匹配 |
 | 400 | `invalid_client` | client_id 不存在或 client_secret 错误 |
 | 400 | `unauthorized_client` | 该 grant_type 未被客户端授权 |
+| 400 | `unsupported_grant_type` | 不支持的 grant_type 值 |
+| 400 | `invalid_scope` | scope 参数无效 |
 | 401 | `invalid_token` | access_token 已过期或已被吊销 |
 | 500 | `server_error` | 服务器内部错误，请稍后重试 |
 
@@ -715,21 +831,23 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 
 | HTTP 状态码 | detail | 说明 |
 |-----------|--------|------|
-| 400 | 描述信息 | 请求参数错误（如无效的 filter 语法） |
+| 400 | 描述信息 | 请求参数错误（如无效的 filter 语法、缺少必填字段） |
 | 401 | 描述信息 | 认证失败（token 无效或已过期） |
-| 404 | `Resource not found` | 用户不存在 |
-| 409 | `User already exists` | 创建用户时账号已存在 |
+| 404 | `User not found` | 用户不存在 |
+| 409 | `User with this email already exists` | 创建用户时邮箱已存在 |
 | 500 | `Internal server error` | 服务器内部错误 |
 
 ### SCIM 用户字段映射
 
-| SCIM 字段 | 数据库字段 | 类型 | 说明 |
-|-----------|-----------|------|------|
+| SCIM 字段 | 数据库/业务字段 | 类型 | 说明 |
+|-----------|---------------|------|------|
 | `id` | `user.id` | UUID | 用户唯一标识 |
-| `userName` | `user.email` | String | 用户名（邮箱） |
+| `userName` | `socialAccount.providerOpenid` (provider=email) | String | 用户名（邮箱），从 email 渠道获取 |
 | `displayName` | `user.name` | String | 显示名称 |
-| `emails[0].value` | `user.email` | String | 邮箱地址 |
-| `active` | `user.emailVerified` | Boolean | 用户是否激活 |
+| `emails[0].value` | `socialAccount.providerOpenid` (provider=email) | String | 邮箱地址，从 email 渠道获取 |
+| `active` | `user.emailVerified` | Boolean | 用户是否激活（邮箱已验证） |
 | `meta.created` | `user.createdAt` | DateTime | 创建时间 |
 | `meta.lastModified` | `user.updatedAt` | DateTime | 最后修改时间 |
-| `department` | `user.role` | String | `"User"` 或 `"Administrator"` |
+| `department` | `user.role` | String | `"User"` 或 `"Administrator"`，映射到 `user.role` |
+
+> **注意**：omni-auth v5.0.0 已将 `user.email` 列移除，邮箱信息统一存储在 `socialAccount` 表（`provider=email` 渠道的 `providerOpenid` 字段）中。因此 `userName` 和 `emails` 的值均从 `socialAccount` 渠道获取，而非 `user` 表。
