@@ -16,13 +16,15 @@
 - [SCIM 2.0 用户管理](#scim-20-用户管理)
   - [鉴权方式](#鉴权方式)
   - [服务配置 (GET /api/scim/v2/ServiceProviderConfig)](#1-服务配置-get-apiscimv2serviceproviderconfig)
-  - [Schema 查询 (GET /api/scim/v2/Schemas)](#2-schema-查询-get-apiscimv2schemas)
-  - [用户列表 (GET /api/scim/v2/Users)](#3-用户列表-get-apiscimv2users)
-  - [创建用户 (POST /api/scim/v2/Users)](#4-创建用户-post-apiscimv2users)
-  - [用户详情 (GET /api/scim/v2/Users/{id})](#5-用户详情-get-apiscimv2usersid)
-  - [全量更新 (PUT /api/scim/v2/Users/{id})](#6-全量更新-put-apiscimv2usersid)
-  - [部分更新 (PATCH /api/scim/v2/Users/{id})](#7-部分更新-patch-apiscimv2usersid)
-  - [删除用户 (DELETE /api/scim/v2/Users/{id})](#8-删除用户-delete-apiscimv2usersid)
+  - [资源类型 (GET /api/scim/v2/ResourceTypes)](#2-资源类型-get-apiscimv2resourcetypes)
+  - [Schema 查询 (GET /api/scim/v2/Schemas)](#3-schema-查询-get-apiscimv2schemas)
+  - [Schema 详情 (GET /api/scim/v2/Schemas/{id})](#4-schema-详情-get-apiscimv2schemasid)
+  - [用户列表 (GET /api/scim/v2/Users)](#5-用户列表-get-apiscimv2users)
+  - [创建用户 (POST /api/scim/v2/Users)](#6-创建用户-post-apiscimv2users)
+  - [用户详情 (GET /api/scim/v2/Users/{id})](#7-用户详情-get-apiscimv2usersid)
+  - [全量更新 (PUT /api/scim/v2/Users/{id})](#8-全量更新-put-apiscimv2usersid)
+  - [部分更新 (PATCH /api/scim/v2/Users/{id})](#9-部分更新-patch-apiscimv2usersid)
+  - [删除用户 (DELETE /api/scim/v2/Users/{id})](#10-删除用户-delete-apiscimv2usersid)
 - [接入示例](#接入示例)
   - [用户登录流程](#用户登录流程)
   - [用户管理流程](#用户管理流程)
@@ -47,27 +49,41 @@
 
 ### 注册客户端
 
-业务系统接入前，需先在云洲注册 OAuth 客户端：
+业务系统接入前，需先在云洲管理后台注册 OAuth 客户端：
 
-```sql
--- 示例：注册 AI 文本分析平台
-INSERT INTO oauth_client (client_id, client_secret, client_name, redirect_uris, allowed_grants, is_confidential)
-VALUES (
-  'ai-text-analysis',                    -- 客户端标识（唯一）
-  '生成的随机密钥',                        -- 机密客户端必填，公开客户端为 NULL
-  'AI 文本分析平台',                       -- 展示名称
-  ARRAY['https://ai-platform.com/oauth/callback'],  -- 允许的回调地址
-  ARRAY['authorization_code', 'client_credentials'],  -- 允许的授权类型
-  true                                    -- 是否机密客户端
-);
+**方式：** 运营人员在 Admin 控制面板 → 凭证管理中签发，或调用 Admin API：
+
+```
+POST /api/admin/oauth-clients
+Content-Type: application/json
 ```
 
-| 字段 | 说明 |
-|------|------|
-| `client_id` | 业务系统唯一标识，建议使用英文短横线风格 |
-| `client_secret` | 机密客户端使用，公开客户端为 `null` |
-| `is_confidential` | `true` = 后端有 client_secret 保护；`false` = 纯前端应用 |
-| `redirect_uris` | 允许的 OAuth 回调地址列表，域名必须匹配 |
+**请求体：**
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `client_name` | ✅ | 客户端展示名称，如 `"AI 文本分析平台"` |
+| `redirect_uris` | ✅ | 允许的 OAuth 回调地址数组 |
+| `allowed_grants` | ✅ | 允许的授权类型，如 `["authorization_code"]` |
+| `is_confidential` | ✅ | `true` = 后端有 client_secret 保护；`false` = 纯前端应用 |
+| `client_uri` | 可选 | 应用主页 URL |
+| `description` | 可选 | 应用描述 |
+
+**成功响应 (201)：**
+
+```json
+{
+  "client_id": "ai-text-analysis",
+  "client_secret": "生成的随机密钥",
+  "client_name": "AI 文本分析平台",
+  "redirect_uris": ["https://ai-platform.com/oauth/callback"],
+  "allowed_grants": ["authorization_code"],
+  "is_confidential": true,
+  "status": "active"
+}
+```
+
+> `client_secret` 仅在签发时返回一次，运营方需妥善保管。机密客户端 `is_confidential=true` 才有 `client_secret`。
 
 ---
 
@@ -91,7 +107,7 @@ GET https://yunzone.com/oauth/authorize
 | `client_id` | ✅ | 注册时分配的 client_id |
 | `redirect_uri` | ✅ | 回调地址，必须匹配注册时的白名单 |
 | `code_challenge` | ✅ | PKCE S256 摘要，由业务系统前端生成 |
-| `code_challenge_method` | ✅ | 固定为 `S256` |
+| `code_challenge_method` | 可选 | 固定为 `S256`，不传时默认 `S256` |
 | `state` | ✅ | CSRF 令牌，回跳时原样返回 |
 
 **流程：**
@@ -171,7 +187,7 @@ POST https://yunzone.com/api/oauth/token
 | `code_verifier` | ✅ | 步骤 1 生成的原始 code_verifier |
 | `redirect_uri` | ✅ | 必须与授权请求一致 |
 | `client_id` | ✅ | 客户端标识 |
-| `client_secret` | 视情况 | 机密客户端必填 |
+| `client_secret` | 视情况 | 机密客户端（`is_confidential=true`）**必填**，公开客户端不传 |
 
 **成功响应 (200)：**
 
@@ -330,7 +346,11 @@ POST https://yunzone.com/api/oauth/revoke
 | 参数 | 必填 | 说明 |
 |------|------|------|
 | `token` | ✅ | 要吊销的令牌 |
+| `client_id` | ✅ | 签发该令牌的客户端标识 |
+| `client_secret` | 视情况 | 机密客户端（`is_confidential=true`）**必填**，公开客户端不传 |
 | `token_type_hint` | 可选 | `access_token` 或 `refresh_token` |
+
+**安全说明：** 按 RFC 7009 §2.1，token 只能被签发它的客户端吊销。机密客户端必须提供 `client_secret` 验证身份。
 
 **成功响应：** `200 OK`（空 body）
 
@@ -401,16 +421,46 @@ Authorization: Bearer {scim-access-token}
 
 ---
 
-### 2. Schema 查询 (GET /api/scim/v2/Schemas)
+### 2. 资源类型 (GET /api/scim/v2/ResourceTypes)
 
-**用途：** 获取 SCIM 资源类型的 Schema 定义，包含 User 核心 Schema 和企业扩展 Schema。
+**用途：** 获取 SCIM 服务支持的资源类型定义。
 
 **成功响应 (200)：**
 
 ```json
 {
   "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-  "totalResults": 2,
+  "totalResults": 1,
+  "Resources": [
+    {
+      "schemas": ["urn:ietf:params:scim:schemas:core:2.0:ResourceType"],
+      "id": "User",
+      "name": "User",
+      "endpoint": "/Users",
+      "description": "User Account",
+      "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+      "schemaExtensions": [],
+      "meta": {
+        "resourceType": "ResourceType",
+        "location": "/v2/ResourceTypes/User"
+      }
+    }
+  ]
+}
+```
+
+---
+
+### 3. Schema 查询 (GET /api/scim/v2/Schemas)
+
+**用途：** 获取 SCIM 资源类型的 Schema 定义，当前仅支持核心 User Schema。
+
+**成功响应 (200)：**
+
+```json
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+  "totalResults": 1,
   "Resources": [
     {
       "id": "urn:ietf:params:scim:schemas:core:2.0:User",
@@ -423,22 +473,30 @@ Authorization: Bearer {scim-access-token}
         { "name": "emails", "type": "complex", "required": false, "mutability": "readWrite", "return": "default" },
         { "name": "active", "type": "boolean", "required": false, "mutability": "readWrite", "return": "default" }
       ]
-    },
-    {
-      "id": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
-      "name": "EnterpriseUser",
-      "description": "Enterprise User Extension",
-      "attributes": [
-        { "name": "department", "type": "string", "required": false, "mutability": "readWrite", "return": "default" }
-      ]
     }
   ]
 }
 ```
 
+### 4. Schema 详情 (GET /api/scim/v2/Schemas/{id})
+
+**用途：** 获取指定 Schema 的详细定义。
+
+**成功响应 (200)：** 返回单个 Schema 对象，内容与列表中的条目一致。
+
+**错误响应 (404)：**
+
+```json
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
+  "detail": "Schema 'urn:ietf:params:scim:schemas:core:2.0:EnterpriseUser' not found",
+  "status": 404
+}
+```
+
 ---
 
-### 3. 用户列表 (GET /api/scim/v2/Users)
+### 5. 用户列表 (GET /api/scim/v2/Users)
 
 **用途：** 获取用户列表，支持搜索和分页。
 
@@ -470,9 +528,6 @@ Authorization: Bearer {scim-access-token}
         "resourceType": "User",
         "created": "2024-01-01T00:00:00Z",
         "lastModified": "2024-01-01T00:00:00Z"
-      },
-      "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
-        "department": "User"
       }
     }
   ]
@@ -491,7 +546,7 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 
 ---
 
-### 4. 创建用户 (POST /api/scim/v2/Users)
+### 6. 创建用户 (POST /api/scim/v2/Users)
 
 **用途：** 创建新用户。
 
@@ -503,10 +558,7 @@ GET /api/scim/v2/Users?startIndex=1&count=50
   "userName": "newuser@example.com",
   "displayName": "新用户",
   "emails": [{ "value": "newuser@example.com", "primary": true }],
-  "active": true,
-  "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
-    "department": "Administrator"
-  }
+  "active": true
 }
 ```
 
@@ -516,7 +568,6 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 | `displayName` | 可选 | 显示名称 |
 | `emails[0].value` | 可选 | 邮箱地址 |
 | `active` | 可选 | 默认 `true` |
-| `department` | 可选 | `"User"` 或 `"Administrator"`（对应 `user.role` 字段，默认 `"User"`） |
 
 **成功响应 (201)：**
 
@@ -532,9 +583,6 @@ GET /api/scim/v2/Users?startIndex=1&count=50
     "resourceType": "User",
     "created": "2024-01-01T00:00:00Z",
     "lastModified": "2024-01-01T00:00:00Z"
-  },
-  "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
-    "department": "Administrator"
   }
 }
 ```
@@ -551,7 +599,7 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 
 ---
 
-### 5. 用户详情 (GET /api/scim/v2/Users/{id})
+### 7. 用户详情 (GET /api/scim/v2/Users/{id})
 
 **用途：** 获取单个用户的详细信息。
 
@@ -569,9 +617,6 @@ GET /api/scim/v2/Users?startIndex=1&count=50
     "resourceType": "User",
     "created": "2024-01-01T00:00:00Z",
     "lastModified": "2024-01-01T00:00:00Z"
-  },
-  "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
-    "department": "User"
   }
 }
 ```
@@ -588,9 +633,11 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 
 ---
 
-### 6. 全量更新 (PUT /api/scim/v2/Users/{id})
+### 8. 全量更新 (PUT /api/scim/v2/Users/{id})
 
-**用途：** 全量替换用户信息（缺失字段将被重置）。
+**用途：** 全量替换用户信息。
+
+**PUT 语义：** 请求体中出现的可写字段被替换；**缺失的可写字段重置为默认值**（`displayName` → 空，`active` → `true`）。受保护字段：`userName` 不可变更；`emails` 是登录标识，**缺失时保留**（不因缺失被删除），显式提供时更新。
 
 **请求体：**
 
@@ -600,20 +647,17 @@ GET /api/scim/v2/Users?startIndex=1&count=50
   "userName": "user@example.com",
   "displayName": "张三（已更新）",
   "emails": [{ "value": "new-email@example.com", "primary": true }],
-  "active": true,
-  "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
-    "department": "Administrator"
-  }
+  "active": true
 }
 ```
 
 **成功响应 (200)：** 返回更新后的完整用户对象。
 
-> 支持更新的字段：`displayName`（映射到 `user.name`）、`active`（映射到 `user.emailVerified`）、`emails`（更新 `socialAccount` 渠道邮箱）、`department`（映射到 `user.role`）。
+> 支持替换的字段：`displayName`（映射到 `user.name`）、`active`（映射到 `user.active`，`false` 禁用账号，登录与存量会话立即失效）、`emails`（更新 `socialAccount` 渠道邮箱）。
 
 ---
 
-### 7. 部分更新 (PATCH /api/scim/v2/Users/{id})
+### 9. 部分更新 (PATCH /api/scim/v2/Users/{id})
 
 **用途：** 部分更新用户信息（如修改角色、禁用账号）。
 
@@ -638,20 +682,27 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 |----|------|
 | `replace` | 替换指定字段的值 |
 | `add` | 仅支持 `emails` 数组追加 |
+| `remove` | 仅支持 `emails` / `emails.value`，解绑邮箱渠道 |
 
 **支持路径 (replace)：**
 
 | path | 说明 |
 |------|------|
-| `active` | `true` / `false`，映射到 `user.emailVerified` |
+| `active` | `true` / `false`，映射到 `user.active`（`false` 禁用账号，登录与存量会话立即失效） |
 | `displayName` | 显示名称，映射到 `user.name` |
-| `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department` | 角色，`"User"` 或 `"Administrator"`，映射到 `user.role` |
 
 **支持路径 (add)：**
 
 | path | 说明 |
 |------|------|
 | `emails` | 追加邮箱（替换 `socialAccount` 渠道的邮箱） |
+
+**支持路径 (remove)：**
+
+| path | 说明 |
+|------|------|
+| `emails` | 解绑 email 渠道，移除该用户的邮箱登录方式 |
+| `emails.value` | 同上 |
 
 **常用场景：**
 
@@ -662,22 +713,22 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 // 修改显示名称
 { "Operations": [{ "op": "replace", "path": "displayName", "value": "新名称" }] }
 
-// 升级为管理员
-{ "Operations": [{ "op": "replace", "path": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department", "value": "Administrator" }] }
-
 // 更新邮箱
 { "Operations": [{ "op": "add", "path": "emails", "value": { "value": "new-email@example.com" } }] }
+
+// 移除邮箱渠道
+{ "Operations": [{ "op": "remove", "path": "emails" }] }
 ```
 
 **成功响应 (200)：** 返回更新后的完整用户对象。
 
 ---
 
-### 8. 删除用户 (DELETE /api/scim/v2/Users/{id})
+### 10. 删除用户 (DELETE /api/scim/v2/Users/{id})
 
 **用途：** 删除指定用户。
 
-**注意：** 删除用户会级联删除其关联的会话、社交账号绑定和 OAuth 令牌记录。
+**注意：** 删除用户会级联删除其关联的会话、社交账号绑定和 OAuth 令牌记录（单事务执行，与 Admin 用户删除、用户自助注销行为一致）。
 
 **成功响应：** `204 No Content`（无 body）
 
@@ -820,7 +871,7 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 |-----------|-------|------|
 | 400 | `invalid_request` | 缺少必填参数或参数格式错误 |
 | 400 | `invalid_grant` | 授权码无效、已使用、已过期，或 code_verifier 不匹配 |
-| 400 | `invalid_client` | client_id 不存在或 client_secret 错误 |
+| 400 | `invalid_client` | client_id 不存在、client_secret 错误或客户端未激活 |
 | 400 | `unauthorized_client` | 该 grant_type 未被客户端授权 |
 | 400 | `unsupported_grant_type` | 不支持的 grant_type 值 |
 | 400 | `invalid_scope` | scope 参数无效 |
@@ -845,9 +896,8 @@ GET /api/scim/v2/Users?startIndex=1&count=50
 | `userName` | `socialAccount.providerOpenid` (provider=email) | String | 用户名（邮箱），从 email 渠道获取 |
 | `displayName` | `user.name` | String | 显示名称 |
 | `emails[0].value` | `socialAccount.providerOpenid` (provider=email) | String | 邮箱地址，从 email 渠道获取 |
-| `active` | `user.emailVerified` | Boolean | 用户是否激活（邮箱已验证） |
+| `active` | `user.active` | Boolean | 账号是否启用（`false` 禁用：拒绝登录且存量会话立即失效） |
 | `meta.created` | `user.createdAt` | DateTime | 创建时间 |
-| `meta.lastModified` | `user.updatedAt` | DateTime | 最后修改时间 |
-| `department` | `user.role` | String | `"User"` 或 `"Administrator"`，映射到 `user.role` |
+| `meta.lastModified` | `user.updatedAt` | DateTime | 最后修改时间
 
 > **注意**：omni-auth v5.0.0 已将 `user.email` 列移除，邮箱信息统一存储在 `socialAccount` 表（`provider=email` 渠道的 `providerOpenid` 字段）中。因此 `userName` 和 `emails` 的值均从 `socialAccount` 渠道获取，而非 `user` 表。
