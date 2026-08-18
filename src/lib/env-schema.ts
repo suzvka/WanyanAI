@@ -55,7 +55,7 @@ export const envSchema = composeFacets(
  * 部署面平台注入旧名经 deploymentAliases 映射到中立键（TICKET-001 适配层，永久保留，
  * 因为平台注入变量名本身不可改名；服务代码一律使用中立键）。
  */
-export const envLoadOptions = { aliases: deploymentAliases } as const;
+export const envLoadOptions = { aliases: deploymentAliases, dotenv: true } as const;
 
 /** 鉴权中心客户端专用：三要素必填，缺失时抛 EnvConfigError（含诊断快照） */
 export const authCenterEnvSchema = requiredFacet(authCenterFacet, [

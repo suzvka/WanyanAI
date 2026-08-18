@@ -1,13 +1,11 @@
 import { createServer } from 'http';
 import { parse } from 'url';
 import next from 'next';
-import { loadDotEnv, loadEnv, resolveListenAddress } from 'yunzone-service-kit/config';
+import { loadEnv, resolveListenAddress } from 'yunzone-service-kit/config';
 import { envLoadOptions, envSchema } from '@/lib/env-schema';
 
-// 本地 .env 文件加载（不存在时静默跳过；部署只需拷贝 .env 到项目目录）
-loadDotEnv();
-
 // 部署环境经中立键读取（TICKET-001：平台注入旧名经 deploymentAliases 过渡，禁止裸读）
+// .env 文件由 loadEnv 的 dotenv: true 选项自动加载（envLoadOptions 已配置）
 const env = loadEnv(envSchema, envLoadOptions);
 const dev = env.DEPLOY_ENV !== 'PROD';
 const { host: hostname, port } = resolveListenAddress();
