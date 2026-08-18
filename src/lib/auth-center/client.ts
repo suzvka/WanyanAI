@@ -9,7 +9,7 @@
  */
 import 'server-only';
 import { loadEnv } from 'yunzone-service-kit/config';
-import { authCenterEnvSchema } from '@/lib/env-schema';
+import { authCenterEnvSchema, envLoadOptions } from '@/lib/env-schema';
 import type {
   IssueTokenRequest,
   IssueTokenResponse,
@@ -30,7 +30,7 @@ const logger = createLogger('auth-center');
 
 function getConfig(): { baseUrl: string; apiKey: string; productId: string } {
   // 三要素缺失时 loadEnv 抛 EnvConfigError（诊断快照只显示 set/unset，不回显值）
-  const env = loadEnv(authCenterEnvSchema);
+  const env = loadEnv(authCenterEnvSchema, envLoadOptions);
 
   return {
     baseUrl: env.AUTH_CENTER_URL.replace(/\/$/, ''),
