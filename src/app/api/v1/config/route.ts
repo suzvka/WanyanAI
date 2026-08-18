@@ -9,6 +9,6 @@ import { envLoadOptions, envSchema } from '@/lib/env-schema';
 export async function GET() {
   const env = loadEnv(envSchema, envLoadOptions);
   return NextResponse.json({
-    userCenterUrl: env.USER_CENTER_URL || env.NEXT_PUBLIC_USER_CENTER_URL || '',
+    userCenterUrl: env.USER_CENTER_URL || '',
   });
 }

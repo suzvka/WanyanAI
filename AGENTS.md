@@ -50,14 +50,14 @@
 | 实现 | 触发条件 | 说明 |
 |------|---------|------|
 | `FileConfigStore` | `CONFIG_STORE=file`（默认） | 写入 `runtime-config/<key>.json` |
-| `CozeDbConfigStore` | `CONFIG_STORE=coze-db` | 写入 Supabase `runtime_config` 表 |
-| `GenericDbConfigStore` | 预留 | 通用 PostgreSQL |
+| `GenericDbConfigStore` | `CONFIG_STORE=db` | 通用 PostgreSQL `runtime_config` 表（DATABASE_PROVIDER 分派连接串） |
 
 ### 数据库
 
-- `src/storage/database/shared/schema.ts` - Drizzle ORM 表定义
+- `src/storage/database/shared/schema.ts` - Drizzle ORM 表定义（`runtime_config` / `health_check`）
 - `runtime_config` 表 - key-value 存储，用于 Admin 运行时配置持久化
-- 使用 `coze-coding-ai db upgrade` 同步 schema 变更
+- 连接串经 `resolveDatabaseUrl()`（`DATABASE_PROVIDER=postgres` 走 `DATABASE_URL`；`DATABASE_PROVIDER=coze` 走平台注入 `PG*` 组）
+- 建表/迁移：`scripts/db-setup.sql`（幂等 DDL，`psql "$DATABASE_URL" -f scripts/db-setup.sql`）或 drizzle-kit
 
 ---
 
@@ -91,9 +91,9 @@
 
 ### 用户中心登录
 
-- **登录页面**: `/login`（iframe 嵌入用户中心登录组件）
+- **登录页面**: `/login`（弹窗打开用户中心嵌入登录页，`postMessage` 回传登录结果）
 - **Token 签发**: `POST /api/v1/auth/issue`（接收 accountToken + user，调用鉴权中心签发 station token）
-- **环境变量**: `NEXT_PUBLIC_USER_CENTER_URL`（用户中心域名，用于 iframe src 和 postMessage origin 校验）
+- **环境变量**: `USER_CENTER_URL`（用户中心服务端地址，经 `/api/v1/config` 运行时下发给浏览器，用于弹窗 src 与 postMessage origin 校验）
 
 ### 权限解析流程
 

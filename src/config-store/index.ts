@@ -2,9 +2,8 @@
  * ConfigStore 工厂函数
  *
  * 根据 CONFIG_STORE 环境变量选择实现：
- *   file       → FileConfigStore（默认）
- *   coze-db    → CozeDbConfigStore
- *   generic-db → GenericDbConfigStore（预留）
+ *   file → FileConfigStore（默认）
+ *   db   → GenericDbConfigStore（通用 PostgreSQL，DATABASE_PROVIDER 分派连接串）
  *
  * 使用示例：
  * ```typescript
@@ -31,12 +30,12 @@ export function getConfigStore(): ConfigStore {
   const mode = process.env.CONFIG_STORE || 'file';
 
   switch (mode) {
-    case 'coze-db': {
-      // 动态加载，避免在未安装 Supabase 依赖时报错
+    case 'db': {
+      // 动态加载，避免连接池在未启用 db 模式时初始化
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { CozeDbConfigStore } = require('./coze-db-store');
-      instance = new CozeDbConfigStore() as ConfigStore;
-      logger.info('ConfigStore 模式: Coze 数据库', { mode });
+      const { GenericDbConfigStore } = require('./generic-db-store');
+      instance = new GenericDbConfigStore() as ConfigStore;
+      logger.info('ConfigStore 模式: PostgreSQL', { mode });
       break;
     }
     case 'file':

@@ -6,13 +6,11 @@
  *
  * 实现：
  * - FileConfigStore: 写入 runtime-config/<key>.json（开发/沙箱）
- * - CozeDbConfigStore: 写入 Coze Supabase runtime_config 表（生产）
- * - GenericDbConfigStore: 写入通用 PostgreSQL（预留）
+ * - GenericDbConfigStore: 写入通用 PostgreSQL runtime_config 表（生产，DATABASE_PROVIDER 分派连接串）
  *
  * 通过环境变量 CONFIG_STORE 选择实现：
- *   file       → FileConfigStore（默认）
- *   coze-db    → CozeDbConfigStore
- *   generic-db → GenericDbConfigStore（预留）
+ *   file → FileConfigStore（默认）
+ *   db   → GenericDbConfigStore
  */
 
 export interface ConfigStore {

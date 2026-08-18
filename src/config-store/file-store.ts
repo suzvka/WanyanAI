@@ -4,7 +4,7 @@
  * 将配置写入 runtime-config/<key>.json 文件。
  * 适用于开发环境 / 沙箱环境。
  *
- * 注意：Coze 生产环境禁止写入部署包，请使用 CozeDbConfigStore。
+ * 注意：生产环境禁止写入部署包，请使用 GenericDbConfigStore（CONFIG_STORE=db）。
  */
 
 import 'server-only';
