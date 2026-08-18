@@ -1,6 +1,6 @@
 ## Coze 内部模型
 
-当项目部署到 Coze 内部环境（`COZE_PROJECT_ENV=PROD`）时，`src/stations/coze/` 中转站会自动启用：
+当项目部署到 Coze 内部环境（部署环境为 PROD，经中立键 `DEPLOY_ENV=PROD` 判定；平台注入的 `COZE_PROJECT_ENV` 由 TICKET-001 适配层映射）时，`src/stations/coze/` 中转站会自动启用：
 
 **模型 ID 格式**：`coze://{model_id}`，如 `coze://doubao-seed-1-8-251228`
 

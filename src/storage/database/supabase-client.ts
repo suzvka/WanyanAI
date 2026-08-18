@@ -16,18 +16,23 @@ interface SupabaseCredentials {
  * 1. 本地 .env 文件加载（不存在时静默跳过）
  * 2. 通过 coze_workload_identity 拉取平台项目环境变量写入 process.env
  *
- * 读取请使用 loadSchemaEnv(envSchema)（schema 私有层已声明 COZE_SUPABASE_*）；
+ * 读取请使用 loadSchemaEnv(envSchema)：SUPABASE_* 中立键优先，
+ * 平台注入的 COZE_SUPABASE_* 经 envLoadOptions.aliases 回退（TICKET-001）；
  * 此处对 process.env 的访问属于平台注入适配，不落入服务代码裸读（TICKET-001）。
  */
+const hasSupabaseCreds = (env: NodeJS.ProcessEnv): boolean =>
+  (env.SUPABASE_URL || env.COZE_SUPABASE_URL) !== undefined &&
+  (env.SUPABASE_ANON_KEY || env.COZE_SUPABASE_ANON_KEY) !== undefined;
+
 function loadPlatformEnvVars(): void {
-  if (envLoaded || (process.env.COZE_SUPABASE_URL && process.env.COZE_SUPABASE_ANON_KEY)) {
+  if (envLoaded || hasSupabaseCreds(process.env)) {
     return;
   }
 
   try {
     // 本地 .env 文件加载（不存在时静默跳过）
     loadDotEnv();
-    if (process.env.COZE_SUPABASE_URL && process.env.COZE_SUPABASE_ANON_KEY) {
+    if (hasSupabaseCreds(process.env)) {
       envLoaded = true;
       return;
     }
@@ -78,16 +83,16 @@ except Exception as e:
 function getSupabaseCredentials(): SupabaseCredentials {
   loadPlatformEnvVars();
 
-  // TICKET-001：私有层经 schema 显式声明后读取，禁止裸读 process.env.COZE_*
+  // TICKET-001：统一经 schema 读取中立键（平台注入 COZE_* 由 aliases 回退），禁止裸读
   const env = loadSchemaEnv(envSchema, envLoadOptions);
-  const url = env.COZE_SUPABASE_URL;
-  const anonKey = env.COZE_SUPABASE_ANON_KEY;
+  const url = env.SUPABASE_URL;
+  const anonKey = env.SUPABASE_ANON_KEY;
 
   if (!url) {
-    throw new Error('COZE_SUPABASE_URL is not set');
+    throw new Error('SUPABASE_URL is not set');
   }
   if (!anonKey) {
-    throw new Error('COZE_SUPABASE_ANON_KEY is not set');
+    throw new Error('SUPABASE_ANON_KEY is not set');
   }
 
   return { url, anonKey };
@@ -95,7 +100,7 @@ function getSupabaseCredentials(): SupabaseCredentials {
 
 function getSupabaseServiceRoleKey(): string | undefined {
   loadPlatformEnvVars();
-  return loadSchemaEnv(envSchema, envLoadOptions).COZE_SUPABASE_SERVICE_ROLE_KEY;
+  return loadSchemaEnv(envSchema, envLoadOptions).SUPABASE_SERVICE_ROLE_KEY;
 }
 
 function getSupabaseClient(token?: string): SupabaseClient {

@@ -37,9 +37,14 @@ export const envSchema = composeFacets(
   // ── 配置存储 ──
   CONFIG_STORE: z.string().optional(),
 
-  // ── Supabase（Coze 平台注入，项目私有层显式声明，TICKET-001）──
-  // 键名保留平台注入原名，属服务自有 schema 扩展（私有命名空间），
-  // 不进入 service-kit 通用契约
+  // ── Supabase ──
+  // 通用契约一律中立命名（TICKET-001：禁止平台名作为键名，与 yunzone_user_center 一致），
+  // SUPABASE_* 为规范键；Coze 平台注入的 COZE_SUPABASE_* 经 envLoadOptions.aliases 回退
+  SUPABASE_URL: z.string().optional(),
+  SUPABASE_ANON_KEY: z.string().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+
+  // ── Supabase 平台注入别名（私有层显式声明，仅作为 aliases 回退源）──
   COZE_SUPABASE_URL: z.string().optional(),
   COZE_SUPABASE_ANON_KEY: z.string().optional(),
   COZE_SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
@@ -52,10 +57,23 @@ export const envSchema = composeFacets(
 
 /**
  * 通用契约 loadEnv 选项：
- * 部署面平台注入旧名经 deploymentAliases 映射到中立键（TICKET-001 适配层，永久保留，
- * 因为平台注入变量名本身不可改名；服务代码一律使用中立键）。
+ * - 部署面平台注入旧名经 deploymentAliases 映射到中立键（TICKET-001 适配层，永久保留，
+ *   因为平台注入变量名本身不可改名；服务代码一律使用中立键）；
+ * - Supabase 平台注入的 COZE_SUPABASE_* 同样经 aliases 回退到中立键 SUPABASE_*，
+ *   与 yunzone_user_center 的别名映射模式一致（规范名优先）。
  */
-export const envLoadOptions = { aliases: deploymentAliases, dotenv: true } as const;
+export const envLoadOptions: {
+  aliases: Record<string, string[]>;
+  dotenv: boolean;
+} = {
+  aliases: {
+    ...deploymentAliases,
+    SUPABASE_URL: ["COZE_SUPABASE_URL"],
+    SUPABASE_ANON_KEY: ["COZE_SUPABASE_ANON_KEY"],
+    SUPABASE_SERVICE_ROLE_KEY: ["COZE_SUPABASE_SERVICE_ROLE_KEY"],
+  },
+  dotenv: true,
+};
 
 /** 鉴权中心客户端专用：三要素必填，缺失时抛 EnvConfigError（含诊断快照） */
 export const authCenterEnvSchema = requiredFacet(authCenterFacet, [
