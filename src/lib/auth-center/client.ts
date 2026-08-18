@@ -8,6 +8,8 @@
  *   AUTH_CENTER_PRODUCT_ID - 产品标识
  */
 import 'server-only';
+import { loadEnv } from 'yunzone-service-kit/config';
+import { authCenterEnvSchema } from '@/lib/env-schema';
 import type {
   IssueTokenRequest,
   IssueTokenResponse,
@@ -27,21 +29,14 @@ const logger = createLogger('auth-center');
 // ============ 配置读取 ============
 
 function getConfig(): { baseUrl: string; apiKey: string; productId: string } {
-  const baseUrl = process.env.AUTH_CENTER_URL;
-  const apiKey = process.env.AUTH_CENTER_API_KEY;
-  const productId = process.env.AUTH_CENTER_PRODUCT_ID;
+  // 三要素缺失时 loadEnv 抛 EnvConfigError（诊断快照只显示 set/unset，不回显值）
+  const env = loadEnv(authCenterEnvSchema);
 
-  if (!baseUrl) {
-    throw new Error('[AuthCenter] 未配置 AUTH_CENTER_URL');
-  }
-  if (!apiKey) {
-    throw new Error('[AuthCenter] 未配置 AUTH_CENTER_API_KEY');
-  }
-  if (!productId) {
-    throw new Error('[AuthCenter] 未配置 AUTH_CENTER_PRODUCT_ID');
-  }
-
-  return { baseUrl: baseUrl.replace(/\/$/, ''), apiKey, productId };
+  return {
+    baseUrl: env.AUTH_CENTER_URL.replace(/\/$/, ''),
+    apiKey: env.AUTH_CENTER_API_KEY,
+    productId: env.AUTH_CENTER_PRODUCT_ID,
+  };
 }
 
 // ============ 通用请求 ============
