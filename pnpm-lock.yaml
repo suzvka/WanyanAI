@@ -146,9 +146,6 @@ importers:
       coze-coding-dev-sdk:
         specifier: ^0.7.21
         version: 0.7.22(@opentelemetry/api@1.9.1)(openai@6.38.0(ws@8.20.1)(zod@4.4.3))(ws@8.20.1)
-      dotenv:
-        specifier: ^17.2.3
-        version: 17.4.2
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
@@ -198,10 +195,10 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
       yunzone-service-kit:
-        specifier: ^0.1.0
-        version: 0.1.0(zod@4.4.3)
+        specifier: ^0.5.0
+        version: 0.5.0(zod@4.4.3)
       zod:
-        specifier: ^4.3.5
+        specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
       '@tailwindcss/postcss':
@@ -5522,8 +5519,8 @@ packages:
     resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
     engines: {node: '>=18'}
 
-  yunzone-service-kit@0.1.0:
-    resolution: {integrity: sha512-3C6Lem2GBaI3XDvcB89HrUW8ekKlv5yPmcwSq4TWneFNZAtQsb+ALbQDSBl2XQg4miEoVKcfIOeMQjST6Cfdmw==}
+  yunzone-service-kit@0.5.0:
+    resolution: {integrity: sha512-GOEBWjiVanqVOX/WKOhfwjyW/IJPJFkvvGWMEs2MSdsqku23pTGeo1NOSxviwjVnFU7SjgiPOubsDuA23ESepA==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^4
@@ -10843,7 +10840,7 @@ snapshots:
 
   yoctocolors@2.1.2: {}
 
-  yunzone-service-kit@0.1.0(zod@4.4.3):
+  yunzone-service-kit@0.5.0(zod@4.4.3):
     dependencies:
       zod: 4.4.3
 

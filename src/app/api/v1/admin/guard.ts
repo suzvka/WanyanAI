@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { resolveAdminConfig, validateAdminSession as isValidAdminSession } from 'yunzone-service-kit/ops';
 
 /**
  * 验证请求是否来自已认证的 Admin 会话
+ * 会话语义统一（service-kit/ops）：ADMIN_PASSWORD 未设置 = 管理后台禁用（503）
  */
 export async function validateAdminSession(): Promise<{ valid: true } | { valid: false; response: Response }> {
-  const expectedToken = process.env.ADMIN_PASSWORD;
+  const admin = resolveAdminConfig();
 
-  if (!expectedToken) {
+  if (!admin.enabled || !admin.password) {
     return {
       valid: false,
       response: NextResponse.json(
@@ -30,41 +32,37 @@ export async function validateAdminSession(): Promise<{ valid: true } | { valid:
     };
   }
 
-  // 验证 session token 的合法性（解码验证签名）
+  if (isValidAdminSession(sessionToken, admin.password)) {
+    return { valid: true };
+  }
+
+  // 区分过期与非法，保持既有错误码语义
+  const expired = isExpiredSession(sessionToken, admin.password);
+  return {
+    valid: false,
+    response: NextResponse.json(
+      expired
+        ? { error: 'Session expired', code: 'SESSION_EXPIRED' }
+        : { error: 'Invalid session', code: 'INVALID_SESSION' },
+      { status: 401 },
+    ),
+  };
+}
+
+/** 仅用于错误码区分：解码会话并判断是否因过期而失效 */
+function isExpiredSession(sessionToken: string, password: string): boolean {
   try {
     const decoded = Buffer.from(sessionToken, 'base64').toString('utf-8');
-    // 格式: admin:<token>:<timestamp>
     const parts = decoded.split(':');
-    if (parts.length !== 3 || parts[0] !== 'admin' || parts[1] !== expectedToken) {
-      return {
-        valid: false,
-        response: NextResponse.json(
-          { error: 'Invalid session', code: 'INVALID_SESSION' },
-          { status: 401 },
-        ),
-      };
-    }
-
-    // 检查是否过期（30 分钟）
     const timestamp = parseInt(parts[2], 10);
-    if (Date.now() - timestamp > 30 * 60 * 1000) {
-      return {
-        valid: false,
-        response: NextResponse.json(
-          { error: 'Session expired', code: 'SESSION_EXPIRED' },
-          { status: 401 },
-        ),
-      };
-    }
-
-    return { valid: true };
+    return (
+      parts.length === 3 &&
+      parts[0] === 'admin' &&
+      parts[1] === password &&
+      Number.isFinite(timestamp) &&
+      Date.now() - timestamp > 30 * 60 * 1000
+    );
   } catch {
-    return {
-      valid: false,
-      response: NextResponse.json(
-        { error: 'Invalid session', code: 'INVALID_SESSION' },
-        { status: 401 },
-      ),
-    };
+    return false;
   }
 }

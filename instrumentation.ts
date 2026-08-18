@@ -9,6 +9,10 @@
 export async function register() {
   // 仅在 Node.js 运行时执行（排除 Edge Runtime）
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // 本地 .env 文件加载（不存在时静默跳过）
+    const { loadDotEnv } = await import('yunzone-service-kit/config');
+    loadDotEnv();
+
     const { ensureServerRegistriesInitialized } = await import('./src/lib/bootstrap');
     await ensureServerRegistriesInitialized();
 
