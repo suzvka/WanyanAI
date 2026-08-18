@@ -195,8 +195,8 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
       yunzone-service-kit:
-        specifier: ^0.5.0
-        version: 0.5.0(zod@4.4.3)
+        specifier: ^0.6.0
+        version: 0.6.0(zod@4.4.3)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -5493,8 +5493,8 @@ packages:
     resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
     engines: {node: '>=18'}
 
-  yunzone-service-kit@0.5.0:
-    resolution: {integrity: sha512-GOEBWjiVanqVOX/WKOhfwjyW/IJPJFkvvGWMEs2MSdsqku23pTGeo1NOSxviwjVnFU7SjgiPOubsDuA23ESepA==}
+  yunzone-service-kit@0.6.0:
+    resolution: {integrity: sha512-QIVVpVQ14nNdiMnkoAGGPCLfvx0k5n1Ae1AqMDbMAu1w7yYwVSjLV/vwQLGsOw2Z6N+5K/Yw96NIPaySEYjM+A==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^4
@@ -10787,7 +10787,7 @@ snapshots:
 
   yoctocolors@2.1.2: {}
 
-  yunzone-service-kit@0.5.0(zod@4.4.3):
+  yunzone-service-kit@0.6.0(zod@4.4.3):
     dependencies:
       zod: 4.4.3
 
