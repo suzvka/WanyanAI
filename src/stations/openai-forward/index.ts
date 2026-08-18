@@ -9,6 +9,8 @@ import { readFileSync, readdirSync, writeFileSync, existsSync, unlinkSync } from
 import path from 'node:path';
 import type { Station, StationModel, ForwardRequest, AdminManagedStation, CredentialField, ModelToggle } from '../types';
 import { createLogger, type Logger } from '../logger';
+import { loadEnv } from 'yunzone-service-kit/config';
+import { envSchema, envLoadOptions } from '../../lib/env-schema';
 
 /**
  * 模型配置结构
@@ -27,16 +29,24 @@ interface ModelConfig {
 /**
  * 解析配置目录路径
  *
- * 优先级：注入的 configDir > COZE_WORKSPACE_PATH 环境变量 > 当前工作目录
+ * 优先级：注入的 configDir > WORKSPACE_PATH（中立键，平台注入旧名经适配层映射）> 当前工作目录
  */
+let cachedWorkspacePath: string | undefined;
+function getWorkspacePath(): string | undefined {
+  if (cachedWorkspacePath === undefined) {
+    cachedWorkspacePath = loadEnv(envSchema, envLoadOptions).WORKSPACE_PATH;
+  }
+  return cachedWorkspacePath;
+}
+
 function resolveConfigDir(configDir?: string): string {
-  return configDir ?? process.env.COZE_WORKSPACE_PATH ?? process.cwd();
+  return configDir ?? getWorkspacePath() ?? process.cwd();
 }
 
 /**
  * 创建 OpenAI Forward 中转站
  *
- * @param options.configDir 配置根目录（默认使用 COZE_WORKSPACE_PATH 或 cwd）
+ * @param options.configDir 配置根目录（默认使用 WORKSPACE_PATH 或 cwd；平台注入旧名经适配层映射）
  * @param options.logger 日志实例（默认使用 console 实现）
  */
 export function createOpenAIForwardStation(options?: { configDir?: string; logger?: Logger }): Station {

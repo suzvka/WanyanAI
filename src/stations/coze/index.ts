@@ -9,12 +9,19 @@ import type { Station, StationModel, ForwardRequest, AdminManagedStation, ModelT
 import { LLMClient, Config, HeaderUtils, type Message } from 'coze-coding-dev-sdk';
 import { createLogger, type Logger } from '../logger';
 import { getConfigStore } from '../../config-store';
+import { loadEnv } from 'yunzone-service-kit/config';
+import { envSchema, envLoadOptions } from '../../lib/env-schema';
 
 /**
  * 检测是否运行在 Coze 内部环境
+ * 中立键 DEPLOY_ENV 读取（TICKET-001：平台注入旧名 COZE_PROJECT_ENV 经适配层映射，禁止裸读）
  */
+let cachedDeployEnv: string | undefined;
 export function isCozeEnvironment(): boolean {
-  const env = process.env.COZE_PROJECT_ENV;
+  if (cachedDeployEnv === undefined) {
+    cachedDeployEnv = loadEnv(envSchema, envLoadOptions).DEPLOY_ENV;
+  }
+  const env = cachedDeployEnv;
   return env === 'PROD' || env === 'DEV';
 }
 

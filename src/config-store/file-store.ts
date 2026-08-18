@@ -13,6 +13,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlink
 import path from 'node:path';
 import type { ConfigStore } from './types';
 import { createLogger } from '@/lib/api-station/logger';
+import { loadEnv } from 'yunzone-service-kit/config';
+import { envSchema, envLoadOptions } from '@/lib/env-schema';
 
 const logger = createLogger('ConfigStore:File');
 
@@ -22,7 +24,8 @@ export class FileConfigStore implements ConfigStore {
   private configDir: string;
 
   constructor(baseDir?: string) {
-    const root = baseDir ?? process.env.COZE_WORKSPACE_PATH ?? process.cwd();
+    // TICKET-001：工作区路径经中立键读取（COZE_WORKSPACE_PATH 由适配层回退）
+    const root = baseDir ?? loadEnv(envSchema, envLoadOptions).WORKSPACE_PATH ?? process.cwd();
     this.configDir = path.join(root, CONFIG_DIR);
     this.ensureDir();
   }

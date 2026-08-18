@@ -1,24 +1,16 @@
 import { createServer } from 'http';
 import { parse } from 'url';
 import next from 'next';
+import { loadDotEnv, loadEnv, resolveListenAddress } from 'yunzone-service-kit/config';
+import { envLoadOptions, envSchema } from '@/lib/env-schema';
 
-// Capture unhandled errors before anything else so that FaaS deployments
-// always surface a clear error message + non-zero exit code on failure.
-process.on('uncaughtException', (err) => {
-  console.error('[server] uncaughtException:', err);
-  process.exit(1);
-});
+// 本地 .env 文件加载（不存在时静默跳过；部署只需拷贝 .env 到项目目录）
+loadDotEnv();
 
-process.on('unhandledRejection', (reason) => {
-  console.error('[server] unhandledRejection:', reason);
-  process.exit(1);
-});
-
-const dev = process.env.COZE_PROJECT_ENV !== 'PROD';
-const hostname = process.env.HOSTNAME || '0.0.0.0';
-const port = parseInt(process.env.DEPLOY_RUN_PORT || process.env.PORT || '5000', 10);
-
-console.log(`[server] starting in ${dev ? 'development' : 'production'} mode on ${hostname}:${port}`);
+// 部署环境经中立键读取（TICKET-001：平台注入旧名经 deploymentAliases 过渡，禁止裸读）
+const env = loadEnv(envSchema, envLoadOptions);
+const dev = env.DEPLOY_ENV !== 'PROD';
+const { host: hostname, port } = resolveListenAddress();
 
 // Create Next.js app
 const app = next({ dev, hostname, port });
@@ -39,10 +31,10 @@ app.prepare().then(() => {
     console.error('Server error:', err);
     process.exit(1);
   });
-  server.listen(port, hostname, () => {
+  server.listen(port, () => {
     console.log(
       `> Server listening at http://${hostname}:${port} as ${
-        dev ? 'development' : process.env.COZE_PROJECT_ENV
+        dev ? 'development' : env.DEPLOY_ENV
       }`,
     );
   });

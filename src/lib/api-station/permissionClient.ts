@@ -11,6 +11,8 @@
 
 import { logInfo, logWarn, logError } from './logger';
 import { getPermissionLevelFromClaims } from '@/lib/auth-center/types';
+import { loadEnv } from 'yunzone-service-kit/config';
+import { envLoadOptions, envSchema } from '@/lib/env-schema';
 
 export interface PermissionQueryResult {
   identityId?: string;
@@ -39,8 +41,9 @@ let state: AuthCenterState | null = null;
 async function initializeState(): Promise<AuthCenterState> {
   if (state) return state;
 
-  const authCenterUrl = process.env.AUTH_CENTER_URL;
-  const authCenterApiKey = process.env.AUTH_CENTER_API_KEY;
+  const env = loadEnv(envSchema, envLoadOptions);
+  const authCenterUrl = env.AUTH_CENTER_URL;
+  const authCenterApiKey = env.AUTH_CENTER_API_KEY;
 
   let config: {
     verifyTimeoutMs?: number;

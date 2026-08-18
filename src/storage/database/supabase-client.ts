@@ -1,6 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
 import { getReportBuffer, createWrappedFetch } from 'coze-coding-dev-sdk';
+import { loadDotEnv, loadEnv as loadSchemaEnv } from 'yunzone-service-kit/config';
+import { envSchema, envLoadOptions } from '@/lib/env-schema';
 
 let envLoaded = false;
 
@@ -9,20 +11,25 @@ interface SupabaseCredentials {
   anonKey: string;
 }
 
-function loadEnv(): void {
+/**
+ * 平台环境变量注入（本地模拟 Coze 注入通道）：
+ * 1. 本地 .env 文件加载（不存在时静默跳过）
+ * 2. 通过 coze_workload_identity 拉取平台项目环境变量写入 process.env
+ *
+ * 读取请使用 loadSchemaEnv(envSchema)（schema 私有层已声明 COZE_SUPABASE_*）；
+ * 此处对 process.env 的访问属于平台注入适配，不落入服务代码裸读（TICKET-001）。
+ */
+function loadPlatformEnvVars(): void {
   if (envLoaded || (process.env.COZE_SUPABASE_URL && process.env.COZE_SUPABASE_ANON_KEY)) {
     return;
   }
 
   try {
-    try {
-      require('dotenv').config();
-      if (process.env.COZE_SUPABASE_URL && process.env.COZE_SUPABASE_ANON_KEY) {
-        envLoaded = true;
-        return;
-      }
-    } catch {
-      // dotenv not available
+    // 本地 .env 文件加载（不存在时静默跳过）
+    loadDotEnv();
+    if (process.env.COZE_SUPABASE_URL && process.env.COZE_SUPABASE_ANON_KEY) {
+      envLoaded = true;
+      return;
     }
 
     const pythonCode = `
@@ -69,10 +76,12 @@ except Exception as e:
 }
 
 function getSupabaseCredentials(): SupabaseCredentials {
-  loadEnv();
+  loadPlatformEnvVars();
 
-  const url = process.env.COZE_SUPABASE_URL;
-  const anonKey = process.env.COZE_SUPABASE_ANON_KEY;
+  // TICKET-001：私有层经 schema 显式声明后读取，禁止裸读 process.env.COZE_*
+  const env = loadSchemaEnv(envSchema, envLoadOptions);
+  const url = env.COZE_SUPABASE_URL;
+  const anonKey = env.COZE_SUPABASE_ANON_KEY;
 
   if (!url) {
     throw new Error('COZE_SUPABASE_URL is not set');
@@ -85,8 +94,8 @@ function getSupabaseCredentials(): SupabaseCredentials {
 }
 
 function getSupabaseServiceRoleKey(): string | undefined {
-  loadEnv();
-  return process.env.COZE_SUPABASE_SERVICE_ROLE_KEY;
+  loadPlatformEnvVars();
+  return loadSchemaEnv(envSchema, envLoadOptions).COZE_SUPABASE_SERVICE_ROLE_KEY;
 }
 
 function getSupabaseClient(token?: string): SupabaseClient {
@@ -125,4 +134,4 @@ function getSupabaseClient(token?: string): SupabaseClient {
   });
 }
 
-export { loadEnv, getSupabaseCredentials, getSupabaseServiceRoleKey, getSupabaseClient };
+export { loadPlatformEnvVars, getSupabaseCredentials, getSupabaseServiceRoleKey, getSupabaseClient };
