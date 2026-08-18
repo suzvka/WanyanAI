@@ -1,85 +1,53 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Loader2, LogIn } from 'lucide-react';
 
-// ============ PKCE 工具函数 ============
+// ============ 类型 ============
 
-/** 生成 N 位随机字符串（43~128） */
-function generateCodeVerifier(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
-  const length = 64 + Math.floor(Math.random() * 32); // 64~95
-  const array = new Uint8Array(length);
-  crypto.getRandomValues(array);
-  return Array.from(array, (byte) => chars[byte % chars.length]).join('');
+interface UserInfo {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
 }
 
-/** Base64URL 编码（无填充） */
-function base64URLEncode(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+interface PostMessageEvent {
+  type: string;
+  payload?: {
+    token?: string;
+    user?: UserInfo;
+    message?: string;
+  };
 }
 
-/** 计算 S256 code_challenge */
-async function computeCodeChallenge(verifier: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return base64URLEncode(digest);
-}
-
-/** 生成随机 state（CSRF 令牌） */
-function generateState(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return base64URLEncode(array.buffer);
-}
+type LoginStatus = 'idle' | 'loading' | 'issuing' | 'success' | 'error';
 
 // ============ 常量 ============
 
-const OAUTH_STORAGE_KEY = 'oauth_pkce_state';
-const OAUTH_VERIFIER_KEY = 'oauth_code_verifier';
+const POPUP_WIDTH = 480;
+const POPUP_HEIGHT = 600;
 
 // ============ 组件 ============
 
 export default function LoginPage() {
   const router = useRouter();
-  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const popupRef = useRef<Window | null>(null);
+  const [status, setStatus] = useState<LoginStatus>('idle');
   const [statusMessage, setStatusMessage] = useState('');
-  const [oauthConfig, setOAuthConfig] = useState<{
-    authorizeUrl: string;
-    clientId: string;
-    redirectUri: string;
-  } | null>(null);
+  const [userCenterUrl, setUserCenterUrl] = useState('');
   const [configLoaded, setConfigLoaded] = useState(false);
 
-  // 加载 OAuth 运行时配置
+  // 加载运行时配置（避免 NEXT_PUBLIC_* 构建时内联问题）
   useEffect(() => {
     fetch('/api/v1/config')
       .then((r) => r.json())
       .then((cfg) => {
-        const providerUrl = cfg.oauthProviderUrl || '';
-        const clientId = cfg.oauthClientId || '';
-
-        if (providerUrl && clientId) {
-          const baseUrl = providerUrl.replace(/\/$/, '');
-          setOAuthConfig({
-            authorizeUrl: `${baseUrl}/oauth/authorize`,
-            clientId,
-            redirectUri: `${window.location.origin}/oauth/callback`,
-          });
-        }
+        setUserCenterUrl(cfg.userCenterUrl || '');
         setConfigLoaded(true);
       })
       .catch(() => {
@@ -87,112 +55,179 @@ export default function LoginPage() {
       });
   }, []);
 
-  // 发起 OAuth 登录
-  const startOAuthLogin = useCallback(async () => {
-    if (!oauthConfig) {
+  // 签发 station token
+  const issueToken = useCallback(async (accountToken: string, user: UserInfo) => {
+    setStatus('issuing');
+    setStatusMessage('正在签发访问凭证...');
+
+    const res = await fetch('/api/v1/auth/issue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountToken, user }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
       setStatus('error');
-      setStatusMessage('未配置 OAuth 认证服务，请联系管理员');
+      setStatusMessage(data.error || '签发凭证失败');
+      return;
+    }
+
+    sessionStorage.setItem('station_token', data.token);
+    sessionStorage.setItem('station_user', JSON.stringify(user));
+    if (data.membership) {
+      sessionStorage.setItem('station_membership', JSON.stringify({
+        level: data.membershipLevel,
+        permissionLevel: data.permissionLevel,
+        expiresAt: data.expiresAt,
+      }));
+    }
+
+    setStatus('success');
+    setStatusMessage(`登录成功！欢迎回来，${user.name}`);
+
+    setTimeout(() => router.push('/'), 800);
+  }, [router]);
+
+  // 监听 postMessage（来自弹窗）
+  const handleMessage = useCallback(
+    (e: MessageEvent<PostMessageEvent>) => {
+      if (!userCenterUrl || e.origin !== userCenterUrl) return;
+
+      const { type, payload } = e.data;
+      if (!type) return;
+
+      switch (type) {
+        case 'auth:sign-in:success': {
+          if (!payload?.token || !payload?.user) return;
+
+          // 关闭弹窗
+          popupRef.current?.close();
+          popupRef.current = null;
+
+          issueToken(payload.token, payload.user);
+          break;
+        }
+
+        case 'auth:sign-in:error':
+          setStatus('error');
+          setStatusMessage(payload?.message || '登录失败');
+          popupRef.current?.close();
+          popupRef.current = null;
+          break;
+      }
+    },
+    [issueToken, userCenterUrl],
+  );
+
+  useEffect(() => {
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [handleMessage]);
+
+  // 监听弹窗被关闭（用户手动关闭）
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (popupRef.current?.closed) {
+        popupRef.current = null;
+        if (status === 'loading') {
+          setStatus('idle');
+          setStatusMessage('');
+        }
+      }
+    }, 500);
+    return () => clearInterval(timer);
+  }, [status]);
+
+  // 打开登录弹窗
+  const openLoginPopup = useCallback(() => {
+    if (!userCenterUrl) {
+      setStatus('error');
+      setStatusMessage('未配置用户中心地址，请联系管理员');
       return;
     }
 
     setStatus('loading');
-    setStatusMessage('正在跳转到认证中心...');
+    setStatusMessage('请在新窗口中完成登录...');
 
-    try {
-      // 1. 生成 PKCE 参数
-      const codeVerifier = generateCodeVerifier();
-      const codeChallenge = await computeCodeChallenge(codeVerifier);
-      const state = generateState();
+    const left = window.screenX + (window.outerWidth - POPUP_WIDTH) / 2;
+    const top = window.screenY + (window.outerHeight - POPUP_HEIGHT) / 2;
 
-      // 2. 存储到 localStorage（回调页读取）
-      // 使用 localStorage 而非 sessionStorage，因为 OAuth 弹窗是独立上下文，
-      // sessionStorage 不共享，但 localStorage 在同源窗口间共享。
-      localStorage.setItem(OAUTH_VERIFIER_KEY, codeVerifier);
-      localStorage.setItem(OAUTH_STORAGE_KEY, state);
+    popupRef.current = window.open(
+      `${userCenterUrl}/embed/sign-in`,
+      'login-popup',
+      `width=${POPUP_WIDTH},height=${POPUP_HEIGHT},left=${left},top=${top}`,
+    );
 
-      // 3. 构造 OAuth 授权 URL
-      const params = new URLSearchParams({
-        response_type: 'code',
-        client_id: oauthConfig.clientId,
-        redirect_uri: oauthConfig.redirectUri,
-        code_challenge: codeChallenge,
-        code_challenge_method: 'S256',
-        state,
-      });
-
-      // 4. 302 跳转
-      window.location.href = `${oauthConfig.authorizeUrl}?${params.toString()}`;
-    } catch (err) {
+    if (!popupRef.current) {
       setStatus('error');
-      setStatusMessage('启动登录失败，请重试');
+      setStatusMessage('弹窗被浏览器拦截，请允许弹窗后重试');
     }
-  }, [oauthConfig]);
+  }, [userCenterUrl]);
+
+  const isBusy = status === 'loading' || status === 'issuing';
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">登录</CardTitle>
-          <CardDescription>使用云洲账号登录以继续</CardDescription>
+          <CardDescription>使用您的账户登录以继续</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* 状态提示 */}
           {statusMessage && (
-            <Alert variant={status === 'error' ? 'destructive' : 'default'}>
+            <Alert
+              variant={
+                status === 'error' ? 'destructive' : status === 'success' ? 'default' : 'default'
+              }
+            >
               <AlertTitle>
-                {status === 'error' ? '登录失败' : '提示'}
+                {status === 'error' ? '登录失败' : status === 'success' ? '登录成功' : '提示'}
               </AlertTitle>
               <AlertDescription>{statusMessage}</AlertDescription>
             </Alert>
           )}
 
           {/* 加载中 */}
-          {!configLoaded && (
+          {(!configLoaded || isBusy) && (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           )}
 
           {/* 登录按钮 */}
-          {configLoaded && status !== 'loading' && (
+          {configLoaded && !isBusy && status !== 'success' && (
             <Button
-              onClick={startOAuthLogin}
-              disabled={!oauthConfig}
+              onClick={openLoginPopup}
+              disabled={!userCenterUrl}
               className="w-full"
               size="lg"
             >
               <LogIn className="mr-2 h-4 w-4" />
-              使用云洲账号登录
+              打开登录窗口
             </Button>
           )}
 
-          {/* 加载中状态 */}
-          {configLoaded && status === 'loading' && (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-sm text-muted-foreground">正在跳转...</span>
-            </div>
-          )}
-
-          {/* 未配置提示 */}
-          {configLoaded && !oauthConfig && (
-            <Alert variant="destructive">
-              <AlertTitle>配置缺失</AlertTitle>
-              <AlertDescription>
-                未配置 OAuth 认证服务（OAUTH_CLIENT_ID / OAUTH_PROVIDER_URL），请联系管理员。
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* 重新登录按钮 */}
-          {configLoaded && status === 'error' && oauthConfig && (
+          {configLoaded && status === 'error' && !isBusy && (
             <Button
-              onClick={startOAuthLogin}
+              onClick={openLoginPopup}
               variant="outline"
               className="w-full"
             >
               重新登录
             </Button>
+          )}
+
+          {/* 未配置提示 */}
+          {configLoaded && !userCenterUrl && (
+            <Alert variant="destructive">
+              <AlertTitle>配置缺失</AlertTitle>
+              <AlertDescription>
+                未配置用户中心地址（USER_CENTER_URL），请联系管理员。
+              </AlertDescription>
+            </Alert>
           )}
         </CardContent>
       </Card>

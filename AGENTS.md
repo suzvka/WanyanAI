@@ -89,68 +89,11 @@
 | `svip` | 3 |
 | `admin` | 99 |
 
-### 用户中心登录（OAuth 2.0 + PKCE）
+### 用户中心登录
 
-采用标准 OAuth 2.0 Authorization Code + PKCE (S256) 流程，由云洲用户中心提供认证服务。
-
-**登录流程**：
-
-```
-1. 用户点击"使用云洲账号登录"
-     │
-2.  前端生成 code_verifier（64~95 位随机字符串）
-     │
-3.  前端计算 code_challenge: Base64URL(SHA256(code_verifier))
-     │
-4.  302 跳转到云洲 OAuth 授权页:
-     {providerUrl}/oauth/authorize
-       ?response_type=code
-       &client_id={clientId}
-       &redirect_uri={origin}/oauth/callback
-       &code_challenge=xxxxx
-       &code_challenge_method=S256
-       &state=random-csrf-token
-     │
-5.  用户在云洲认证（或已有 session 则跳过）
-     │
-6.  302 回跳至 /oauth/callback?code=xxx&state=yyy
-     │
-7.  前端回调页:
-     - 校验 state（防 CSRF）
-     - 读取 sessionStorage 中的 code_verifier
-     - POST /api/v1/oauth/callback { code, code_verifier, redirect_uri }
-     │
-8.  后端:
-     - 向云洲 POST /api/oauth/token 交换 access_token
-     - 用 access_token 调云洲 GET /api/oauth/userinfo 获取用户信息
-     - 调用鉴权中心签发 station token
-     - 返回 station token + 用户信息
-     │
-9.  前端存储 station token 到 sessionStorage
-     │
-10. 跳转首页，登录完成
-```
-
-**核心文件**：
-
-| 文件 | 说明 |
-|------|------|
-| `src/app/(auth)/login/page.tsx` | 登录页，生成 PKCE 参数并跳转到云洲 |
-| `src/app/(auth)/oauth/callback/page.tsx` | OAuth 回调页，接收 code 并调用后端 |
-| `src/app/api/v1/oauth/callback/route.ts` | 后端令牌交换 + 用户信息获取 + station token 签发 |
-| `src/app/api/v1/auth/issue/route.ts` | 仍保留，用于直接签发 station token |
-| `src/app/api/v1/config/route.ts` | 返回 OAuth 配置给前端 |
-
-**环境变量**：
-
-| 变量 | 说明 |
-|------|------|
-| `OAUTH_PROVIDER_URL` | 云洲 OAuth 服务 base URL（如 `https://yunzone.com`） |
-| `OAUTH_CLIENT_ID` | 注册时分配的 client_id |
-| `OAUTH_CLIENT_SECRET` | 注册时分配的 client_secret（机密客户端） |
-| `AUTH_CENTER_URL` | 我方鉴权中心 base URL |
-| `AUTH_CENTER_API_KEY` | 鉴权中心客户端凭证 |
-| `AUTH_CENTER_PRODUCT_ID` | 产品标识 |
+- **登录页面**: `/login`（iframe 嵌入用户中心登录组件）
+- **Token 签发**: `POST /api/v1/auth/issue`（接收 accountToken + user，调用鉴权中心签发 station token）
+- **环境变量**: `NEXT_PUBLIC_USER_CENTER_URL`（用户中心域名，用于 iframe src 和 postMessage origin 校验）
 
 ### 权限解析流程
 
@@ -173,9 +116,3 @@
 **根因**：`useAuth` 使用 `useState(readInitialState)` 初始化，但 Next.js App Router 中 `useState` 初始化器在服务端 SSR/RSC 渲染时执行，此时 `typeof window === 'undefined'`，无法读取 `sessionStorage`。服务端序列化的状态在客户端水合时直接使用，初始化器不会再次执行。
 
 **修复**：在 `useAuth` 中添加 `useEffect`，客户端挂载后重新调用 `readInitialState()` 从 `sessionStorage` 读取实际状态，与服务端状态不一致时更新 React state。
-
-### 登录页 postMessage origin 校验导致第三方登录回调丢失（2026-08-23 → 已迁移至 OAuth 2.0）
-
-**问题**：原 postMessage 弹窗模式下，用户中心域名 301 重定向到后台域名时，`e.origin` 校验失败，消息被静默丢弃。
-
-**修复**：已从 postMessage + 弹窗模式**全面迁移至 OAuth 2.0 Authorization Code + PKCE 标准流程**，不再依赖 `e.origin` 做安全边界。详见上方「用户中心登录（OAuth 2.0 + PKCE）」章节。
