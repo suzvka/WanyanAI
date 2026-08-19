@@ -6,13 +6,24 @@ import { envLoadOptions, envSchema } from '@/lib/env-schema';
 
 // ── Diagnostic helpers ──
 let _keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+const _logFile = '/tmp/server-debug-' + process.pid + '.log';
+let _logStream: import('fs').WriteStream | null = null;
 
-function log(msg: string) {
-  console.log(`[server] ${msg}`);
+function debugLog(msg: string) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`;
+  // stdout
+  process.stdout.write(line);
+  // file
+  if (!_logStream) {
+    try {
+      const fs = require('fs') as typeof import('fs');
+      _logStream = fs.createWriteStream(_logFile, { flags: 'a' });
+      _logStream.on('error', () => { _logStream = null; });
+    } catch { /* ignore */ }
+  }
+  _logStream?.write(line);
 }
-function warn(msg: string) {
-  console.warn(`[server] ${msg}`);
-}
+
 function activeHandles() {
   // @ts-ignore - internal API for diagnostics
   const handles: unknown[] = process._getActiveHandles?.() ?? [];
@@ -30,78 +41,103 @@ function activeHandles() {
 
 // ── Global error handlers ──
 process.on('uncaughtException', err => {
-  console.error('[server] uncaughtException:', err);
+  process.stdout.write(`[${new Date().toISOString()}] uncaughtException: ${err.message}\n${err.stack}\n`);
   process.exit(1);
 });
 process.on('unhandledRejection', reason => {
-  console.error('[server] unhandledRejection:', reason);
+  process.stdout.write(`[${new Date().toISOString()}] unhandledRejection: ${String(reason)}\n`);
   process.exit(1);
 });
 process.on('beforeExit', code => {
-  console.error(`[server] beforeExit: code=${code}, activeHandles=[${activeHandles()}]`);
+  debugLog(`beforeExit: code=${code}, activeHandles=[${activeHandles()}]`);
 });
 process.on('exit', code => {
-  console.error(`[server] exit: code=${code}`);
+  try {
+    process.stdout.write(`[${new Date().toISOString()}] exit: code=${code}, activeHandles=[${activeHandles()}]\n`);
+  } catch { /* ignore */ }
+  _logStream?.end();
+});
+
+// ── Keep event loop alive ──
+// 1) dummy TCP server on random port — most reliable in FaaS
+import { createServer as createNetServer } from 'net';
+const _dummyKeepAlive = createNetServer();
+_dummyKeepAlive.listen(0, '127.0.0.1');
+debugLog(`step 0a: dummy net.Server on random port, activeHandles=[${activeHandles()}]`);
+
+// 2) stdin resume as backup
+try {
+  process.stdin.resume();
+  debugLog(`step 0b: stdin.resume() called, readable=${process.stdin.readable}, flowing=${process.stdin.readableFlowing}, activeHandles=[${activeHandles()}]`);
+} catch (e: any) {
+  debugLog(`step 0b: stdin.resume() FAILED: ${e.message}`);
+}
+
+// 3) interval as last resort
+_keepAliveTimer = setInterval(() => {
+  debugLog(`[keepAlive] tick, activeHandles=[${activeHandles()}]`);
+}, 10_000);
+
+// Also log the module load state
+process.nextTick(() => {
+  debugLog(`[nextTick] module loaded, keepAlive=${_keepAliveTimer !== null}, dummyServer=${_dummyKeepAlive.listening}, activeHandles=[${activeHandles()}]`);
 });
 
 // ── Load env ──
-log('step 1: loadEnv...');
+debugLog('step 1: loadEnv...');
 const env = loadEnv(envSchema, envLoadOptions);
-log(`step 1 done: DEPLOY_ENV=${env.DEPLOY_ENV}, CONFIG_STORE=${env.CONFIG_STORE}`);
+debugLog(`step 1 done: DEPLOY_ENV=${env.DEPLOY_ENV}, CONFIG_STORE=${env.CONFIG_STORE}`);
 
 const dev = env.DEPLOY_ENV !== 'PROD';
 const { host: hostname, port } = resolveListenAddress();
-log(`step 2: resolveListenAddress -> ${hostname}:${port}`);
+debugLog(`step 2: resolveListenAddress -> ${hostname}:${port}`);
 
-log(`[server] starting in ${dev ? 'development' : 'production'} mode on ${hostname}:${port}`);
+debugLog(`starting in ${dev ? 'development' : 'production'} mode on ${hostname}:${port}`);
 
 // ── Create Next.js app ──
-log('step 3: next({ dev, hostname, port, customServer: false })...');
+debugLog('step 3: next({ dev, hostname, port, customServer: false })...');
 const app = next({ dev, hostname, port, customServer: false });
-log('step 3 done');
+debugLog('step 3 done');
 
-log('step 4: app.getRequestHandler()...');
+debugLog('step 4: app.getRequestHandler()...');
 const handle = app.getRequestHandler();
-log('step 4 done');
-
-// Keep event loop alive during app.prepare() to prevent premature exit in FaaS.
-log(`step 5: setInterval keepAlive (activeHandles before=[${activeHandles()}])`);
-_keepAliveTimer = setInterval(() => {
-  log(`[keepAlive] tick, activeHandles=[${activeHandles()}]`);
-}, 5_000);
-log(`step 5 done: keepAlive set, activeHandles=[${activeHandles()}]`);
+debugLog('step 4 done');
 
 // ── Prepare & start ──
-log('step 6: app.prepare()...');
+debugLog('step 5: app.prepare()...');
 app.prepare().then(() => {
-  log('step 6 done: app.prepare() resolved');
-  log(`step 7: createServer, activeHandles=[${activeHandles()}]`);
+  debugLog('step 5 done: app.prepare() resolved');
+  debugLog(`step 6: createServer, activeHandles=[${activeHandles()}]`);
 
   const server = createServer(async (req, res) => {
     try {
       const parsedUrl = parse(req.url!, true);
       await handle(req, res, parsedUrl);
     } catch (err) {
-      console.error('Error occurred handling', req.url, err);
+      debugLog(`Error handling ${req.url}: ${err}`);
       res.statusCode = 500;
       res.end('Internal server error');
     }
   });
   server.once('error', err => {
-    console.error('Server error:', err);
+    debugLog(`Server error: ${err.message}`);
     if (_keepAliveTimer) clearInterval(_keepAliveTimer);
+    _dummyKeepAlive.close();
     process.exit(1);
   });
   server.listen(port, () => {
-    if (_keepAliveTimer) clearInterval(_keepAliveTimer);
+    clearInterval(_keepAliveTimer!);
+    _keepAliveTimer = null;
     process.removeAllListeners('beforeExit');
-    log(`> Server listening at http://${hostname}:${port} as ${
+    _dummyKeepAlive.close();
+    debugLog(`> Server listening at http://${hostname}:${port} as ${
       dev ? 'development' : env.DEPLOY_ENV
     }`);
-    log(`activeHandles after listen=[${activeHandles()}]`);
+    debugLog(`activeHandles after listen=[${activeHandles()}]`);
   });
 }).catch(err => {
-  console.error('Failed to start server:', err);
+  debugLog(`Failed to start server: ${err.message}\n${err.stack}`);
   if (_keepAliveTimer) clearInterval(_keepAliveTimer);
+  _dummyKeepAlive.close();
   process.exit(1);
 });
