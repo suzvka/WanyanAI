@@ -4,7 +4,31 @@ import next from 'next';
 import { loadEnv, resolveListenAddress } from 'yunzone-service-kit/config';
 import { envLoadOptions, envSchema } from '@/lib/env-schema';
 
-// Global error handlers to prevent unexpected exits
+// ── Diagnostic helpers ──
+let _keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+
+function log(msg: string) {
+  console.log(`[server] ${msg}`);
+}
+function warn(msg: string) {
+  console.warn(`[server] ${msg}`);
+}
+function activeHandles() {
+  // @ts-ignore - internal API for diagnostics
+  const handles: unknown[] = process._getActiveHandles?.() ?? [];
+  const types = handles.map(h => {
+    const ctor = (h as object).constructor?.name;
+    if (ctor === 'Timer') {
+      // @ts-ignore
+      const isRef = (h as any)._refCount !== undefined ? (h as any)._refCount > 0 : true;
+      return `${ctor}(ref=${isRef})`;
+    }
+    return ctor || 'unknown';
+  });
+  return types.join(', ') || '(none)';
+}
+
+// ── Global error handlers ──
 process.on('uncaughtException', err => {
   console.error('[server] uncaughtException:', err);
   process.exit(1);
@@ -13,35 +37,46 @@ process.on('unhandledRejection', reason => {
   console.error('[server] unhandledRejection:', reason);
   process.exit(1);
 });
-// Log when event loop is about to drain (diagnostic for FaaS early-exit)
 process.on('beforeExit', code => {
-  console.error(`[server] beforeExit: event loop empty, code=${code}`);
+  console.error(`[server] beforeExit: code=${code}, activeHandles=[${activeHandles()}]`);
+});
+process.on('exit', code => {
+  console.error(`[server] exit: code=${code}`);
 });
 
-// 部署环境经中立键读取（TICKET-001：平台注入旧名经 deploymentAliases 过渡，禁止裸读）
-// .env 文件由 loadEnv 的 dotenv: true 选项自动加载（envLoadOptions 已配置）
+// ── Load env ──
+log('step 1: loadEnv...');
 const env = loadEnv(envSchema, envLoadOptions);
+log(`step 1 done: DEPLOY_ENV=${env.DEPLOY_ENV}, CONFIG_STORE=${env.CONFIG_STORE}`);
+
 const dev = env.DEPLOY_ENV !== 'PROD';
 const { host: hostname, port } = resolveListenAddress();
+log(`step 2: resolveListenAddress -> ${hostname}:${port}`);
 
-console.log(`[server] starting in ${dev ? 'development' : 'production'} mode on ${hostname}:${port}`);
+log(`[server] starting in ${dev ? 'development' : 'production'} mode on ${hostname}:${port}`);
 
-// Use customServer: false to get a NextServer (same class as `next start` uses internally)
-// instead of NextCustomServer. NextServer's prepare() is lighter in production
-// (skips server.prepare()) and avoids the heavyweight router-server initialization
-// path that can cause premature exit (exit status 0) in FaaS environments.
+// ── Create Next.js app ──
+log('step 3: next({ dev, hostname, port, customServer: false })...');
 const app = next({ dev, hostname, port, customServer: false });
+log('step 3 done');
+
+log('step 4: app.getRequestHandler()...');
 const handle = app.getRequestHandler();
+log('step 4 done');
 
 // Keep event loop alive during app.prepare() to prevent premature exit in FaaS.
-// Use a no-op timer that ref()'s the event loop; cleared once server is listening.
-const keepAlive = setInterval(() => {
-  // intent: keep event loop alive; no-op callback
-}, 30_000);
-// Unref is NOT called — we want the timer to keep the process alive.
-// (unref is explicitly avoided here.)
+log(`step 5: setInterval keepAlive (activeHandles before=[${activeHandles()}])`);
+_keepAliveTimer = setInterval(() => {
+  log(`[keepAlive] tick, activeHandles=[${activeHandles()}]`);
+}, 5_000);
+log(`step 5 done: keepAlive set, activeHandles=[${activeHandles()}]`);
 
+// ── Prepare & start ──
+log('step 6: app.prepare()...');
 app.prepare().then(() => {
+  log('step 6 done: app.prepare() resolved');
+  log(`step 7: createServer, activeHandles=[${activeHandles()}]`);
+
   const server = createServer(async (req, res) => {
     try {
       const parsedUrl = parse(req.url!, true);
@@ -54,21 +89,19 @@ app.prepare().then(() => {
   });
   server.once('error', err => {
     console.error('Server error:', err);
-    clearInterval(keepAlive);
+    if (_keepAliveTimer) clearInterval(_keepAliveTimer);
     process.exit(1);
   });
   server.listen(port, () => {
-    clearInterval(keepAlive);
-    // Remove beforeExit listener now that the HTTP server keeps the loop alive
+    if (_keepAliveTimer) clearInterval(_keepAliveTimer);
     process.removeAllListeners('beforeExit');
-    console.log(
-      `> Server listening at http://${hostname}:${port} as ${
-        dev ? 'development' : env.DEPLOY_ENV
-      }`,
-    );
+    log(`> Server listening at http://${hostname}:${port} as ${
+      dev ? 'development' : env.DEPLOY_ENV
+    }`);
+    log(`activeHandles after listen=[${activeHandles()}]`);
   });
 }).catch(err => {
   console.error('Failed to start server:', err);
-  clearInterval(keepAlive);
+  if (_keepAliveTimer) clearInterval(_keepAliveTimer);
   process.exit(1);
 });
