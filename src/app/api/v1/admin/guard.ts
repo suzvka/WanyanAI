@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { resolveAdminConfig, validateAdminSession as isValidAdminSession } from 'yunzone-service-kit/ops';
+import {
+  ADMIN_SESSION_COOKIE,
+  resolveAdminConfig,
+  validateSignedAdminSession,
+} from 'yunzone-service-kit/ops';
 
 /**
- * 验证请求是否来自已认证的 Admin 会话
- * 会话语义统一（service-kit/ops）：ADMIN_PASSWORD 未设置 = 管理后台禁用（503）
+ * 验证请求是否来自已认证的 Admin 会话（v1.0 Admin Session Protocol）。
+ * 会话语义统一（service-kit/ops）：ADMIN_PASSWORD 未设置 = 管理后台禁用（503）。
+ * 错误码统一：禁用 503 ADMIN_DISABLED；未认证 401 UNAUTHENTICATED
+ * （会话过期/非法再细分 SESSION_EXPIRED / INVALID_SESSION 供前端提示）。
  */
 export async function validateAdminSession(): Promise<{ valid: true } | { valid: false; response: Response }> {
   const admin = resolveAdminConfig();
@@ -13,54 +19,60 @@ export async function validateAdminSession(): Promise<{ valid: true } | { valid:
     return {
       valid: false,
       response: NextResponse.json(
-        { error: 'Admin access not configured', code: 'ADMIN_NOT_CONFIGURED' },
+        { code: 'ADMIN_DISABLED', message: '管理后台已禁用' },
         { status: 503 },
       ),
     };
   }
 
   const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('admin_session')?.value;
+  const sessionToken = cookieStore.get(ADMIN_SESSION_COOKIE)?.value;
 
   if (!sessionToken) {
     return {
       valid: false,
       response: NextResponse.json(
-        { error: 'Unauthorized', code: 'UNAUTHORIZED' },
+        { code: 'UNAUTHENTICATED', message: '未登录' },
         { status: 401 },
       ),
     };
   }
 
-  if (isValidAdminSession(sessionToken, admin.password)) {
+  const username = validateSignedAdminSession(sessionToken, admin.password, {
+    maxAgeSeconds: admin.sessionMaxAgeSeconds,
+  });
+  if (username !== null) {
     return { valid: true };
   }
 
   // 区分过期与非法，保持既有错误码语义
-  const expired = isExpiredSession(sessionToken, admin.password);
+  const expired = isExpiredSession(sessionToken, admin);
   return {
     valid: false,
     response: NextResponse.json(
       expired
-        ? { error: 'Session expired', code: 'SESSION_EXPIRED' }
-        : { error: 'Invalid session', code: 'INVALID_SESSION' },
+        ? { code: 'SESSION_EXPIRED', message: '会话已过期' }
+        : { code: 'INVALID_SESSION', message: '会话无效' },
       { status: 401 },
     ),
   };
 }
 
-/** 仅用于错误码区分：解码会话并判断是否因过期而失效 */
-function isExpiredSession(sessionToken: string, password: string): boolean {
+/** 仅用于错误码区分：解析 HMAC 会话载荷并判断是否因过期而失效 */
+function isExpiredSession(
+  sessionToken: string,
+  admin: { password: string | null; sessionMaxAgeSeconds: number }
+): boolean {
   try {
-    const decoded = Buffer.from(sessionToken, 'base64').toString('utf-8');
-    const parts = decoded.split(':');
-    const timestamp = parseInt(parts[2], 10);
+    const parts = sessionToken.split('.');
+    if (parts.length !== 2) return false;
+    const payload = JSON.parse(
+      Buffer.from(parts[0], 'base64url').toString('utf-8'),
+    ) as { t?: unknown };
     return (
-      parts.length === 3 &&
-      parts[0] === 'admin' &&
-      parts[1] === password &&
-      Number.isFinite(timestamp) &&
-      Date.now() - timestamp > 30 * 60 * 1000
+      typeof payload.t === 'number' &&
+      admin.password !== null &&
+      Math.floor(Date.now() / 1000) - payload.t > admin.sessionMaxAgeSeconds
     );
   } catch {
     return false;
