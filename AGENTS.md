@@ -54,10 +54,9 @@
 
 ### 数据库
 
-- `src/storage/database/shared/schema.ts` - Drizzle ORM 表定义（`runtime_config` / `health_check`）
 - `runtime_config` 表 - key-value 存储，用于 Admin 运行时配置持久化
 - 连接串经 `resolveDatabaseUrl()`（`DATABASE_PROVIDER=postgres` 走 `DATABASE_URL`；`DATABASE_PROVIDER=coze` 走平台注入 `PG*` 组）
-- 建表/迁移：`scripts/db-setup.sql`（幂等 DDL，`psql "$DATABASE_URL" -f scripts/db-setup.sql`）或 drizzle-kit
+- 建表/迁移：`scripts/db-setup.sql`（幂等 DDL，`psql "$DATABASE_URL" -f scripts/db-setup.sql`）
 
 ---
 
