@@ -189,8 +189,8 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
       yunzone-service-kit:
-        specifier: ^0.10.0
-        version: 0.10.0(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(zod@4.4.3)
+        specifier: ^0.11.1
+        version: 0.11.1(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(zod@4.4.3)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -5091,8 +5091,8 @@ packages:
     resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
     engines: {node: '>=18'}
 
-  yunzone-service-kit@0.10.0:
-    resolution: {integrity: sha512-jWC/Q+5R9gA7KkHmSdhvkQAwxcRCf2Ymtm9KJo3kHeOrOjU2j+xv/S/pvC4JyaWWDxWHp8VedDzVER1CnD6X/Q==}
+  yunzone-service-kit@0.11.1:
+    resolution: {integrity: sha512-0xoWhrZ0aM1LKy0vbKKQM1H24dttxQuLr50oM7Lb0eHffECNqUO5YoY05jh0IoQkZ9XCT8YeIZ/WOqGynvhb6g==}
     engines: {node: '>=18'}
     peerDependencies:
       next: '>=14'
@@ -10177,7 +10177,7 @@ snapshots:
 
   yoctocolors@2.1.2: {}
 
-  yunzone-service-kit@0.10.0(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(zod@4.4.3):
+  yunzone-service-kit@0.11.1(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(zod@4.4.3):
     dependencies:
       pg: 8.23.0
       zod: 4.4.3
