@@ -25,7 +25,7 @@ export async function GET() {
       name: s.name,
       hasCredentialConfig: s.hasCredentialConfig,
       hasModelToggle: s.hasModelToggle,
-      credentialSchema: s.hasCredentialConfig ? s.getCredentialSchema() : [],
+      credentialSchema: s.hasCredentialConfig ? await s.getCredentialSchema() : [],
       credentials: s.hasCredentialConfig ? await s.getCredentialConfig() : [],
       modelToggles: s.hasModelToggle ? await s.getModelToggles() : [],
     })),
