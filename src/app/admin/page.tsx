@@ -111,25 +111,7 @@ function LoginPage({ onLogin }: { onLogin: (token: string) => void }) {
 // ---- Credential Editor ----
 
 function CredentialEditor({ station }: { station: StationInfo }) {
-  const [credentials, setCredentials] = useState<CredentialField[]>(() =>
-    station.credentials.length > 0
-      ? station.credentials
-      : station.credentialSchema.map((s) => ({
-          key: '',
-          label: s.label,
-          type: s.type,
-          required: s.required,
-          description: s.description,
-          value: '',
-          children: station.credentialSchema.map((c) => ({
-            key: c.key,
-            label: c.label,
-            type: c.type,
-            required: c.required,
-            value: '',
-          })),
-        })),
-  );
+  const [credentials, setCredentials] = useState<CredentialField[]>(station.credentials);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -137,20 +119,29 @@ function CredentialEditor({ station }: { station: StationInfo }) {
     const modelId = prompt('请输入新模型标识（如 deepseek-chat）：');
     if (!modelId || modelId.trim() === '') return;
 
+    const id = modelId.trim();
+    if (credentials.some((c) => c.key === id)) {
+      alert(`模型 "${id}" 已存在，请勿重复添加`);
+      return;
+    }
+
     setCredentials((prev) => [
       ...prev,
       {
-        key: modelId.trim(),
+        key: id,
         label: modelId.trim(),
         type: 'group',
         required: false,
-        children: station.credentialSchema.map((s) => ({
-          key: s.key,
-          label: s.label,
-          type: s.type,
-          required: s.required,
-          value: '',
-        })),
+        // schema 中的 id 字段是模型标识（即本条目的 key），不作为子字段渲染
+        children: station.credentialSchema
+          .filter((s) => s.key !== 'id')
+          .map((s) => ({
+            key: s.key,
+            label: s.label,
+            type: s.type,
+            required: s.required,
+            value: '',
+          })),
       },
     ]);
   };
