@@ -27,6 +27,7 @@
 ### Admin 管理控制台
 
 - **页面**: `/admin`（需手动输入 URL 访问）
+  - 前端按模块拆分于 `src/app/admin/`：`page.tsx`（认证 + Shell 双栏布局）、`login.tsx`（登录页）、`station-nav.tsx`（左侧站点导航）、`credential-editor.tsx`（凭证配置：Collapsible 模型卡片 + Dialog 添加 + AlertDialog 删除 + Sticky 保存栏 + sonner toast）、`model-toggles.tsx`（模型启停：状态徽章 + 统计概览 + 即时保存）、`types.ts`（共享类型）
 - **API 路由**: `/api/v1/admin/verify` | `/api/v1/admin/stations` | `/api/v1/admin/config` | `/api/v1/admin/toggles`
 - **认证方式**: 环境变量 `ADMIN_PASSWORD`，未设置时返回 503
 - **会话管理**: httpOnly cookie（无状态 HMAC 签名，不存服务端会话；改密码即全部失效），有效期由 `ADMIN_SESSION_MAX_AGE` 控制（默认 86400 秒 / 24 小时）

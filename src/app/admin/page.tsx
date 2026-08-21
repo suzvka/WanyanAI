@@ -1,53 +1,38 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTheme } from 'next-themes';
-import { Moon, Sun } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import {
+  ChevronRight,
+  KeyRound,
+  LayoutDashboard,
+  LogOut,
+  Moon,
+  Power,
+  ShieldCheck,
+  Sun,
+} from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
+import LoginPage from './login';
+import { StationNav } from './station-nav';
+import { CredentialEditor } from './credential-editor';
+import { ModelTogglePanel } from './model-toggles';
+import type { StationInfo } from './types';
 
-// ---- Types ----
-
-interface StationInfo {
-  id: string;
-  name: string;
-  hasCredentialConfig: boolean;
-  hasModelToggle: boolean;
-  credentialSchema: CredentialField[];
-  credentials: CredentialField[];
-  modelToggles: ModelToggleInfo[];
-}
-
-interface CredentialField {
-  key: string;
-  label: string;
-  type: 'text' | 'password' | 'number' | 'group';
-  required: boolean;
-  description?: string;
-  value?: string;
-  children?: CredentialField[];
-}
-
-interface ModelToggleInfo {
-  id: string;
-  name: string;
-  description?: string;
-  enabled: boolean;
-}
-
-// ---- Theme Toggle ----
+// ---- 主题切换（Hydration 安全） ----
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
-  // Hydration 安全：挂载后再渲染图标，避免 SSR 不一致
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -67,335 +52,105 @@ function ThemeToggle() {
   );
 }
 
-// ---- Login Page ----
+// ---- 站点身份卡 ----
 
-function LoginPage({ onLogin }: { onLogin: (token: string) => void }) {
-  const [token, setToken] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      const res = await fetch('/api/v1/admin/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || '验证失败');
-        return;
-      }
-
-      onLogin(token);
-    } catch {
-      setError('网络错误，请重试');
-    } finally {
-      setLoading(false);
-    }
-  };
+function StationIdentity({ station }: { station: StationInfo }) {
+  const credentialCount = station.credentials.length;
+  const enabledCount = station.modelToggles.filter((m) => m.enabled).length;
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background">
-      <div className="absolute right-4 top-4">
-        <ThemeToggle />
-      </div>
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Admin 管理控制台</CardTitle>
-          <CardDescription>请输入访问令牌以继续</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="token">访问令牌</Label>
-              <Input
-                id="token"
-                type="password"
-                placeholder="输入 Admin Token"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                autoFocus
-              />
-            </div>
-            {error && (
-              <Alert variant="destructive">
-                <AlertTitle>验证失败</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            <Button type="submit" className="w-full" disabled={loading || !token.trim()}>
-              {loading ? '验证中...' : '进入管理'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-// ---- Credential Editor ----
-
-function CredentialEditor({ station }: { station: StationInfo }) {
-  const [credentials, setCredentials] = useState<CredentialField[]>(station.credentials);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  const addModel = () => {
-    const modelId = prompt('请输入新模型标识（如 deepseek-chat）：');
-    if (!modelId || modelId.trim() === '') return;
-
-    const id = modelId.trim();
-    if (credentials.some((c) => c.key === id)) {
-      alert(`模型 "${id}" 已存在，请勿重复添加`);
-      return;
-    }
-
-    setCredentials((prev) => [
-      ...prev,
-      {
-        key: id,
-        label: modelId.trim(),
-        type: 'group',
-        required: false,
-        // schema 中的 id 字段是模型标识（即本条目的 key），不作为子字段渲染
-        children: station.credentialSchema
-          .filter((s) => s.key !== 'id')
-          .map((s) => ({
-            key: s.key,
-            label: s.label,
-            type: s.type,
-            required: s.required,
-            value: '',
-          })),
-      },
-    ]);
-  };
-
-  const removeModel = (index: number) => {
-    if (!confirm(`确定移除模型 "${credentials[index].key}" 的配置？`)) return;
-    setCredentials((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const updateChildValue = (modelIndex: number, childKey: string, value: string) => {
-    setCredentials((prev) => {
-      const updated = [...prev];
-      const children = [...(updated[modelIndex].children || [])];
-      const childIndex = children.findIndex((c) => c.key === childKey);
-      if (childIndex >= 0) {
-        children[childIndex] = { ...children[childIndex], value };
-        updated[modelIndex] = { ...updated[modelIndex], children };
-      }
-      return updated;
-    });
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    setMessage(null);
-
-    try {
-      const res = await fetch('/api/v1/admin/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stationId: station.id,
-          credentials,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setMessage({ type: 'error', text: data.error || '保存失败' });
-        return;
-      }
-
-      setMessage({ type: 'success', text: '配置已保存，将立即生效' });
-    } catch {
-      setMessage({ type: 'error', text: '网络错误，请重试' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">凭证配置</h3>
-        <Button variant="outline" size="sm" onClick={addModel}>
-          + 添加模型
-        </Button>
-      </div>
-
-      {credentials.length === 0 && (
-        <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          暂无模型配置，点击上方按钮添加
+    <Card className="flex flex-col gap-5 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-4">
+        <div
+          className="flex size-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-pop"
+          style={{ background: 'var(--accent-gradient)' }}
+        >
+          <ShieldCheck className="size-6" />
         </div>
-      )}
-
-      <div className="space-y-4">
-        {credentials.map((cred, idx) => (
-          <Card key={cred.key}>
-            <CardHeader className="flex flex-row items-center justify-between py-3">
-              <CardTitle className="text-base">{cred.key}</CardTitle>
-              <Button variant="ghost" size="sm" className="text-red-500" onClick={() => removeModel(idx)}>
-                删除
-              </Button>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {(cred.children || []).map((child) => (
-                <div key={child.key} className="space-y-1">
-                  <Label className="text-xs">
-                    {child.label}
-                    {child.required && <span className="text-red-500">*</span>}
-                  </Label>
-                  <Input
-                    type={child.type === 'password' ? 'password' : 'text'}
-                    placeholder={child.label}
-                    value={child.value ?? ''}
-                    onChange={(e) => updateChildValue(idx, child.key, e.target.value)}
-                  />
-                  {child.description && (
-                    <p className="text-xs text-muted-foreground">{child.description}</p>
-                  )}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ))}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="truncate text-lg font-semibold tracking-tight">{station.name}</h2>
+            <Badge variant="outline" className="font-mono text-[10px]">
+              {station.id}
+            </Badge>
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {station.hasCredentialConfig && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] text-primary">
+                <KeyRound className="size-3" />
+                凭证配置
+              </span>
+            )}
+            {station.hasModelToggle && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] text-primary">
+                <Power className="size-3" />
+                模型启停
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
-      {message && (
-        <Alert variant={message.type === 'success' ? 'default' : 'destructive'}>
-          <AlertTitle>{message.type === 'success' ? '成功' : '失败'}</AlertTitle>
-          <AlertDescription>{message.text}</AlertDescription>
-        </Alert>
-      )}
-
-      {credentials.length > 0 && (
-        <Button onClick={handleSave} disabled={saving} className="w-full">
-          {saving ? '保存中...' : '保存配置'}
-        </Button>
-      )}
-    </div>
+      <div className="flex shrink-0 gap-6 pl-16 sm:pl-0">
+        <div className="text-center">
+          <p className="text-lg font-semibold tabular-nums">{credentialCount}</p>
+          <p className="text-xs text-muted-foreground">凭证模型</p>
+        </div>
+        <Separator orientation="vertical" className="hidden h-8 self-center sm:block" />
+        <div className="text-center">
+          <p className="text-lg font-semibold tabular-nums">
+            {enabledCount}
+            <span className="text-xs font-normal text-muted-foreground">
+              /{station.modelToggles.length}
+            </span>
+          </p>
+          <p className="text-xs text-muted-foreground">模型运行</p>
+        </div>
+      </div>
+    </Card>
   );
 }
 
-// ---- Model Toggle Panel ----
+// ---- 中转站面板 ----
 
-function ModelTogglePanel({ station }: { station: StationInfo }) {
-  const [toggles, setToggles] = useState<ModelToggleInfo[]>(station.modelToggles);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+function StationPanel({ station }: { station: StationInfo }) {
+  const hasCredentials = station.hasCredentialConfig;
+  const hasToggles = station.hasModelToggle;
+  const defaultTab = hasCredentials ? 'credentials' : hasToggles ? 'toggles' : 'credentials';
 
-  const toggleModel = async (modelId: string, enabled: boolean) => {
-    setSaving(true);
-    setMessage(null);
-
-    // 乐观更新
-    setToggles((prev) => prev.map((t) => (t.id === modelId ? { ...t, enabled } : t)));
-
-    try {
-      const res = await fetch('/api/v1/admin/toggles', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stationId: station.id, modelId, enabled }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setMessage({ type: 'error', text: data.error || '更新失败' });
-        // 回滚
-        setToggles((prev) => prev.map((t) => (t.id === modelId ? { ...t, enabled: !enabled } : t)));
-        return;
-      }
-
-      setMessage({ type: 'success', text: `模型 ${enabled ? '已启用' : '已禁用'}` });
-    } catch {
-      setMessage({ type: 'error', text: '网络错误，请重试' });
-      setToggles((prev) => prev.map((t) => (t.id === modelId ? { ...t, enabled: !enabled } : t)));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (toggles.length === 0) {
+  if (!hasCredentials && !hasToggles) {
     return (
-      <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-        无可管理的模型
+      <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed px-8 py-14 text-center">
+        <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <LayoutDashboard className="size-5" />
+        </div>
+        <p className="text-sm font-medium">该中转站无可配置项</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3">
-        {toggles.map((model) => (
-          <Card key={model.id}>
-            <CardContent className="flex items-center justify-between py-4">
-              <div className="flex-1">
-                <p className="font-medium">{model.name}</p>
-                <p className="text-xs text-muted-foreground">{model.id}</p>
-                {model.description && (
-                  <p className="mt-1 text-xs text-muted-foreground">{model.description}</p>
-                )}
-              </div>
-              <Switch
-                checked={model.enabled}
-                onCheckedChange={(checked) => toggleModel(model.id, checked)}
-                disabled={saving}
-              />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+    <Tabs defaultValue={defaultTab} className="w-full">
+      <TabsList className="grid w-full max-w-sm grid-cols-2">
+        {hasCredentials && <TabsTrigger value="credentials">凭证配置</TabsTrigger>}
+        {hasToggles && <TabsTrigger value="toggles">模型启停</TabsTrigger>}
+      </TabsList>
 
-      {message && (
-        <Alert variant={message.type === 'success' ? 'default' : 'destructive'}>
-          <AlertTitle>{message.type === 'success' ? '成功' : '失败'}</AlertTitle>
-          <AlertDescription>{message.text}</AlertDescription>
-        </Alert>
+      {hasCredentials && (
+        <TabsContent value="credentials" className="mt-5">
+          <CredentialEditor station={station} />
+        </TabsContent>
       )}
-    </div>
+      {hasToggles && (
+        <TabsContent value="toggles" className="mt-5">
+          <ModelTogglePanel station={station} />
+        </TabsContent>
+      )}
+    </Tabs>
   );
 }
 
-// ---- Station Panel ----
-
-function StationPanel({ station }: { station: StationInfo }) {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <h2 className="text-xl font-bold">{station.name}</h2>
-        <Badge variant="outline">{station.id}</Badge>
-      </div>
-
-      <Tabs defaultValue={station.hasCredentialConfig ? 'credentials' : 'toggles'} className="w-full">
-        <TabsList>
-          {station.hasCredentialConfig && <TabsTrigger value="credentials">凭证配置</TabsTrigger>}
-          {station.hasModelToggle && <TabsTrigger value="toggles">模型启停</TabsTrigger>}
-        </TabsList>
-        {station.hasCredentialConfig && (
-          <TabsContent value="credentials">
-            <CredentialEditor station={station} />
-          </TabsContent>
-        )}
-        {station.hasModelToggle && (
-          <TabsContent value="toggles">
-            <ModelTogglePanel station={station} />
-          </TabsContent>
-        )}
-      </Tabs>
-    </div>
-  );
-}
-
-// ---- Main Admin Page ----
+// ---- 主页面 ----
 
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false);
@@ -455,11 +210,11 @@ export default function AdminPage() {
     };
   }, [authenticated]);
 
-  const handleLogin = (token: string) => {
+  const handleLogin = () => {
     setAuthenticated(true);
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     setAuthenticated(false);
     setStations([]);
     setActiveStationId(null);
@@ -474,56 +229,128 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b bg-background/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-bold">Admin 管理控制台</h1>
-          <div className="flex items-center gap-2">
+      <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
+          {/* Logo + 标题 */}
+          <div className="flex min-w-0 items-center gap-3">
+            <div
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg text-white"
+              style={{ background: 'var(--accent-gradient)' }}
+            >
+              <ShieldCheck className="size-4" />
+            </div>
+            <div className="hidden min-w-0 items-center gap-1.5 text-sm sm:flex">
+              <span className="font-semibold">管理控制台</span>
+              {activeStation && (
+                <>
+                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate text-muted-foreground">{activeStation.name}</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="ml-auto flex items-center gap-1">
             <ThemeToggle />
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              退出
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+              <LogOut />
+              <span className="hidden sm:inline">退出</span>
             </Button>
           </div>
         </div>
       </header>
 
-      {/* Main */}
-      <div className="mx-auto max-w-6xl px-4 py-6">
-        {/* Station selector */}
-        {stations.length > 0 && (
-          <div className="mb-6 flex gap-2 overflow-x-auto">
-            {stations.map((s) => (
-              <Button
-                key={s.id}
-                variant={activeStationId === s.id ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setActiveStationId(s.id)}
-              >
-                {s.name}
-              </Button>
-            ))}
-          </div>
-        )}
+      {/* Body: 侧边栏 + 内容区 */}
+      <div className="mx-auto flex max-w-7xl">
+        {/* 桌面侧边栏 */}
+        <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-64 shrink-0 border-r lg:block">
+          <ScrollArea className="h-full">
+            <div className="space-y-4 px-4 py-5">
+              <div className="flex items-center justify-between px-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  中转站
+                </p>
+                <Badge variant="secondary" className="font-mono text-[10px]">
+                  {stations.length}
+                </Badge>
+              </div>
+              {!loading && stations.length > 0 && (
+                <StationNav
+                  stations={stations}
+                  activeStationId={activeStationId}
+                  onSelect={setActiveStationId}
+                />
+              )}
+              {loading && (
+                <div className="space-y-2 px-2">
+                  {[0, 1, 2].map((i) => (
+                    <Skeleton key={i} className="h-14 w-full rounded-xl" />
+                  ))}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </aside>
 
-        {loading && (
-          <div className="flex items-center justify-center py-12">
-            <p className="text-muted-foreground">加载中...</p>
-          </div>
-        )}
+        {/* 主内容区 */}
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6">
+          {/* 移动端站点切换 */}
+          {!loading && stations.length > 0 && (
+            <div className="mb-5 flex gap-2 overflow-x-auto pb-1 lg:hidden">
+              {stations.map((s) => (
+                <Button
+                  key={s.id}
+                  variant={activeStationId === s.id ? 'default' : 'outline'}
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => setActiveStationId(s.id)}
+                >
+                  {s.name}
+                </Button>
+              ))}
+            </div>
+          )}
 
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertTitle>加载失败</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+          {/* 加载骨架 */}
+          {loading && (
+            <div className="space-y-5">
+              <Skeleton className="h-24 w-full rounded-2xl" />
+              <Skeleton className="h-10 w-64 rounded-lg" />
+              <Skeleton className="h-48 w-full rounded-2xl" />
+            </div>
+          )}
 
-        {!loading && stations.length === 0 && !error && (
-          <div className="rounded-lg border border-dashed p-12 text-center text-sm text-muted-foreground">
-            没有可管理的子站
-          </div>
-        )}
+          {/* 错误 */}
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTitle>加载失败</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-        {!loading && activeStation && <StationPanel station={activeStation} />}
+          {/* 空状态 */}
+          {!loading && stations.length === 0 && !error && (
+            <div className={cn('flex flex-col items-center gap-3 rounded-2xl border border-dashed px-8 py-16 text-center')}>
+              <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <LayoutDashboard className="size-5" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">没有可管理的子站</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  请确认中转站已正确注册到系统
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* 站点内容 */}
+          {!loading && activeStation && (
+            <div className="space-y-6">
+              <StationIdentity station={activeStation} />
+              <StationPanel station={activeStation} />
+            </div>
+          )}
+        </main>
       </div>
     </div>
   );
