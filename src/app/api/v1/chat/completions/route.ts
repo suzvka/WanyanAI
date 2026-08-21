@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     });
 
     // === 模型权限门槛检查（子站声明、入口裁决；放在限流前，拒绝时不消耗配额）===
-    const modelMeta = await stationRegistry.findModel(model);
+    let modelMeta = await stationRegistry.findModel(model);
 
     if (!modelMeta) {
       // 区分"模型被停用"与"模型不存在"（尊重子站启停信号）
@@ -94,16 +94,37 @@ export async function POST(request: NextRequest) {
           { status: 403 },
         );
       }
-      logError('[API:Chat] 未找到可处理该模型的中转站', null, { requestId, model });
-      return NextResponse.json(
-        createErrorResponse(
-          `Model not found: ${model}`,
-          'invalid_request_error',
-          'MODEL_NOT_FOUND',
-          { requestId },
-        ),
-        { status: 404 },
-      );
+
+      // 方案 B：清单外动态模型透传兜底。
+      // 若存在能处理该模型的中转站（如 coze 站 canHandle 任意 coze:// 前缀），
+      // 视为平台新上线的动态模型：不要求出现在内置清单中，放行转发，
+      // 由子站（forward 内 isModelAllowed）与平台侧校验模型有效性。
+      const dynamicStation = stationRegistry.findStation(model);
+      if (!dynamicStation) {
+        logError('[API:Chat] 未找到可处理该模型的中转站', null, { requestId, model });
+        return NextResponse.json(
+          createErrorResponse(
+            `Model not found: ${model}`,
+            'invalid_request_error',
+            'MODEL_NOT_FOUND',
+            { requestId },
+          ),
+          { status: 404 },
+        );
+      }
+
+      logInfo('[API:Chat] 清单外动态模型放行（方案 B 透传）', {
+        requestId,
+        model,
+        stationId: dynamicStation.id,
+      });
+
+      // 降级元数据：无权限门槛、不参与模型级限流（未声明配额 = 不限制）
+      modelMeta = {
+        id: model,
+        name: model,
+        description: 'Dynamic model (passthrough, not in station catalog)',
+      };
     }
 
     if (modelMeta.minPermissionLevel !== undefined && permissionLevel < modelMeta.minPermissionLevel) {

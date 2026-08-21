@@ -27,7 +27,14 @@ export function isCozeEnvironment(): boolean {
 }
 
 /**
- * Coze 内部模型完整列表（所有可用模型定义）
+ * Coze 内部模型清单（用于展示与 Admin 启停管理）
+ *
+ * 来源：LLM 集成技能注入的 Available Models（平台当前可用模型），
+ * 平台模型变更时需随技能同步更新本清单。
+ *
+ * 注意：本清单仅约束"展示 / 开关 / 默认行为"，转发层采用动态透传
+ * （见 isModelAllowed）：不在清单内且未显式配置启停的 coze:// 模型
+ * 默认放行，由平台侧校验模型有效性，新模型上线无需改代码即可调用。
  */
 const ALL_COZE_MODELS: StationModel[] = [
   {
@@ -52,42 +59,6 @@ const ALL_COZE_MODELS: StationModel[] = [
     id: 'coze://doubao-seed-1-8-251228',
     name: 'Doubao Seed 1.8',
     description: '多模态 Agent 优化模型，支持深度思考、视觉理解与 Web 搜索',
-    maxCallsPerHour: 1000,
-  },
-  {
-    id: 'coze://doubao-seed-1-6-251015',
-    name: 'Doubao Seed 1.6',
-    description: '通用模型，兼顾复杂推理、视觉理解与指令遵循能力',
-    maxCallsPerHour: 1000,
-  },
-  {
-    id: 'coze://doubao-seed-1-6-vision-250815',
-    name: 'Doubao Seed 1.6 Vision',
-    description: '视觉理解模型，支持图像输入与多模态推理',
-    maxCallsPerHour: 1000,
-  },
-  {
-    id: 'coze://doubao-seed-1-6-lite-251015',
-    name: 'Doubao Seed 1.6 Lite',
-    description: '轻量级模型，主打低时延、高性价比',
-    maxCallsPerHour: 1000,
-  },
-  {
-    id: 'coze://deepseek-v3-2-251201',
-    name: 'DeepSeek V3.2',
-    description: '高性能推理模型，擅长代码与数学',
-    maxCallsPerHour: 1000,
-  },
-  {
-    id: 'coze://deepseek-r1-250528',
-    name: 'DeepSeek R1',
-    description: '深度推理模型，擅长复杂逻辑与数学推理',
-    maxCallsPerHour: 1000,
-  },
-  {
-    id: 'coze://kimi-k2-5-260127',
-    name: 'Kimi K2.5',
-    description: '多模态推理模型，支持长上下文理解',
     maxCallsPerHour: 1000,
   },
   {
@@ -214,29 +185,26 @@ export function createCozeStation(options?: { logger?: Logger }): Station {
   }
 
   /**
-   * 获取已启用的模型列表（根据 ConfigStore 中的启停状态过滤）
+   * 判断模型是否允许调用（方案 B：动态透传）
+   *
+   * 规则（优先级从高到低）：
+   * 1. 显式配置过启停开关 → 以开关为准（管理员管控优先，含停用拦截）
+   * 2. 未配置开关 → 默认放行。内置清单内模型默认启用；清单外的新模型
+   *    直接透传，由平台侧校验模型有效性——新模型上线无需改代码即可调用。
    */
-  async function getEnabledModels(): Promise<StationModel[]> {
-    // 非 Coze 环境返回空列表（中转站禁用）
+  async function isModelAllowed(modelId: string): Promise<boolean> {
+    // 非 Coze 环境一律拒绝（中转站禁用）
     if (!isCozeEnvironment()) {
-      logger.info('非 Coze 环境，中转站禁用');
-      return [];
+      return false;
     }
-
+    // 仅处理 coze:// 前缀模型
+    if (!modelId.startsWith('coze://')) {
+      return false;
+    }
     const toggles = await ensureTogglesLoaded();
-
-    const enabled = ALL_COZE_MODELS.filter(m => {
-      const enabled = toggles.get(m.id);
-      // 未配置启停记录的模型默认启用
-      return enabled === undefined || enabled === true;
-    });
-
-    logger.info('Coze 模型列表（已过滤启停）', {
-      total: ALL_COZE_MODELS.length,
-      enabled: enabled.length,
-    });
-
-    return enabled;
+    const explicit = toggles.get(modelId);
+    // 显式配置过开关 → 以开关为准；未配置 → 默认放行（含清单外新模型）
+    return explicit === undefined ? true : explicit;
   }
 
   return {
@@ -279,9 +247,8 @@ export function createCozeStation(options?: { logger?: Logger }): Station {
         );
       }
 
-      // 检查模型是否已启用
-      const enabledModels = await getEnabledModels();
-      if (!enabledModels.find(m => m.id === model)) {
+      // 检查模型是否允许调用（清单内按启停配置管控；清单外 coze:// 模型动态透传）
+      if (!(await isModelAllowed(model))) {
         logger.error('模型未启用或不存在', null, { requestId, model });
         return new Response(
           JSON.stringify({
