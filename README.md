@@ -71,10 +71,11 @@ platform-config/                 # 平台级配置
 ├── rate-limit.json              # 限流配置
 └── prompt-blocks/               # 提示词片段（任务总览）
 
-keys/                            # 模型密钥配置（deepseek.json、qwen3.json 等）
+runtime-config/               # 运行时配置数据（DATABASE_PROVIDER=none 时 FileSqlDb 的本地 json，已 gitignore）
+keys/                         # 外部模型密钥种子（首次启动导入 ConfigStore 后即不再直接使用）
 ```
 
-> 注意：本项目通过自定义 Node.js 入口 `src/server.ts`（`pnpm dev` / `pnpm start` 均走此入口）提供 HTTP 服务，并使用 `keys/` 目录下的 JSON 文件管理模型密钥（非 `.env`）。
+> 注意：本项目通过自定义 Node.js 入口 `src/server.ts`（`pnpm dev` / `pnpm start` 均走此入口）提供 HTTP 服务。外部模型密钥由 ConfigStore 统一管理（渠道由 `DATABASE_PROVIDER` 决定，见 [AGENTS.md](./AGENTS.md)），`keys/` 目录仅作为首次启动时的种子导入源，运行时增删改一律经 Admin 控制台（/admin）。
 
 ## 开发规范
 

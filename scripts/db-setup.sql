@@ -1,8 +1,9 @@
 -- =============================================================================
 -- WanyanAI 数据库初始化（幂等 DDL）
 --
--- 适用：CONFIG_STORE=db 模式的目标 PostgreSQL（DATABASE_PROVIDER=postgres 的
--- DATABASE_URL 指向的库，或 DATABASE_PROVIDER=coze 时平台注入的 PG 库）。
+-- 适用：DATABASE_PROVIDER=postgres / coze 模式的目标 PostgreSQL
+-- （postgres 走 DATABASE_URL 指向的库；coze 走平台注入的 PG 库）。
+-- DATABASE_PROVIDER=none 时无需本脚本：配置存储由 FileSqlDb 本地 json 模拟。
 --
 -- 用法：
 --   psql "$DATABASE_URL" -f scripts/db-setup.sql
