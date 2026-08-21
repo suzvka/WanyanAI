@@ -8,4 +8,4 @@ validate = [ "bash", "./scripts/validate.sh" ]
 
 [deploy]
 build = [ "pnpm", "run", "build" ]
-run = [ "sh", "-c", "node dist/server.js" ]
+run = [ "node", "dist/server.js" ]
