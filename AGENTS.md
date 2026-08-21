@@ -21,7 +21,7 @@
 | `types.ts` | `Station`, `AdminManagedStation`, `CredentialField`, `ModelToggle` 等核心类型 |
 | `registry.ts` | `StationRegistry` - 注册/查找中转站，提供 `getAdminManagedStations()` |
 | `loader.ts` | 初始化所有中转站 |
-| `openai-forward/index.ts` | 从 `keys/*.json` 读取配置，转发到 OpenAI 兼容 API |
+| `openai-forward/index.ts` | 模型配置经 ConfigStore 读写（`keys/*.json` 仅作首次种子导入），转发到 OpenAI 兼容 API |
 | `coze/index.ts` | Coze 内部模型，通过 `coze-coding-dev-sdk` 调用 |
 
 ### Admin 管理控制台
@@ -29,7 +29,7 @@
 - **页面**: `/admin`（需手动输入 URL 访问）
 - **API 路由**: `/api/v1/admin/verify` | `/api/v1/admin/stations` | `/api/v1/admin/config` | `/api/v1/admin/toggles`
 - **认证方式**: 环境变量 `ADMIN_PASSWORD`，未设置时返回 503
-- **会话管理**: httpOnly cookie，有效期由 `ADMIN_SESSION_MAX_AGE` 控制（默认 86400 秒 / 24 小时）
+- **会话管理**: httpOnly cookie（无状态 HMAC 签名，不存服务端会话；改密码即全部失效），有效期由 `ADMIN_SESSION_MAX_AGE` 控制（默认 86400 秒 / 24 小时）
 
 ### 子站接入 Admin 管理
 
@@ -45,17 +45,20 @@
 
 ### ConfigStore（配置存储层）
 
-`src/config-store/` 提供 KV 存储抽象：
+`src/config-store/` 提供 KV 存储，**统一构建在数据库抽象（SqlDb）之上，无独立存储开关**：
 
-| 实现 | 触发条件 | 说明 |
+| 实现 | 渠道（DATABASE_PROVIDER） | 说明 |
 |------|---------|------|
-| `FileConfigStore` | `CONFIG_STORE=file`（默认） | 写入 `runtime-config/<key>.json` |
-| `GenericDbConfigStore` | `CONFIG_STORE=db` | 通用 PostgreSQL `runtime_config` 表（DATABASE_PROVIDER 分派连接串） |
+| `SqlDbConfigStore` | 全部 | `runtime_config` 表 KV 视图，底层 `SqlDb` 由工厂注入 |
+| `PgSqlDb`（kit） | `postgres` / `coze` | 官方 PostgreSQL 适配（凭证按渠道解析） |
+| `FileSqlDb` | `none` | 本地 json 文件模拟数据库行为（`runtime-config/db.json`），无需真实库 |
+
+渠道唯一来源 = `DATABASE_PROVIDER`（`postgres` / `coze` / `none`），经 `resolveDatabaseChannel()` 解析后由 `getConfigStore()` 分派。
 
 ### 数据库
 
 - `runtime_config` 表 - key-value 存储，用于 Admin 运行时配置持久化
-- 连接串经 `resolveDatabaseUrl()`（`DATABASE_PROVIDER=postgres` 走 `DATABASE_URL`；`DATABASE_PROVIDER=coze` 走平台注入 `PG*` 组）
+- 渠道经 `resolveDatabaseChannel()`（`DATABASE_PROVIDER=postgres` 走 `DATABASE_URL`；`DATABASE_PROVIDER=coze` 走平台注入 `PG*` 组；`none` 走 `FileSqlDb` 本地 json 模拟）
 - 建表/迁移：`scripts/db-setup.sql`（幂等 DDL，`psql "$DATABASE_URL" -f scripts/db-setup.sql`）
 
 ---

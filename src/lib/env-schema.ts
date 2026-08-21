@@ -12,7 +12,8 @@
  * - 需要必填的模块声明独立子 schema（如 authCenterEnvSchema 三要素），
  *   缺失时由 loadEnv 抛出带诊断快照的 EnvConfigError（不回显变量值）。
  * - 数据库键组与 yunzone_user_center 对齐：DATABASE_PROVIDER 显式分派
- *   （postgres 默认走 DATABASE_URL；coze 走平台注入 PG* 组），不自动嗅探。
+ *   （postgres 默认走 DATABASE_URL；coze 走平台注入 PG* 组；none = 显式无库，
+ *   配置存储回落到 FileSqlDb 本地 json 模拟），不自动嗅探。
  */
 
 import { z } from "zod";
@@ -33,11 +34,9 @@ export const envSchema = composeFacets(
   userCenterFacet,
   adminFacet
 ).extend({
-  // ── 配置存储 ──
-  CONFIG_STORE: z.string().optional(),
-
   // ── 数据库（通用 PostgreSQL，DATABASE_PROVIDER 分派，与 yunzone_user_center 一致）──
-  // 数据库模式：postgres（通用，默认）| coze（Coze 平台数据库集成）
+  // 数据库渠道：postgres（通用，默认）| coze（Coze 平台数据库集成）| none（显式无库，
+  // 配置存储走 FileSqlDb 本地 json 模拟）。渠道唯一来源，无独立存储开关。
   DATABASE_PROVIDER: z.string().default("postgres"),
   // 通用连接串（DATABASE_PROVIDER=postgres 时使用）
   DATABASE_URL: z.string().optional(),

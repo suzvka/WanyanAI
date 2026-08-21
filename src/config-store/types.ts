@@ -4,13 +4,13 @@
  * 运行时键值对缓存环境抽象层。
  * 所有子站的凭证配置、启停状态等运行时数据均通过此接口读写。
  *
- * 实现：
- * - FileConfigStore: 写入 runtime-config/<key>.json（开发/沙箱）
- * - GenericDbConfigStore: 写入通用 PostgreSQL runtime_config 表（生产，DATABASE_PROVIDER 分派连接串）
+ * 实现（依赖倒置：统一构建在数据库抽象 SqlDb 之上）：
+ * - SqlDbConfigStore: runtime_config 表的 KV 视图，底层 SqlDb 由工厂注入——
+ *   - postgres 渠道：kit PgSqlDb（DATABASE_URL）
+ *   - coze 渠道：kit PgSqlDb（平台注入 PG* 变量组）
+ *   - none 渠道：FileSqlDb（本地 json 文件模拟数据库行为，无真实库）
  *
- * 通过环境变量 CONFIG_STORE 选择实现：
- *   file → FileConfigStore（默认）
- *   db   → GenericDbConfigStore
+ * 渠道唯一来源 = DATABASE_PROVIDER（postgres / coze / none），无独立存储开关。
  */
 
 export interface ConfigStore {

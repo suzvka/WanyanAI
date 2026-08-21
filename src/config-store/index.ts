@@ -1,9 +1,10 @@
 /**
- * ConfigStore 工厂函数
+ * ConfigStore 工厂（依赖倒置：配置存储统一构建在数据库抽象 SqlDb 之上）
  *
- * 根据 CONFIG_STORE 环境变量选择实现：
- *   file → FileConfigStore（默认）
- *   db   → GenericDbConfigStore（通用 PostgreSQL，DATABASE_PROVIDER 分派连接串）
+ * 唯一事实来源 = DATABASE_PROVIDER（resolveDatabaseChannel 解析）：
+ * - postgres / coze：kit 官方 PgSqlDb 适配（createSqlDb），连接凭证按渠道解析
+ * - none（显式无库）：本地 json 文件模拟（FileSqlDb）——非回退，是渠道值域内
+ *   的明确映射（"无需数据库时选非库存储后端"），与 kit 的 none fail-fast 语义对齐
  *
  * 使用示例：
  * ```typescript
@@ -17,7 +18,9 @@
 import 'server-only';
 
 import type { ConfigStore } from './types';
-import { FileConfigStore } from './file-store';
+import { SqlDbConfigStore } from './sql-db-store';
+import { FileSqlDb } from './file-sql-db';
+import { createSqlDb, resolveDatabaseChannel } from 'yunzone-service-kit/db';
 import { createLogger } from '@/lib/api-station/logger';
 
 const logger = createLogger('ConfigStore');
@@ -27,23 +30,17 @@ let instance: ConfigStore | null = null;
 export function getConfigStore(): ConfigStore {
   if (instance) return instance;
 
-  const mode = process.env.CONFIG_STORE || 'file';
+  // 渠道唯一来源：DATABASE_PROVIDER（postgres / coze / none）
+  const channel = resolveDatabaseChannel();
 
-  switch (mode) {
-    case 'db': {
-      // 动态加载，避免连接池在未启用 db 模式时初始化
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { GenericDbConfigStore } = require('./generic-db-store');
-      instance = new GenericDbConfigStore() as ConfigStore;
-      logger.info('ConfigStore 模式: PostgreSQL', { mode });
-      break;
-    }
-    case 'file':
-    default: {
-      instance = new FileConfigStore();
-      logger.info('ConfigStore 模式: 本地文件', { mode });
-      break;
-    }
+  if (channel === 'none') {
+    // 显式无库 → 本地 json 文件模拟数据库行为（不创建任何数据库执行器）
+    instance = new SqlDbConfigStore(new FileSqlDb());
+    logger.info('ConfigStore 模式: 本地文件模拟（DATABASE_PROVIDER=none）');
+  } else {
+    // postgres / coze → kit 官方 PgSqlDb 适配（渠道差异 = 凭证获取方式）
+    instance = new SqlDbConfigStore(createSqlDb({ channel }));
+    logger.info('ConfigStore 模式: PostgreSQL', { channel });
   }
 
   return instance;
