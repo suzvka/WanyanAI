@@ -116,7 +116,6 @@ function StationIdentity({ station }: { station: StationInfo }) {
 function StationPanel({ station }: { station: StationInfo }) {
   const hasCredentials = station.hasCredentialConfig;
   const hasToggles = station.hasModelToggle;
-  const defaultTab = hasCredentials ? 'credentials' : hasToggles ? 'toggles' : 'credentials';
 
   if (!hasCredentials && !hasToggles) {
     return (
@@ -129,23 +128,28 @@ function StationPanel({ station }: { station: StationInfo }) {
     );
   }
 
+  // 单一能力：直接展示面板，不套 Tabs，减少一次无意义的点击
+  if (!hasCredentials) {
+    return <ModelTogglePanel station={station} />;
+  }
+  if (!hasToggles) {
+    return <CredentialEditor station={station} />;
+  }
+
+  // 双能力：Tabs 切换两类配置
   return (
-    <Tabs defaultValue={defaultTab} className="w-full">
+    <Tabs defaultValue="credentials" className="w-full">
       <TabsList className="grid w-full max-w-sm grid-cols-2">
-        {hasCredentials && <TabsTrigger value="credentials">凭证配置</TabsTrigger>}
-        {hasToggles && <TabsTrigger value="toggles">模型启停</TabsTrigger>}
+        <TabsTrigger value="credentials">凭证配置</TabsTrigger>
+        <TabsTrigger value="toggles">模型启停</TabsTrigger>
       </TabsList>
 
-      {hasCredentials && (
-        <TabsContent value="credentials" className="mt-5">
-          <CredentialEditor station={station} />
-        </TabsContent>
-      )}
-      {hasToggles && (
-        <TabsContent value="toggles" className="mt-5">
-          <ModelTogglePanel station={station} />
-        </TabsContent>
-      )}
+      <TabsContent value="credentials" className="mt-5">
+        <CredentialEditor station={station} />
+      </TabsContent>
+      <TabsContent value="toggles" className="mt-5">
+        <ModelTogglePanel station={station} />
+      </TabsContent>
     </Tabs>
   );
 }
