@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stationRegistry } from '@/stations/registry';
 import { initializeStations } from '@/stations/loader';
 import { validateAdminSession } from '@/app/api/v1/admin/guard';
+import type { CredentialField } from '@/stations/types';
 
 /**
  * PUT /api/v1/admin/config
@@ -24,7 +25,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { stationId, credentials } = body as {
       stationId?: string;
-      credentials?: unknown[];
+      credentials?: CredentialField[];
     };
 
     if (!stationId || !Array.isArray(credentials)) {
@@ -54,7 +55,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    await station.updateCredentialConfig(credentials as any);
+    await station.updateCredentialConfig(credentials);
 
     return NextResponse.json({ success: true, stationId });
   } catch (error) {

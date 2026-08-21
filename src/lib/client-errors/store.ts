@@ -43,11 +43,4 @@ export function storeClientError(
   };
 }
 
-export function listClientErrors(): ClientErrorRecord[] {
-  return [...records];
-}
 
-export function clearClientErrors(): void {
-  records.splice(0, records.length);
-  notifiedAt.clear();
-}

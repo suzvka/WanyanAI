@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 /** 用户信息 */
 export interface AuthUser {
@@ -47,7 +47,7 @@ function parseMembershipClaims(claims: Record<string, unknown> | undefined): Mem
   };
 }
 
-/** 从 sessionStorage 读取初始状态的工厂函数（在 useState 初始化器中调用，避免 effect 中 setState） */
+/** 从 sessionStorage 读取登录状态（SSR 无 window 时返回占位状态） */
 function readInitialState(): AuthState {
   if (typeof window === 'undefined') {
     return { loaded: false, loggedIn: false, user: null, stationToken: null, membership: null };
@@ -81,24 +81,51 @@ function readInitialState(): AuthState {
   return { loaded: true, loggedIn: false, user: null, stationToken: null, membership: null };
 }
 
-export function useAuth() {
-  const [state, setState] = useState<AuthState>(readInitialState);
+/**
+ * 登录状态以 useSyncExternalStore 暴露：
+ * - SSR/RSC 渲染使用 serverSnapshot（loaded:false），客户端水合后立即用 getSnapshot
+ *   重新读取 sessionStorage，与服务端快照不一致时由 React 自动修正渲染，
+ *   无需 useEffect 手动 setState。
+ * - getSnapshot 返回缓存的稳定引用，写入路径（login/logout/updateMembership）
+ *   更新缓存并通知订阅者。
+ */
+const SSR_STATE: AuthState = {
+  loaded: false,
+  loggedIn: false,
+  user: null,
+  stationToken: null,
+  membership: null,
+};
 
-  /**
-   * 客户端挂载后重新从 sessionStorage 读取登录状态。
-   *
-   * 原因：在 Next.js App Router 中，useState 初始化器在服务端 SSR/RSC 渲染时执行，
-   * 此时 typeof window === 'undefined'，无法读取 sessionStorage。
-   * 服务端序列化的状态在客户端水合时直接使用，初始化器不会再次执行。
-   * 因此需要 useEffect 在客户端重新读取，否则用户登录后页面仍显示未登录。
-   */
-  useEffect(() => {
-    const clientState = readInitialState();
-    if (clientState.loaded !== state.loaded || clientState.loggedIn !== state.loggedIn) {
-      setState(clientState);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+let cachedState: AuthState | null = null;
+
+const listeners = new Set<() => void>();
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function getSnapshot(): AuthState {
+  if (cachedState === null) {
+    cachedState = readInitialState();
+  }
+  return cachedState;
+}
+
+function getServerSnapshot(): AuthState {
+  return SSR_STATE;
+}
+
+function commit(next: AuthState): void {
+  cachedState = next;
+  listeners.forEach((listener) => listener());
+}
+
+export function useAuth() {
+  const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   /** 登录成功后保存状态 */
   const login = useCallback(
@@ -109,7 +136,7 @@ export function useAuth() {
       if (membership) {
         sessionStorage.setItem(STORAGE_KEYS.membership, JSON.stringify(membership));
       }
-      setState({
+      commit({
         loaded: true,
         loggedIn: true,
         user,
@@ -123,7 +150,7 @@ export function useAuth() {
   /** 更新会员信息 */
   const updateMembership = useCallback((membership: MembershipInfo) => {
     sessionStorage.setItem(STORAGE_KEYS.membership, JSON.stringify(membership));
-    setState((prev) => ({ ...prev, membership }));
+    commit({ ...(cachedState ?? readInitialState()), membership });
   }, []);
 
   /** 登出 */
@@ -131,7 +158,7 @@ export function useAuth() {
     sessionStorage.removeItem(STORAGE_KEYS.token);
     sessionStorage.removeItem(STORAGE_KEYS.user);
     sessionStorage.removeItem(STORAGE_KEYS.membership);
-    setState({
+    commit({
       loaded: true,
       loggedIn: false,
       user: null,

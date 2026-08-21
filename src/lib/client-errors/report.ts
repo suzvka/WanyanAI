@@ -114,4 +114,3 @@ export function reportBusinessError(error: unknown, message?: string): ClientErr
 }
 
 export type { ClientErrorLevel, ClientErrorRecord, ClientErrorReportInput, ClientErrorSource } from './types';
-export { clearClientErrors, listClientErrors } from './store';
