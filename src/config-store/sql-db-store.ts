@@ -41,12 +41,18 @@ export class SqlDbConfigStore implements ConfigStore {
 
   async set(key: string, value: string): Promise<void> {
     try {
-      // JSONB 语义：可解析为对象则存对象，否则存字符串原值（与旧 GenericDbConfigStore 一致）
-      let parsedValue: unknown;
+      // 统一序列化为合法 JSON 文本后再入库（JSONB 语义）：
+      // 不能把 JSON.parse 后的 JS 值直接传给 pg 驱动——pg 会把 JS 数组序列化为
+      // PostgreSQL 数组字面量（如 {"{\"id\":\"x\"}"}）而非 JSON 数组，写入 JSONB
+      // 列会抛 "invalid input syntax for type json"。统一传 JSON 文本，由
+      // PostgreSQL（text → jsonb 隐式转换）/ FileSqlDb（解析为 JS 值）各自完成转换。
+      let jsonText: string;
       try {
-        parsedValue = JSON.parse(value);
+        // 可解析为 JSON 则规整化（保证是合法 JSON 文本）
+        jsonText = JSON.stringify(JSON.parse(value));
       } catch {
-        parsedValue = value;
+        // 非 JSON 字符串：包装为 JSON 字符串字面量，保证 JSONB 列可接受
+        jsonText = JSON.stringify(value);
       }
 
       const now = new Date();
@@ -54,7 +60,7 @@ export class SqlDbConfigStore implements ConfigStore {
         `INSERT INTO runtime_config (key, value, updated_at)
          VALUES ($1, $2, $3)
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
-        [key, parsedValue, now]
+        [key, jsonText, now]
       );
 
       logger.info('配置已写入', { key });

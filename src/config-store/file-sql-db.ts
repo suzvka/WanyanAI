@@ -180,8 +180,18 @@ export class FileSqlDb implements SqlDb {
     if (normalized === SQL_UPSERT) {
       this.expectParams(sql, params, 3);
       const [key, value, updatedAt] = params as [string, unknown, Date | string];
+      // 模拟 JSONB 列语义：JSON 文本参数解析为 JS 值后存储，
+      // 与 PostgreSQL jsonb 列的存取行为对齐（读取时返回已解析的 JS 值）
+      let stored: unknown = value;
+      if (typeof value === 'string') {
+        try {
+          stored = JSON.parse(value);
+        } catch {
+          stored = value;
+        }
+      }
       this.rows.set(key, {
-        value,
+        value: stored,
         updated_at: updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt),
       });
       await this.persist();
