@@ -9,6 +9,7 @@ import type { Station, StationModel, ForwardRequest, AdminManagedStation, ModelT
 import { LLMClient, Config, HeaderUtils, type Message } from 'coze-coding-dev-sdk';
 import { createLogger, type Logger } from '../logger';
 import { getConfigStore } from '../../config-store';
+import { stationRegistry } from '@/stations/registry';
 import { loadEnv } from 'yunzone-service-kit/config';
 import { envSchema, envLoadOptions } from '../../lib/env-schema';
 
@@ -198,8 +199,19 @@ function formatSSEChunk(id: string, model: string, content: string): string {
 export function createCozeStation(options?: { logger?: Logger }): Station {
   const logger = options?.logger ?? createLogger('Station:Coze');
 
-  /** 缓存模型启停状态 */
+  /** 缓存模型启停状态（供同步读取加速，变更时同步更新） */
   let togglesCache: Map<string, boolean> | null = null;
+
+  /**
+   * 确保启停状态已加载：进程启动后首次调用从 ConfigStore 读取，
+   * 避免在存在停用记录时仍默认返回全部模型。
+   */
+  async function ensureTogglesLoaded(): Promise<Map<string, boolean>> {
+    if (!togglesCache) {
+      togglesCache = await loadModelToggles();
+    }
+    return togglesCache;
+  }
 
   /**
    * 获取已启用的模型列表（根据 ConfigStore 中的启停状态过滤）
@@ -211,18 +223,11 @@ export function createCozeStation(options?: { logger?: Logger }): Station {
       return [];
     }
 
-    const toggles = togglesCache ?? await loadModelToggles();
-    togglesCache = toggles;
-
-    // 如果没有任何启停记录，默认全部启用
-    if (toggles.size === 0) {
-      logger.info('Coze 模型启停未配置，默认全部启用', { modelCount: ALL_COZE_MODELS.length });
-      return ALL_COZE_MODELS;
-    }
+    const toggles = await ensureTogglesLoaded();
 
     const enabled = ALL_COZE_MODELS.filter(m => {
       const enabled = toggles.get(m.id);
-      // 未配置的模型默认启用
+      // 未配置启停记录的模型默认启用
       return enabled === undefined || enabled === true;
     });
 
@@ -238,21 +243,17 @@ export function createCozeStation(options?: { logger?: Logger }): Station {
     id: 'coze-internal',
     name: 'Coze Internal',
 
-    getModels(): StationModel[] {
-      // 同步返回当前缓存的模型列表
-      // 首次调用时，返回全部模型（后续由 Admin 页面控制启停）
+    async getModels(): Promise<StationModel[]> {
+      // 非 Coze 环境返回空列表（中转站禁用）
       if (!isCozeEnvironment()) {
         return [];
       }
-      if (togglesCache) {
-        const enabled = ALL_COZE_MODELS.filter(m => {
-          const e = togglesCache!.get(m.id);
-          return e === undefined || e === true;
-        });
-        return enabled;
-      }
-      // 首次加载，默认返回全部
-      return ALL_COZE_MODELS;
+      // 每次基于最新启停状态过滤（未配置记录时默认全部启用）
+      const toggles = await ensureTogglesLoaded();
+      return ALL_COZE_MODELS.filter(m => {
+        const e = toggles.get(m.id);
+        return e === undefined || e === true;
+      });
     },
 
     canHandle(modelId: string): boolean {
@@ -429,7 +430,8 @@ export function createCozeStation(options?: { logger?: Logger }): Station {
     },
 
     async getModelToggles(): Promise<ModelToggle[]> {
-      const toggles = togglesCache ?? await loadModelToggles();
+      // 每次从 ConfigStore 读取最新状态，避免内存缓存与存储漂移（刷新页面后状态回退）
+      const toggles = await loadModelToggles();
       togglesCache = toggles;
 
       return ALL_COZE_MODELS.map(m => ({
@@ -441,11 +443,14 @@ export function createCozeStation(options?: { logger?: Logger }): Station {
     },
 
     async updateModelToggle(modelId: string, enabled: boolean): Promise<void> {
-      const toggles = togglesCache ?? await loadModelToggles();
-      togglesCache = toggles;
-
+      // 基于最新存储状态更新，防止并发/缓存导致旧值覆盖新值
+      const toggles = await loadModelToggles();
       toggles.set(modelId, enabled);
+      togglesCache = toggles;
       await saveModelToggles(toggles);
+
+      // 模型启停变化后，使注册表模型列表缓存失效，确保首页模型列表立即生效
+      stationRegistry.invalidateModelsCache();
 
       logger.info('Coze 模型启停状态已更新', { modelId, enabled });
     },

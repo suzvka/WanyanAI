@@ -15,6 +15,7 @@ import path from 'node:path';
 import type { Station, StationModel, ForwardRequest, AdminManagedStation, CredentialField, ModelToggle } from '../types';
 import { createLogger, type Logger } from '../logger';
 import { getConfigStore } from '../../config-store';
+import { stationRegistry } from '@/stations/registry';
 import { loadEnv } from 'yunzone-service-kit/config';
 import { envSchema, envLoadOptions } from '../../lib/env-schema';
 
@@ -370,6 +371,8 @@ export function createOpenAIForwardStation(options?: { configDir?: string; logge
       const store = getConfigStore();
       await store.set(MODELS_STORE_KEY, JSON.stringify(configs));
       clearModelsCache();
+      // 模型配置变化后，使注册表模型列表缓存失效，确保首页模型列表立即生效
+      stationRegistry.invalidateModelsCache();
       logger.info('模型配置已更新（ConfigStore）', { modelCount: configs.length });
     },
 

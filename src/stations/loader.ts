@@ -10,7 +10,7 @@
  * 4. 支持注入宿主 logger 与配置目录（准库化：不依赖项目内部设施）
  */
 
-import { stationRegistry } from './registry';
+import { stationRegistry } from '@/stations/registry';
 import { createOpenAIForwardStation } from './openai-forward';
 import { createCozeStation } from './coze';
 import { createLogger, type Logger } from './logger';
@@ -18,7 +18,8 @@ import { createLogger, type Logger } from './logger';
 /** 默认 logger（未注入时的兜底实现） */
 const defaultLogger = createLogger('StationLoader');
 
-/** 加载状态标记 */
+/** 加载状态标记（挂载到 globalThis，防止 Next.js dev 下 ESM/CJS 双加载导致重复注册） */
+const g = globalThis as unknown as { __stationsInitialized?: boolean };
 let initialized = false;
 
 /**
@@ -33,7 +34,7 @@ let initialized = false;
 export function initializeStations(options?: { logger?: Logger; configDir?: string }): void {
   const logger = options?.logger ?? defaultLogger;
 
-  if (initialized) {
+  if (g.__stationsInitialized) {
     logger.info('中转站已初始化，跳过');
     return;
   }
@@ -58,6 +59,7 @@ export function initializeStations(options?: { logger?: Logger; configDir?: stri
   }
 
   initialized = true;
+  g.__stationsInitialized = true;
 
   const stations = stationRegistry.getStations();
   logger.info('中转站加载完成', {
@@ -72,5 +74,6 @@ export function initializeStations(options?: { logger?: Logger; configDir?: stri
 export function resetStations(): void {
   stationRegistry.reset();
   initialized = false;
+  g.__stationsInitialized = false;
   defaultLogger.info('中转站已重置');
 }

@@ -41,12 +41,12 @@ class StationRegistryImpl implements IStationRegistry {
 
   /**
    * 获取所有可用的模型
+   *
+   * 每次调用都实时拉取各子站最新模型列表，不做跨请求缓存：
+   * 各子站自身管理内存缓存（Coze 启停、OpenAI Forward 配置），
+   * 避免注册表级缓存与子站变更（模型启停/配置更新）不同步。
    */
   async getAllModels(): Promise<StationModel[]> {
-    if (this.modelsCache) {
-      return this.modelsCache;
-    }
-
     const models: StationModel[] = [];
 
     for (const station of this.modules.values()) {
@@ -57,9 +57,6 @@ class StationRegistryImpl implements IStationRegistry {
         this.logger.error(`获取中转站 ${station.id} 的模型列表失败`, error);
       }
     }
-
-    this.modelsCache = models;
-    this.logger.info('模型列表已更新', { totalModels: models.length });
 
     return models;
   }
@@ -83,6 +80,39 @@ class StationRegistryImpl implements IStationRegistry {
   async findModel(modelId: string): Promise<StationModel | null> {
     const models = await this.getAllModels();
     return models.find(m => m.id === modelId) ?? null;
+  }
+
+  /**
+   * 判断模型是否"存在但被停用"（用于区分 MODEL_DISABLED 与 MODEL_NOT_FOUND）
+   *
+   * 遍历所有可处理该模型的中转站，查询其启停状态（AdminManagedStation 能力）。
+   * 查询失败或无法判断时返回 false，交由调用方按 MODEL_NOT_FOUND 兜底。
+   */
+  async isModelDisabled(modelId: string): Promise<boolean> {
+    for (const station of this.modules.values()) {
+      if (!station.canHandle(modelId)) continue;
+      const admin = station as unknown as AdminManagedStation;
+      if (typeof admin.getModelToggles !== 'function') continue;
+      try {
+        const toggles = await admin.getModelToggles();
+        const toggle = toggles.find(t => t.id === modelId);
+        if (toggle && !toggle.enabled) return true;
+      } catch {
+        // 查询失败时忽略该站，继续下一个
+      }
+    }
+    return false;
+  }
+
+  /**
+   * 使模型列表缓存失效
+   *
+   * 中转站模型列表可能因运行期变更（如 Coze 模型启停、配置更新）而变化，
+   * 变更方调用此方法后，下次 getAllModels() 将重新拉取各子站的最新模型。
+   */
+  invalidateModelsCache(): void {
+    this.modelsCache = null;
+    this.logger.info('模型列表缓存已失效');
   }
 
   /**
@@ -115,5 +145,6 @@ class StationRegistryImpl implements IStationRegistry {
   }
 }
 
-// 单例实例
-export const stationRegistry = new StationRegistryImpl();
+// 单例实例（挂载到 globalThis，防止 Next.js dev 下 ESM/CJS 双加载产生两个实例）
+const g = globalThis as unknown as { __stationRegistry?: StationRegistryImpl };
+export const stationRegistry = g.__stationRegistry ?? (g.__stationRegistry = new StationRegistryImpl());

@@ -80,6 +80,20 @@ export async function POST(request: NextRequest) {
     const modelMeta = await stationRegistry.findModel(model);
 
     if (!modelMeta) {
+      // 区分"模型被停用"与"模型不存在"（尊重子站启停信号）
+      const disabled = await stationRegistry.isModelDisabled(model);
+      if (disabled) {
+        logWarn('[API:Chat] 模型已被停用', { requestId, model });
+        return NextResponse.json(
+          createErrorResponse(
+            `Model disabled: ${model}`,
+            'invalid_request_error',
+            'MODEL_DISABLED',
+            { requestId },
+          ),
+          { status: 403 },
+        );
+      }
       logError('[API:Chat] 未找到可处理该模型的中转站', null, { requestId, model });
       return NextResponse.json(
         createErrorResponse(
