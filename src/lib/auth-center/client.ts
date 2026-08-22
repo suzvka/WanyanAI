@@ -75,7 +75,14 @@ async function request<T>(
       code: error.code,
       message: error.message,
     });
-    throw new Error(`[AuthCenter] ${error.code}: ${error.message}`);
+    // 附加错误码（Error.cause 风格），供调用方按 code 做幂等/降级判断
+    const httpError = new Error(`[AuthCenter] ${error.code}: ${error.message}`) as Error & {
+      code?: string;
+      status?: number;
+    };
+    httpError.code = error.code;
+    httpError.status = res.status;
+    throw httpError;
   }
 
   return res.json() as Promise<T>;

@@ -78,10 +78,10 @@ export async function POST(req: NextRequest) {
       to: level,
     });
 
-    // 吊销旧 token
-    await revokeToken({ token, productId: getProductId() });
-
-    // 签发新 token（带新会员等级）
+    // 先签发新 token（带新会员等级），再吊销旧 token。
+    // 顺序保证：即使签发失败，旧 token 仍有效，现有会话不受影响（无感化关键）；
+    // 鉴权中心对同一 (userId, productId) 重复签发会替换旧 token，
+    // 因此吊销失败也不阻塞升级（仅记录日志）。
     const newClaims = {
       ...currentClaims,
       membershipLevel: level,
@@ -92,6 +92,15 @@ export async function POST(req: NextRequest) {
       productId: getProductId(),
       claims: newClaims,
     });
+
+    try {
+      await revokeToken({ token, productId: getProductId() });
+    } catch (revokeErr) {
+      logger.warn('旧 token 吊销失败（新 token 已签发，可忽略）', {
+        userId,
+        detail: revokeErr instanceof Error ? revokeErr.message : '未知错误',
+      });
+    }
 
     return NextResponse.json({
       success: true,

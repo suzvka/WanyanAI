@@ -66,7 +66,7 @@ const MEMBERSHIP_TIERS: Record<string, {
 
 export default function AccountPage() {
   const router = useRouter();
-  const { loaded, loggedIn, user, stationToken, membership, updateMembership, logout } = useAuth();
+  const { loaded, loggedIn, user, stationToken, membership, rotateToken, logout } = useAuth();
   const [upgrading, setUpgrading] = useState(false);
   const [error, setError] = useState('');
 
@@ -122,12 +122,14 @@ export default function AccountPage() {
         return;
       }
 
-      // 更新本地 token
-      sessionStorage.setItem('station_token', data.token);
-      updateMembership({
-        level: data.membershipLevel,
-        permissionLevel: data.permissionLevel,
-        expiresAt: data.expiresAt,
+      // 无感轮换：同步新 token + 新会员等级，后续请求自动使用新凭证
+      rotateToken({
+        token: data.token,
+        membership: {
+          level: data.membershipLevel,
+          permissionLevel: data.permissionLevel,
+          expiresAt: data.expiresAt,
+        },
       });
     } catch {
       setError('网络错误，请重试');

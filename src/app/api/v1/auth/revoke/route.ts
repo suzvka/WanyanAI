@@ -6,7 +6,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { revokeToken, getProductId } from '@/lib/auth-center/client';
-import { logError } from '@/lib/api-station/logger';
+import { logInfo, logError } from '@/lib/api-station/logger';
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
@@ -23,6 +23,12 @@ export async function POST(request: NextRequest) {
     await revokeToken({ token, productId: getProductId() });
     return NextResponse.json({ success: true });
   } catch (error) {
+    // 幂等语义：token 已不存在（被吊销/过期清理）视为吊销成功，避免客户端收到失败误判
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'TOKEN_NOT_FOUND') {
+      logInfo('[Auth:Revoke] Token 已不存在，按幂等成功处理');
+      return NextResponse.json({ success: true });
+    }
     logError('[Auth:Revoke] Token 吊销失败', error);
     // 不阻塞客户端本地清理，返回 502 由调用方降级
     return NextResponse.json(

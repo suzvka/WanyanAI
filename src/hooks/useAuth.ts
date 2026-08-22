@@ -154,6 +154,33 @@ export function useAuth() {
     commit({ ...(cachedState ?? readInitialState()), membership });
   }, []);
 
+  /**
+   * 无感轮换登录凭证（token rotation）。
+   *
+   * 服务端在会员升级等场景会吊销旧 token 并换发新 token（vip 等级与 token 绑定）。
+   * 调用本方法将新 token 与会员信息同步到 sessionStorage 与内存缓存并通知订阅者，
+   * 使 useAuth().stationToken 立即切换到新 token，后续请求全程无感使用新凭证，
+   * 避免因旧 token 已失效导致登录态丢失。
+   */
+  const rotateToken = useCallback(
+    (patch: { token: string; membership: MembershipInfo | null }) => {
+      const current = cachedState ?? readInitialState();
+      sessionStorage.setItem(STORAGE_KEYS.token, patch.token);
+      if (patch.membership) {
+        sessionStorage.setItem(STORAGE_KEYS.membership, JSON.stringify(patch.membership));
+      } else {
+        sessionStorage.removeItem(STORAGE_KEYS.membership);
+      }
+      commit({
+        ...current,
+        loggedIn: true,
+        stationToken: patch.token,
+        membership: patch.membership,
+      });
+    },
+    [],
+  );
+
   /** 登出：先服务端吊销 station token（失败不阻塞本地清理），再清除本地状态 */
   const logout = useCallback(() => {
     const token = sessionStorage.getItem(STORAGE_KEYS.token);
@@ -177,5 +204,5 @@ export function useAuth() {
     });
   }, []);
 
-  return { ...state, login, updateMembership, logout };
+  return { ...state, login, updateMembership, rotateToken, logout };
 }
