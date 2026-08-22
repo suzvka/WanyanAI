@@ -32,13 +32,12 @@ import {
  * 平台认证面（云洲平台统一认证服务接入配置）
  *
  * - PLATFORM_AUTH_URL：平台认证服务地址（登录弹窗/回调/origin 校验）
- * - PLATFORM_CLIENT_ID / PLATFORM_CLIENT_SECRET：平台签发的服务凭证
- *   （OAuth 2.0 客户端凭证，由鉴权中心 admin/credentials 统一签发）
+ * - 服务凭证复用鉴权中心唯一凭证 AUTH_CENTER_API_KEY：
+ *   client_secret = apiKey 明文；client_id = SHA-256(apiKey)（服务端派生，
+ *   即鉴权中心签发时的 token_hash，同一凭证的公开别名），无需独立签发。
  */
 const platformAuthFacet = z.object({
   PLATFORM_AUTH_URL: z.string().optional(),
-  PLATFORM_CLIENT_ID: z.string().optional(),
-  PLATFORM_CLIENT_SECRET: z.string().optional(),
 });
 
 /** 通用环境变量契约（全 optional） */
@@ -94,9 +93,13 @@ export const authCenterEnvSchema = requiredFacet(authCenterFacet, [
   "AUTH_CENTER_PRODUCT_ID",
 ]);
 
-/** 平台认证客户端专用：三要素必填，缺失时抛 EnvConfigError（含诊断快照） */
-export const platformAuthEnvSchema = requiredFacet(platformAuthFacet, [
-  "PLATFORM_AUTH_URL",
-  "PLATFORM_CLIENT_ID",
-  "PLATFORM_CLIENT_SECRET",
-]);
+/**
+ * 平台认证客户端专用：必填项为平台认证地址 + 鉴权中心唯一凭证（AUTH_CENTER_API_KEY），
+ * 缺失时抛 EnvConfigError（含诊断快照）。
+ * 注意：authCenterEnvSchema 额外要求 AUTH_CENTER_URL/PRODUCT_ID（直连鉴权中心场景），
+ * 平台认证面只需凭证本身，不要求鉴权中心地址。
+ */
+export const platformAuthEnvSchema = requiredFacet(
+  composeFacets(platformAuthFacet, authCenterFacet),
+  ["PLATFORM_AUTH_URL", "AUTH_CENTER_API_KEY"]
+);

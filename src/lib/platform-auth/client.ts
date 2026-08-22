@@ -1,18 +1,21 @@
 /**
  * 平台认证（云洲平台统一认证服务）HTTP 客户端
  *
- * 使用平台签发的服务凭证（client_id + client_secret）调用平台认证服务
+ * 使用鉴权中心唯一凭证（AUTH_CENTER_API_KEY）调用平台认证服务
  * 的 OAuth 2.0 端点。所有方法仅在服务端调用（凭证不得下发浏览器）。
  *
- * 环境变量（平台认证面，见 @/lib/env-schema）：
- *   PLATFORM_AUTH_URL     - 平台认证服务 base URL
- *   PLATFORM_CLIENT_ID    - 平台签发的服务凭证 client_id
- *   PLATFORM_CLIENT_SECRET - 平台签发的服务凭证 client_secret
+ * 环境变量：
+ *   PLATFORM_AUTH_URL   - 平台认证服务 base URL（平台认证面）
+ *   AUTH_CENTER_API_KEY - 鉴权中心签发的唯一凭证（apiKey 明文）
  *
- * 凭证由鉴权中心（yunzone_auth）admin/credentials 统一签发，
- * 平台认证服务（用户中心）仅透传验证，本模块为纯消费者侧封装。
+ * 凭证语义（单一凭证体系）：
+ *   client_secret = AUTH_CENTER_API_KEY（apiKey 明文）
+ *   client_id     = SHA-256(apiKey) hex（服务端派生，即鉴权中心签发时的
+ *                   token_hash，见 yunzone_auth src/lib/crypto.ts hashToken）
+ * 平台认证服务（用户中心）仅透传鉴权中心验证，本模块为纯消费者侧封装。
  */
 import 'server-only';
+import { createHash } from 'node:crypto';
 import { loadEnv } from 'yunzone-service-kit/config';
 import { envLoadOptions, platformAuthEnvSchema } from '@/lib/env-schema';
 import { createLogger } from '@/lib/api-station/logger';
@@ -27,14 +30,22 @@ const logger = createLogger('platform-auth');
 
 // ============ 配置读取 ============
 
+/**
+ * 派生 OAuth client_id：与鉴权中心 hashToken 一致（SHA-256 完整 apiKey 的 hex）。
+ * client_id 是凭证的公开别名（publicClaims.clientId = token_hash），非独立凭证。
+ */
+export function deriveClientId(apiKey: string): string {
+  return createHash('sha256').update(apiKey).digest('hex');
+}
+
 function getConfig(): { baseUrl: string; clientId: string; clientSecret: string } {
-  // 三要素缺失时 loadEnv 抛 EnvConfigError（诊断快照只显示 set/unset，不回显值）
+  // 必填项缺失时 loadEnv 抛 EnvConfigError（诊断快照只显示 set/unset，不回显值）
   const env = loadEnv(platformAuthEnvSchema, envLoadOptions);
 
   return {
     baseUrl: env.PLATFORM_AUTH_URL.replace(/\/$/, ''),
-    clientId: env.PLATFORM_CLIENT_ID,
-    clientSecret: env.PLATFORM_CLIENT_SECRET,
+    clientId: deriveClientId(env.AUTH_CENTER_API_KEY),
+    clientSecret: env.AUTH_CENTER_API_KEY,
   };
 }
 

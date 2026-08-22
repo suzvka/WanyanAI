@@ -93,7 +93,7 @@
 - **登录页面**: `/login`（生成 PKCE + state，弹窗打开平台认证服务 `/oauth/authorize`，授权后回跳 `/auth/callback`，回调页经 `postMessage` 把 code + state 回传主窗口）
 - **Token 签发**: `POST /api/v1/auth/issue`（接收 `code` + `codeVerifier`，服务端用平台服务凭证换 access token → 取 userinfo → 以真实用户身份向鉴权中心签发 station token；客户端不提交任何用户信息）
 - **登出吊销**: `POST /api/v1/auth/revoke`（委托鉴权中心 revokeToken，useAuth.logout 联动调用）
-- **环境变量**: `PLATFORM_AUTH_URL` / `PLATFORM_CLIENT_ID` / `PLATFORM_CLIENT_SECRET`（平台认证面，以平台为本位命名，不绑定具体子服务；服务凭证由鉴权中心 admin/credentials 统一签发，平台认证服务仅透传验证；`PLATFORM_AUTH_URL` 与 `PLATFORM_CLIENT_ID` 经 `/api/v1/config` 运行时下发给浏览器）
+- **环境变量**: `PLATFORM_AUTH_URL`（平台认证面，以平台为本位命名，不绑定具体子服务）；凭证复用鉴权中心唯一凭证 `AUTH_CENTER_API_KEY`（client_secret = apiKey 明文，client_id = SHA-256(apiKey) 服务端派生，即 token_hash；单一凭证体系，不独立签发 OAuth 客户端凭证）。`PLATFORM_AUTH_URL` 与派生 client_id 经 `/api/v1/config` 运行时下发给浏览器
 
 ### 权限解析流程
 
