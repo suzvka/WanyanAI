@@ -92,11 +92,12 @@
 | `svip` | 3 |
 | `admin` | 99 |
 
-### 用户中心登录
+### 平台认证登录（OAuth 2.0 授权码 + PKCE）
 
-- **登录页面**: `/login`（弹窗打开用户中心嵌入登录页，`postMessage` 回传登录结果）
-- **Token 签发**: `POST /api/v1/auth/issue`（接收 accountToken + user，调用鉴权中心签发 station token）
-- **环境变量**: `USER_CENTER_URL`（用户中心服务端地址，经 `/api/v1/config` 运行时下发给浏览器，用于弹窗 src 与 postMessage origin 校验）
+- **登录页面**: `/login`（生成 PKCE + state，弹窗打开平台认证服务 `/oauth/authorize`，授权后回跳 `/auth/callback`，回调页经 `postMessage` 把 code + state 回传主窗口）
+- **Token 签发**: `POST /api/v1/auth/issue`（接收 `code` + `codeVerifier`，服务端用平台服务凭证换 access token → 取 userinfo → 以真实用户身份向鉴权中心签发 station token；客户端不提交任何用户信息）
+- **登出吊销**: `POST /api/v1/auth/revoke`（委托鉴权中心 revokeToken，useAuth.logout 联动调用）
+- **环境变量**: `PLATFORM_AUTH_URL`（平台认证面，以平台为本位命名，不绑定具体子服务）；凭证复用鉴权中心唯一凭证 `AUTH_CENTER_API_KEY`（client_secret = apiKey 明文，client_id = SHA-256(apiKey) 服务端派生，即 token_hash；单一凭证体系，不独立签发 OAuth 客户端凭证）。`PLATFORM_AUTH_URL` 与派生 client_id 经 `/api/v1/config` 运行时下发给浏览器
 
 ### 权限解析流程
 
