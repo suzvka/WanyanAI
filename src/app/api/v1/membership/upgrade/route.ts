@@ -1,24 +1,26 @@
+/**
+ * POST /api/v1/membership/upgrade
+ *
+ * 通用「会员策略执行器」：按 action（策略 id）对当前用户换发 token。
+ *
+ * 设计原则：
+ * - 「往 token 上绑定哪些内容」由策略注册表（src/lib/membership/strategies.ts）声明，
+ *   本接口不硬编码任何「升一级 / 降一级 / 还原」业务动作；
+ * - 升级/降级/还原的适用性由各策略自行校验（isApplicable），无全局升降级限制；
+ * - 换发顺序：先签发新 token，再吊销旧 token（吊销失败不阻塞），保证任何时刻会话不受损。
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { introspectToken, revokeToken, issueToken, getProductId } from '@/lib/auth-center';
+import { getMembershipStrategy, getPermissionLevelFor } from '@/lib/membership/strategies';
 import { createLogger } from '@/lib/api-station/logger';
 
 const logger = createLogger('Membership');
 
 // ============ 类型 ============
 
-interface UpgradeRequest {
-  level: string;
+interface ActionRequest {
+  action?: string;
 }
-
-// ============ 会员等级映射 ============
-
-const ALLOWED_LEVELS = ['free', 'vip', 'svip'];
-
-const MEMBERSHIP_TO_PERMISSION: Record<string, number> = {
-  free: 1,
-  vip: 2,
-  svip: 3,
-};
 
 // ============ 路由处理 ============
 
@@ -33,14 +35,13 @@ export async function POST(req: NextRequest) {
     }
 
     // 解析请求体
-    const body: UpgradeRequest = await req.json().catch(() => ({} as UpgradeRequest));
-    const { level } = body;
+    const body: ActionRequest = await req.json().catch(() => ({}));
+    const { action } = body;
 
-    if (!level || !ALLOWED_LEVELS.includes(level)) {
-      return NextResponse.json(
-        { error: `无效的会员等级，可选值: ${ALLOWED_LEVELS.join(', ')}` },
-        { status: 400 },
-      );
+    // 策略必须存在（框架：按钮 = 策略 id）
+    const strategy = action ? getMembershipStrategy(action) : undefined;
+    if (!strategy) {
+      return NextResponse.json({ error: '无效的会员策略' }, { status: 400 });
     }
 
     // 校验当前 token
@@ -54,39 +55,33 @@ export async function POST(req: NextRequest) {
     const currentClaims = introspect.claims ?? {};
     const currentLevel = (currentClaims.membershipLevel as string) ?? 'free';
 
-    // 不允许降级
-    const currentPermission = MEMBERSHIP_TO_PERMISSION[currentLevel] ?? 1;
-    const targetPermission = MEMBERSHIP_TO_PERMISSION[level] ?? 1;
-    if (targetPermission < currentPermission) {
+    // 策略适用性校验（升级/降级/还原由策略自行声明）
+    if (!strategy.isApplicable(currentLevel)) {
       return NextResponse.json(
-        { error: `不支持降级：当前 ${currentLevel}，目标 ${level}` },
+        { error: `当前等级 ${currentLevel} 不适用策略「${strategy.label}」` },
         { status: 400 },
       );
     }
 
-    // 同等级无需升级
-    if (targetPermission === currentPermission) {
+    // 目标与当前相同（防御：策略应通过 isApplicable 排除，这里兜底）
+    if (strategy.targetLevel === currentLevel) {
       return NextResponse.json(
         { error: `已是 ${currentLevel} 会员，无需重复操作` },
         { status: 400 },
       );
     }
 
-    logger.info('会员升级', {
+    logger.info('执行会员策略', {
       userId,
+      action: strategy.id,
       from: currentLevel,
-      to: level,
+      to: strategy.targetLevel,
     });
 
-    // 先签发新 token（带新会员等级），再吊销旧 token。
-    // 顺序保证：即使签发失败，旧 token 仍有效，现有会话不受影响（无感化关键）；
-    // 鉴权中心对同一 (userId, productId) 重复签发会替换旧 token，
-    // 因此吊销失败也不阻塞升级（仅记录日志）。
-    const newClaims = {
-      ...currentClaims,
-      membershipLevel: level,
-    };
+    // 由策略计算新 claims（token 绑定内容的唯一出口）
+    const newClaims = strategy.apply(currentClaims);
 
+    // 先签发新 token，再吊销旧 token（吊销失败不阻塞，签发成功即会话安全）
     const issued = await issueToken({
       userId,
       productId: getProductId(),
@@ -102,18 +97,21 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const permissionLevel = getPermissionLevelFor(strategy.targetLevel);
+
     return NextResponse.json({
       success: true,
+      action: strategy.id,
       token: issued.token,
-      membershipLevel: level,
-      permissionLevel: targetPermission,
+      membershipLevel: strategy.targetLevel,
+      permissionLevel,
       expiresAt: issued.expiresAt,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : '未知错误';
-    logger.error('会员升级失败', err instanceof Error ? err : null, { message });
+    logger.error('执行会员策略失败', err instanceof Error ? err : null, { message });
     return NextResponse.json(
-      { error: `升级失败，请稍后重试: ${message}` },
+      { error: `操作失败，请稍后重试: ${message}` },
       { status: 500 },
     );
   }
