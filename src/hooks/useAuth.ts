@@ -7,7 +7,8 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  role: string;
+  // 可选：平台认证 userinfo 不返回角色，角色由 membershipLevel 派生（见 parseMembershipClaims）
+  role?: string;
 }
 
 /** 会员信息 */
