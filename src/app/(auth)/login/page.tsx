@@ -1,5 +1,15 @@
 'use client';
 
+/**
+ * /login — 平台认证登录页（OAuth 2.0 授权码 + PKCE，弹窗模式）
+ *
+ * 流程：
+ *   1. 生成 PKCE（code_verifier + S256 challenge）与 state，暂存 sessionStorage（oauth_pending）
+ *   2. 弹窗打开平台认证服务 /oauth/authorize（redirect_uri = 本服务 /auth/callback）
+ *   3. 用户登录授权后回跳 /auth/callback，回调页 postMessage 回传 code + state
+ *   4. 本页校验 origin（同源）与 state，POST /api/v1/auth/issue 换 station token
+ *   5. 写入 sessionStorage 并跳转首页
+ */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,20 +19,19 @@ import { Loader2, LogIn } from 'lucide-react';
 
 // ============ 类型 ============
 
-interface UserInfo {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
-
 interface PostMessageEvent {
   type: string;
   payload?: {
-    token?: string;
-    user?: UserInfo;
-    message?: string;
+    code?: string;
+    state?: string;
+    error?: string;
   };
+}
+
+/** 暂存的 OAuth 待处理状态（弹窗打开前写入，回调后清除） */
+interface PendingOAuth {
+  codeVerifier: string;
+  state: string;
 }
 
 type LoginStatus = 'idle' | 'loading' | 'issuing' | 'success' | 'error';
@@ -30,7 +39,47 @@ type LoginStatus = 'idle' | 'loading' | 'issuing' | 'success' | 'error';
 // ============ 常量 ============
 
 const POPUP_WIDTH = 480;
-const POPUP_HEIGHT = 600;
+const POPUP_HEIGHT = 640;
+
+const PENDING_KEY = 'oauth_pending';
+
+// ============ PKCE 工具 ============
+
+const PKCE_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+
+function randomString(length: number): string {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => PKCE_CHARSET[b % PKCE_CHARSET.length]).join('');
+}
+
+function base64UrlEncode(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  bytes.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** 生成 code_verifier（43~128 字符，RFC 7636） */
+function generateCodeVerifier(): string {
+  return randomString(64);
+}
+
+/** 生成 S256 code_challenge */
+async function generateCodeChallenge(verifier: string): Promise<string> {
+  if (!crypto.subtle) {
+    throw new Error('当前浏览器不支持 PKCE（crypto.subtle 不可用）');
+  }
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return base64UrlEncode(digest);
+}
+
+/** 生成 state（防 CSRF） */
+function generateState(): string {
+  return base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)).buffer);
+}
 
 // ============ 组件 ============
 
@@ -39,7 +88,8 @@ export default function LoginPage() {
   const popupRef = useRef<Window | null>(null);
   const [status, setStatus] = useState<LoginStatus>('idle');
   const [statusMessage, setStatusMessage] = useState('');
-  const [userCenterUrl, setUserCenterUrl] = useState('');
+  const [platformAuthUrl, setPlatformAuthUrl] = useState('');
+  const [oauthClientId, setOauthClientId] = useState('');
   const [configLoaded, setConfigLoaded] = useState(false);
 
   // 加载运行时配置（避免 NEXT_PUBLIC_* 构建时内联问题）
@@ -47,7 +97,8 @@ export default function LoginPage() {
     fetch('/api/v1/config')
       .then((r) => r.json())
       .then((cfg) => {
-        setUserCenterUrl(cfg.userCenterUrl || '');
+        setPlatformAuthUrl(cfg.platformAuthUrl || '');
+        setOauthClientId(cfg.oauthClientId || '');
         setConfigLoaded(true);
       })
       .catch(() => {
@@ -55,70 +106,90 @@ export default function LoginPage() {
       });
   }, []);
 
-  // 签发 station token
-  const issueToken = useCallback(async (accountToken: string, user: UserInfo) => {
-    setStatus('issuing');
-    setStatusMessage('正在签发访问凭证...');
+  // 签发 station token（携带 OAuth 授权码 + PKCE verifier）
+  const issueToken = useCallback(
+    async (code: string, codeVerifier: string, redirectUri: string) => {
+      setStatus('issuing');
+      setStatusMessage('正在签发访问凭证...');
 
-    const res = await fetch('/api/v1/auth/issue', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accountToken, user }),
-    });
+      const res = await fetch('/api/v1/auth/issue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, codeVerifier, redirectUri }),
+      });
 
-    const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      setStatus('error');
-      setStatusMessage(data.error || '签发凭证失败');
-      return;
-    }
+      if (!res.ok) {
+        setStatus('error');
+        setStatusMessage(data.error || '签发凭证失败');
+        return;
+      }
 
-    sessionStorage.setItem('station_token', data.token);
-    sessionStorage.setItem('station_user', JSON.stringify(user));
-    if (data.membership) {
-      sessionStorage.setItem('station_membership', JSON.stringify({
-        level: data.membershipLevel,
-        permissionLevel: data.permissionLevel,
-        expiresAt: data.expiresAt,
-      }));
-    }
+      sessionStorage.setItem('station_token', data.token);
+      sessionStorage.setItem('station_user', JSON.stringify(data.user));
+      if (data.membership) {
+        sessionStorage.setItem('station_membership', JSON.stringify({
+          level: data.membershipLevel,
+          permissionLevel: data.permissionLevel,
+          expiresAt: data.expiresAt,
+        }));
+      }
 
-    setStatus('success');
-    setStatusMessage(`登录成功！欢迎回来，${user.name}`);
+      setStatus('success');
+      setStatusMessage(`登录成功！欢迎回来，${data.user?.name || ''}`);
 
-    setTimeout(() => router.push('/'), 800);
-  }, [router]);
+      setTimeout(() => router.push('/'), 800);
+    },
+    [router],
+  );
 
-  // 监听 postMessage（来自弹窗）
+  // 监听 postMessage（来自同源回调页 /auth/callback）
   const handleMessage = useCallback(
     (e: MessageEvent<PostMessageEvent>) => {
-      if (!userCenterUrl || e.origin !== userCenterUrl) return;
+      // 仅接受同源回调消息（回调页与主窗口同源）
+      if (e.origin !== window.location.origin) return;
 
       const { type, payload } = e.data;
-      if (!type) return;
+      if (type !== 'wanyanai:oauth:callback' || !payload) return;
 
-      switch (type) {
-        case 'auth:sign-in:success': {
-          if (!payload?.token || !payload?.user) return;
+      // 关闭弹窗（无论成败）
+      popupRef.current?.close();
+      popupRef.current = null;
 
-          // 关闭弹窗
-          popupRef.current?.close();
-          popupRef.current = null;
-
-          issueToken(payload.token, payload.user);
-          break;
-        }
-
-        case 'auth:sign-in:error':
-          setStatus('error');
-          setStatusMessage(payload?.message || '登录失败');
-          popupRef.current?.close();
-          popupRef.current = null;
-          break;
+      // 授权被拒绝（access_denied 等）
+      if (payload.error) {
+        setStatus('error');
+        setStatusMessage(payload.error === 'access_denied' ? '您已取消授权' : payload.error);
+        return;
       }
+
+      if (!payload.code || !payload.state) return;
+
+      // state 校验（防授权码注入）：与打开弹窗前生成的值比对
+      let pending: PendingOAuth | null = null;
+      try {
+        const raw = sessionStorage.getItem(PENDING_KEY);
+        pending = raw ? (JSON.parse(raw) as PendingOAuth) : null;
+      } catch {
+        pending = null;
+      }
+
+      sessionStorage.removeItem(PENDING_KEY);
+
+      if (!pending || pending.state !== payload.state) {
+        setStatus('error');
+        setStatusMessage('登录状态校验失败，请重试');
+        return;
+      }
+
+      issueToken(
+        payload.code,
+        pending.codeVerifier,
+        `${window.location.origin}/auth/callback`,
+      );
     },
-    [issueToken, userCenterUrl],
+    [issueToken],
   );
 
   useEffect(() => {
@@ -131,6 +202,7 @@ export default function LoginPage() {
     const timer = setInterval(() => {
       if (popupRef.current?.closed) {
         popupRef.current = null;
+        sessionStorage.removeItem(PENDING_KEY);
         if (status === 'loading') {
           setStatus('idle');
           setStatusMessage('');
@@ -140,40 +212,67 @@ export default function LoginPage() {
     return () => clearInterval(timer);
   }, [status]);
 
-  // 打开登录弹窗
-  const openLoginPopup = useCallback(() => {
-    if (!userCenterUrl) {
+  // 打开 OAuth 授权弹窗
+  const openOAuthPopup = useCallback(async () => {
+    if (!platformAuthUrl || !oauthClientId) {
       setStatus('error');
-      setStatusMessage('未配置用户中心地址，请联系管理员');
+      setStatusMessage('未配置平台认证服务，请联系管理员');
       return;
     }
 
-    setStatus('loading');
-    setStatusMessage('请在新窗口中完成登录...');
+    try {
+      const codeVerifier = generateCodeVerifier();
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
+      const state = generateState();
 
-    const left = window.screenX + (window.outerWidth - POPUP_WIDTH) / 2;
-    const top = window.screenY + (window.outerHeight - POPUP_HEIGHT) / 2;
+      // 暂存 verifier + state（仅主窗口 sessionStorage，弹窗内不可读）
+      sessionStorage.setItem(
+        PENDING_KEY,
+        JSON.stringify({ codeVerifier, state } satisfies PendingOAuth),
+      );
 
-    popupRef.current = window.open(
-      `${userCenterUrl}/embed/sign-in`,
-      'login-popup',
-      `width=${POPUP_WIDTH},height=${POPUP_HEIGHT},left=${left},top=${top}`,
-    );
+      const authorizeUrl = new URL(`${platformAuthUrl}/oauth/authorize`);
+      authorizeUrl.searchParams.set('response_type', 'code');
+      authorizeUrl.searchParams.set('client_id', oauthClientId);
+      authorizeUrl.searchParams.set('redirect_uri', `${window.location.origin}/auth/callback`);
+      authorizeUrl.searchParams.set('scope', 'openid profile email');
+      authorizeUrl.searchParams.set('state', state);
+      authorizeUrl.searchParams.set('code_challenge', codeChallenge);
+      authorizeUrl.searchParams.set('code_challenge_method', 'S256');
 
-    if (!popupRef.current) {
+      setStatus('loading');
+      setStatusMessage('请在新窗口中完成登录...');
+
+      const left = window.screenX + (window.outerWidth - POPUP_WIDTH) / 2;
+      const top = window.screenY + (window.outerHeight - POPUP_HEIGHT) / 2;
+
+      popupRef.current = window.open(
+        authorizeUrl.toString(),
+        'login-popup',
+        `width=${POPUP_WIDTH},height=${POPUP_HEIGHT},left=${left},top=${top}`,
+      );
+
+      if (!popupRef.current) {
+        sessionStorage.removeItem(PENDING_KEY);
+        setStatus('error');
+        setStatusMessage('弹窗被浏览器拦截，请允许弹窗后重试');
+      }
+    } catch {
+      sessionStorage.removeItem(PENDING_KEY);
       setStatus('error');
-      setStatusMessage('弹窗被浏览器拦截，请允许弹窗后重试');
+      setStatusMessage('当前浏览器不支持安全登录，请更换浏览器后重试');
     }
-  }, [userCenterUrl]);
+  }, [platformAuthUrl, oauthClientId]);
 
   const isBusy = status === 'loading' || status === 'issuing';
+  const configReady = Boolean(platformAuthUrl && oauthClientId);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">登录</CardTitle>
-          <CardDescription>使用您的账户登录以继续</CardDescription>
+          <CardDescription>使用您的云洲平台账户登录以继续</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* 状态提示 */}
@@ -193,15 +292,15 @@ export default function LoginPage() {
           {/* 加载中 */}
           {(!configLoaded || isBusy) && (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
           )}
 
           {/* 登录按钮 */}
           {configLoaded && !isBusy && status !== 'success' && (
             <Button
-              onClick={openLoginPopup}
-              disabled={!userCenterUrl}
+              onClick={openOAuthPopup}
+              disabled={!configReady}
               className="w-full"
               size="lg"
             >
@@ -212,7 +311,7 @@ export default function LoginPage() {
 
           {configLoaded && status === 'error' && !isBusy && (
             <Button
-              onClick={openLoginPopup}
+              onClick={openOAuthPopup}
               variant="outline"
               className="w-full"
             >
@@ -221,11 +320,11 @@ export default function LoginPage() {
           )}
 
           {/* 未配置提示 */}
-          {configLoaded && !userCenterUrl && (
+          {configLoaded && !configReady && (
             <Alert variant="destructive">
               <AlertTitle>配置缺失</AlertTitle>
               <AlertDescription>
-                未配置用户中心地址（USER_CENTER_URL），请联系管理员。
+                未配置平台认证服务（PLATFORM_AUTH_URL / PLATFORM_CLIENT_ID），请联系管理员。
               </AlertDescription>
             </Alert>
           )}

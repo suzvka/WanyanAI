@@ -9,6 +9,7 @@ import { envLoadOptions, envSchema } from '@/lib/env-schema';
 export async function GET() {
   const env = loadEnv(envSchema, envLoadOptions);
   return NextResponse.json({
-    userCenterUrl: env.USER_CENTER_URL || '',
+    platformAuthUrl: env.PLATFORM_AUTH_URL || '',
+    oauthClientId: env.PLATFORM_CLIENT_ID || '',
   });
 }

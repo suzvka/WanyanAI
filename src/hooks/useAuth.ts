@@ -153,8 +153,17 @@ export function useAuth() {
     commit({ ...(cachedState ?? readInitialState()), membership });
   }, []);
 
-  /** 登出 */
+  /** 登出：先服务端吊销 station token（失败不阻塞本地清理），再清除本地状态 */
   const logout = useCallback(() => {
+    const token = sessionStorage.getItem(STORAGE_KEYS.token);
+    if (token) {
+      // fire-and-forget：不阻塞本地清理，失败降级为仅本地登出
+      fetch('/api/v1/auth/revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      }).catch(() => {});
+    }
     sessionStorage.removeItem(STORAGE_KEYS.token);
     sessionStorage.removeItem(STORAGE_KEYS.user);
     sessionStorage.removeItem(STORAGE_KEYS.membership);

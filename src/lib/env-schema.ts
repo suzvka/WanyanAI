@@ -3,7 +3,10 @@
  *
  * 基于 yunzone-service-kit/config 的 env 分面规范组合声明：
  * - 集群通用分面：deploymentFacet（部署面）/ authCenterFacet（鉴权中心面）/
- *   userCenterFacet（用户中心面）/ adminFacet（管理面）
+ *   adminFacet（管理面）
+ * - 本地平台认证面（platformAuthFacet）：云洲平台统一认证服务接入配置。
+ *   以平台为本位命名（PLATFORM_*），不绑定具体子服务（用户中心仅是当前实现者）；
+ *   服务凭证由鉴权中心统一签发，用户中心仅透传验证。
  * - 本地独有字段（日志/配置存储/数据库）用 extend 追加
  *
  * 设计约定：
@@ -23,14 +26,26 @@ import {
   deploymentAliases,
   deploymentFacet,
   requiredFacet,
-  userCenterFacet,
 } from "yunzone-service-kit/config";
+
+/**
+ * 平台认证面（云洲平台统一认证服务接入配置）
+ *
+ * - PLATFORM_AUTH_URL：平台认证服务地址（登录弹窗/回调/origin 校验）
+ * - PLATFORM_CLIENT_ID / PLATFORM_CLIENT_SECRET：平台签发的服务凭证
+ *   （OAuth 2.0 客户端凭证，由鉴权中心 admin/credentials 统一签发）
+ */
+const platformAuthFacet = z.object({
+  PLATFORM_AUTH_URL: z.string().optional(),
+  PLATFORM_CLIENT_ID: z.string().optional(),
+  PLATFORM_CLIENT_SECRET: z.string().optional(),
+});
 
 /** 通用环境变量契约（全 optional） */
 export const envSchema = composeFacets(
   deploymentFacet,
   authCenterFacet,
-  userCenterFacet,
+  platformAuthFacet,
   adminFacet
 ).extend({
   // ── 配置存储 ──
@@ -77,4 +92,11 @@ export const authCenterEnvSchema = requiredFacet(authCenterFacet, [
   "AUTH_CENTER_URL",
   "AUTH_CENTER_API_KEY",
   "AUTH_CENTER_PRODUCT_ID",
+]);
+
+/** 平台认证客户端专用：三要素必填，缺失时抛 EnvConfigError（含诊断快照） */
+export const platformAuthEnvSchema = requiredFacet(platformAuthFacet, [
+  "PLATFORM_AUTH_URL",
+  "PLATFORM_CLIENT_ID",
+  "PLATFORM_CLIENT_SECRET",
 ]);
