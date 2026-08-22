@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -85,6 +86,7 @@ function generateState(): string {
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const popupRef = useRef<Window | null>(null);
   const [status, setStatus] = useState<LoginStatus>('idle');
   const [statusMessage, setStatusMessage] = useState('');
@@ -126,22 +128,22 @@ export default function LoginPage() {
         return;
       }
 
-      sessionStorage.setItem('station_token', data.token);
-      sessionStorage.setItem('station_user', JSON.stringify(data.user));
-      if (data.membership) {
-        sessionStorage.setItem('station_membership', JSON.stringify({
-          level: data.membershipLevel,
-          permissionLevel: data.permissionLevel,
-          expiresAt: data.expiresAt,
-        }));
-      }
+      // 统一经 useAuth.login 写入（内部更新模块缓存并持久化 sessionStorage），
+      // 保证 SPA 跳转后全局壳（AppShell）立即感知登录态，无需刷新页面
+      login(
+        data.token,
+        data.user,
+        data.membership
+          ? { membershipLevel: data.membershipLevel, expiresAt: data.expiresAt }
+          : undefined,
+      );
 
       setStatus('success');
       setStatusMessage(`登录成功！欢迎回来，${data.user?.name || ''}`);
 
       setTimeout(() => router.push('/'), 800);
     },
-    [router],
+    [login, router],
   );
 
   // 监听 postMessage（来自同源回调页 /auth/callback）
@@ -324,7 +326,7 @@ export default function LoginPage() {
             <Alert variant="destructive">
               <AlertTitle>配置缺失</AlertTitle>
               <AlertDescription>
-                未配置平台认证服务（PLATFORM_AUTH_URL / PLATFORM_CLIENT_ID），请联系管理员。
+                未配置平台认证服务（PLATFORM_AUTH_URL / AUTH_CENTER_API_KEY），请联系管理员。
               </AlertDescription>
             </Alert>
           )}
