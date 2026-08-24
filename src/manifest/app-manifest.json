@@ -3,13 +3,13 @@
   "app": {
     "id": "wanyanai",
     "name": "WanyanAI",
-    "tagline": "万言 AI 文坛",
-    "description": "你的作品经得起拷打吗？",
+    "tagline": "AI 驱动的文本诊断专家",
+    "description": "插件化智能文本分析平台。框架开源，功能插件支持按需定制。",
     "href": "https://wanyan.coze.site",
     "status": "live",
     "assets": {
       "icon": "https://wanyan.coze.site/app-icon.png"
     },
-    "tags": ["文学", "文本分析"]
+    "tags": ["开源框架", "可定制"]
   }
 }
