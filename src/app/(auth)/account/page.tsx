@@ -172,8 +172,8 @@ export default function AccountPage() {
   };
 
   const handleLogout = () => {
-    logout();
-    router.push('/');
+    // logout 内部负责吊销 token、清本地态并跳转平台单点登出，无需此处再导航
+    void logout();
   };
 
   return (

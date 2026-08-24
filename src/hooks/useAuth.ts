@@ -32,6 +32,12 @@ const STORAGE_KEYS = {
   membership: 'station_membership',
 } as const;
 
+/**
+ * 平台单点登出 state 的暂存 key（登出发起时写入，/auth/logout-callback 校验后清除）。
+ * 导出供登出回调页复用，避免两处硬编码不一致。
+ */
+export const LOGOUT_STATE_KEY = 'logout_state';
+
 function parseMembershipClaims(claims: Record<string, unknown> | undefined): MembershipInfo | null {
   if (!claims?.membershipLevel) return null;
   const level = claims.membershipLevel as string;
@@ -181,17 +187,29 @@ export function useAuth() {
     [],
   );
 
-  /** 登出：先服务端吊销 station token（失败不阻塞本地清理），再清除本地状态 */
-  const logout = useCallback(() => {
+  /**
+   * 登出（单点登出联动）：
+   *   1. 吊销本站 station token（等待完成，失败降级为仅本地登出）
+   *   2. 清除本地登录态（sessionStorage + 内存缓存）
+   *   3. 跳转平台登出端点销毁平台会话，否则平台域 cookie 仍在，
+   *      用户下次仍可静默免密登录，登出语义不成立
+   */
+  const logout = useCallback(async () => {
+    // 1. 吊销本站 station token（等待完成，保证跳转前吊销已落库）
     const token = sessionStorage.getItem(STORAGE_KEYS.token);
     if (token) {
-      // fire-and-forget：不阻塞本地清理，失败降级为仅本地登出
-      fetch('/api/v1/auth/revoke', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      }).catch(() => {});
+      try {
+        await fetch('/api/v1/auth/revoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+      } catch {
+        // 网络异常不阻塞本地清理（保留原 fire-and-forget 的降级语义）
+      }
     }
+
+    // 2. 清除本地登录态（无论服务端吊销成败）
     sessionStorage.removeItem(STORAGE_KEYS.token);
     sessionStorage.removeItem(STORAGE_KEYS.user);
     sessionStorage.removeItem(STORAGE_KEYS.membership);
@@ -202,6 +220,30 @@ export function useAuth() {
       stationToken: null,
       membership: null,
     });
+
+    // 3. 平台单点登出：浏览器跳转到平台登出端点（清平台域会话必须由浏览器带 cookie 发起）
+    try {
+      const res = await fetch('/api/v1/config');
+      if (!res.ok) throw new Error('config unavailable');
+      const cfg = (await res.json()) as { platformAuthUrl?: string; oauthClientId?: string };
+      if (!cfg.platformAuthUrl || !cfg.oauthClientId) {
+        throw new Error('platform auth not configured');
+      }
+
+      const state = crypto.randomUUID();
+      sessionStorage.setItem(LOGOUT_STATE_KEY, state);
+
+      const redirectUri = `${window.location.origin}/auth/logout-callback`;
+      const logoutUrl =
+        `${cfg.platformAuthUrl}/api/oauth/logout` +
+        `?client_id=${encodeURIComponent(cfg.oauthClientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&state=${encodeURIComponent(state)}`;
+      window.location.href = logoutUrl;
+    } catch {
+      // 平台认证未配置或获取失败：降级为仅本地登出，回首页
+      window.location.href = '/';
+    }
   }, []);
 
   return { ...state, login, updateMembership, rotateToken, logout };
