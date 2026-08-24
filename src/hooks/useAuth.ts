@@ -233,7 +233,9 @@ export function useAuth() {
       const state = crypto.randomUUID();
       sessionStorage.setItem(LOGOUT_STATE_KEY, state);
 
-      const redirectUri = `${window.location.origin}/auth/logout-callback`;
+      // 复用已登记的授权回调 /auth/callback（OIDC 允许登出回跳复用授权回调白名单地址），
+      // 避免新增登记登出回调导致平台端 redirect_uri 白名单校验失败（400）。
+      const redirectUri = `${window.location.origin}/auth/callback`;
       const logoutUrl =
         `${cfg.platformAuthUrl}/api/oauth/logout` +
         `?client_id=${encodeURIComponent(cfg.oauthClientId)}` +

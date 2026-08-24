@@ -96,8 +96,8 @@
 
 - **登录页面**: `/login`（生成 PKCE + state，弹窗打开平台认证服务 `/oauth/authorize`，授权后回跳 `/auth/callback`，回调页经 `postMessage` 把 code + state 回传主窗口）
 - **Token 签发**: `POST /api/v1/auth/issue`（接收 `code` + `codeVerifier`，服务端用平台服务凭证换 access token → 取 userinfo → 以真实用户身份向鉴权中心签发 station token；客户端不提交任何用户信息）
-- **登出（单点登出联动）**: `useAuth.logout` 三段式——① 等待 `POST /api/v1/auth/revoke`（委托鉴权中心 revokeToken，失败降级仅本地登出）② 清空本地登录态（sessionStorage + 内存缓存）③ 浏览器跳转平台登出端点 `${PLATFORM_AUTH_URL}/api/oauth/logout?client_id=...&redirect_uri=...&state=...` 销毁平台会话，回跳 `/auth/logout-callback`（校验 state 防伪造后展示已退出）。平台未配置时降级为仅本地登出并回首页
-- **环境变量**: `PLATFORM_AUTH_URL`（平台认证面，以平台为本位命名，不绑定具体子服务）；凭证复用鉴权中心唯一凭证 `AUTH_CENTER_API_KEY`（client_secret = apiKey 明文，client_id = SHA-256(apiKey) 服务端派生，即 token_hash；单一凭证体系，不独立签发 OAuth 客户端凭证）。`PLATFORM_AUTH_URL` 与派生 client_id 经 `/api/v1/config` 运行时下发给浏览器。**接入平台登出端点时，需在平台凭证白名单登记本站回调 `/auth/logout-callback`**
+- **登出（单点登出联动）**: `useAuth.logout` 三段式——① 等待 `POST /api/v1/auth/revoke`（委托鉴权中心 revokeToken，失败降级仅本地登出）② 清空本地登录态（sessionStorage + 内存缓存）③ 浏览器跳转平台登出端点 `${PLATFORM_AUTH_URL}/api/oauth/logout?client_id=...&redirect_uri=...&state=...` 销毁平台会话。**登出回跳复用已登记的授权回调 `/auth/callback`**（OIDC 允许登出回跳复用授权回调白名单地址，避免平台端 redirect_uri 白名单校验失败返回 400）；回调页凭参数区分场景——授权回调带 `code`/`error`（弹窗回传 + close），登出回跳仅带 `state`（顶层导航，校验 state 防伪造后展示已退出，**不可 close**）。平台未配置时降级为仅本地登出并回首页
+- **环境变量**: `PLATFORM_AUTH_URL`（平台认证面，以平台为本位命名，不绑定具体子服务）；凭证复用鉴权中心唯一凭证 `AUTH_CENTER_API_KEY`（client_secret = apiKey 明文，client_id = SHA-256(apiKey) 服务端派生，即 token_hash；单一凭证体系，不独立签发 OAuth 客户端凭证）。`PLATFORM_AUTH_URL` 与派生 client_id 经 `/api/v1/config` 运行时下发给浏览器
 
 ### 权限解析流程
 
