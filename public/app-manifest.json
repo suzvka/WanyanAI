@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "app": {
+    "id": "wanyanai",
+    "name": "WanyanAI",
+    "tagline": "万言 AI 文坛",
+    "description": "你的作品经得起拷打吗？",
+    "href": "https://wanyan.coze.site",
+    "status": "live",
+    "assets": {
+      "icon": "https://wanyan.coze.site/app-icon.png"
+    },
+    "tags": ["文学", "文本分析"]
+  }
+}
