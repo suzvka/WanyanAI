@@ -33,12 +33,21 @@ import {
  * 平台认证面（云洲平台统一认证服务接入配置）
  *
  * - PLATFORM_AUTH_URL：平台认证服务地址（登录弹窗/回调/origin 校验）
- * - 服务凭证复用鉴权中心唯一凭证 AUTH_CENTER_API_KEY：
- *   client_secret = apiKey 明文；client_id = SHA-256(apiKey)（服务端派生，
- *   即鉴权中心签发时的 token_hash，同一凭证的公开别名），无需独立签发。
+ * - 服务凭证（二选一）：
+ *   1) 默认（单一凭证体系）：复用鉴权中心唯一凭证 AUTH_CENTER_API_KEY，
+ *      client_secret = apiKey 明文；client_id = SHA-256(apiKey)（服务端派生，
+ *      即鉴权中心签发时的 token_hash，同一凭证的公开别名），无需独立签发。
+ *      适用前提：平台认证服务按同一规则透传验证 client。
+ *   2) 可选覆盖（推荐，兼容标准 OAuth 注册表）：若平台认证服务维护自有
+ *      OAuth 客户端注册表（不认识派生 client_id），可显式配置
+ *      PLATFORM_CLIENT_ID / PLATFORM_CLIENT_SECRET（平台侧真实注册的凭证），
+ *      设置后优先使用，不再走派生规则。
  */
 const platformAuthFacet = z.object({
   PLATFORM_AUTH_URL: z.string().optional(),
+  // 平台认证服务自有 OAuth 客户端凭证（可选覆盖，设置后优先于派生规则）
+  PLATFORM_CLIENT_ID: z.string().optional(),
+  PLATFORM_CLIENT_SECRET: z.string().optional(),
 });
 
 /** 通用环境变量契约（全 optional） */
