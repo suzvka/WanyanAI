@@ -21,6 +21,14 @@ const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 
+/**
+ * 限流桶键：进程级全局桶。
+ * X-Forwarded-For / X-Real-IP 均可被客户端伪造（换头即重置计数），
+ * 不作为限流维度；应用层无其他可信来源时改用全局桶，
+ * 代价是多管理员共享尝试预算（管理登录低频，可接受）。
+ */
+const LOGIN_RATE_LIMIT_KEY = 'adminVerify:global';
+
 function isRateLimited(key: string): number | null {
   const now = Date.now();
   const entry = loginAttempts.get(key);
@@ -57,12 +65,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 登录限流（防暴力枚举，协议 2.5）
-    const ip =
-      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      request.headers.get('x-real-ip') ||
-      'unknown';
-    const retryAfter = isRateLimited(`adminVerify:${ip}`);
+    // 登录限流（防暴力枚举，协议 2.5；全局桶，不信任可伪造的转发头）
+    const retryAfter = isRateLimited(LOGIN_RATE_LIMIT_KEY);
     if (retryAfter !== null) {
       return NextResponse.json(
         { error: 'Too many attempts', code: 'RATE_LIMITED', retryAfter },

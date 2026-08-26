@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { introspectToken, revokeToken, issueToken, getProductId } from '@/lib/auth-center';
 import { getMembershipStrategy, getPermissionLevelFor } from '@/lib/membership/strategies';
 import { createLogger } from '@/lib/api-station/logger';
+import { loadPublishedPlatformConfig } from '@/server/platform-config/loader';
 
 const logger = createLogger('Membership');
 
@@ -26,6 +27,24 @@ interface ActionRequest {
 
 export async function POST(req: NextRequest) {
   try {
+    // 闸门：会员升级开关（平台配置）关闭时一律拒绝。
+    // 权益/订单校验接入前保持关闭，避免无凭证直换会员等级；
+    // 配置读取失败同样拒绝（安全默认）。
+    try {
+      const platformConfig = await loadPublishedPlatformConfig();
+      if (!platformConfig.featureFlags.enableMembershipUpgrade) {
+        return NextResponse.json(
+          { error: '会员升级通道暂未开放' },
+          { status: 403 },
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { error: '会员升级通道暂未开放' },
+        { status: 403 },
+      );
+    }
+
     // 提取并验证 token
     const authHeader = req.headers.get('authorization');
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;

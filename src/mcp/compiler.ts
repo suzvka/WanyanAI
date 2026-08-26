@@ -1,3 +1,10 @@
+/**
+ * 工具提示词编译器（自研标签协议，MCP 风格）
+ *
+ * 将工具定义编译为注入提示词的 <call> 标签调用规则。
+ * 注：此处为自研流式工具调用协议，非标准 MCP（Model Context Protocol），
+ * 命名沿用 MCP 字样仅为形态类比（见 streamingClient.ts 头部声明）。
+ */
 import type { McpCompiledPrompt, McpPromptToolDescriptor, McpToolDefinition } from './types';
 
 function renderParameter(parameter: McpPromptToolDescriptor['parameters'][number]): string {

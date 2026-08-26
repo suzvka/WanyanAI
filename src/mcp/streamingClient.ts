@@ -1,5 +1,11 @@
 /**
- * 流式 MCP 客户端
+ * 流式工具调用客户端（自研协议，MCP 风格）
+ *
+ * 如实声明：本模块实现的是自研的标签式流式工具调用协议——
+ * 解析模型输出中的 <call>...</call> 标签并同步执行 handler，
+ * 与 Anthropic 主导的标准 MCP（Model Context Protocol，
+ * JSON-RPC/stdio+SSE 传输规范）无任何兼容关系；仅因“模型驱动的工具调用”
+ * 这一形态相似而在命名上沿用 MCP 字样。
  *
  * 在单次 SSE 连接中解析模型响应里的 <call> 标签并同步执行 handler，
  * 不依赖外部 Conversation 类，避免递归 HTTP 请求。

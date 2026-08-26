@@ -132,6 +132,8 @@ export const siteSchema = z.object({
 export const featureFlagsSchema = z.object({
   enableFileUpload: z.boolean(),
   enableAnnotations: z.boolean(),
+  // 会员升级闸门：权益/订单校验就绪前保持关闭（缺省即关闭，安全默认）
+  enableMembershipUpgrade: z.boolean().default(false),
 });
 
 export const appearanceBrandSchema = z.object({

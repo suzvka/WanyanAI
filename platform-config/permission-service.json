@@ -3,6 +3,6 @@
   "healthCheckIntervalMs": 30000,
   "healthCheckTimeoutMs": 3000,
   "verifyTimeoutMs": 5000,
-  "fallbackPermissionLevel": 1,
+  "fallbackPermissionLevel": 0,
   "enableHealthCheck": true
 }

@@ -35,6 +35,7 @@ export function createFallbackPlatformConfig(): PlatformConfig {
     featureFlags: {
       enableFileUpload: true,
       enableAnnotations: true,
+      enableMembershipUpgrade: false,
     },
   };
 }
