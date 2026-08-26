@@ -146,7 +146,12 @@ export async function POST(request: NextRequest) {
     }
 
     // === 限流检查 ===
-    const subjectId = `key:${key}`;
+    // 计数维度优先用鉴权中心返回的身份（同一账户换 key 不重置）；
+    // 无身份（fallback/游客）时才退回 key 维度桶（等级 0 已被模型门槛拦截，
+    // 此处仅为兼容非目录链路的兼容计数）。
+    const subjectId = permissionResult.identityId
+      ? `acct:${permissionResult.identityId}`
+      : `guest:${key}`;
     const rateLimitResult = checkRateLimit({ subjectId, permissionLevel });
 
     if (!rateLimitResult.allowed) {

@@ -1,6 +1,8 @@
 export type FeatureFlagsConfig = {
   enableFileUpload: boolean;
   enableAnnotations: boolean;
+  /** 会员升级闸门：权益/订单校验就绪前保持关闭（缺省即关闭） */
+  enableMembershipUpgrade: boolean;
 };
 
 export type AppearanceBrandConfig = {

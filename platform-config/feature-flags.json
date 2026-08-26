@@ -1,4 +1,5 @@
 {
   "enableFileUpload": true,
-  "enableAnnotations": true
+  "enableAnnotations": true,
+  "enableMembershipUpgrade": false
 }
