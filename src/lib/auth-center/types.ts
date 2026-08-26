@@ -13,6 +13,15 @@ export interface IssueTokenRequest {
   scope?: string[];
   claims?: Record<string, unknown>;
   ttl?: number; // 秒，默认 86400 (24h)
+  /**
+   * v1.4 — 身份票据：第三方产品签发业务用户 token 的账户锚定凭据
+   * （平台签发，见 requestIdentityTicket；与 evidenceToken 二选一）
+   */
+  identityTicket?: string;
+  /**
+   * v1.4 — 链式证据：同一产品现存有效业务用户 token（会员换发等续签场景）
+   */
+  evidenceToken?: string;
 }
 
 /** 校验 Token 请求 */

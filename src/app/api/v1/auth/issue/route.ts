@@ -5,7 +5,8 @@
  * 本接口在服务端完成：
  *   1. 用平台签发的服务凭证向平台认证服务换 access token（授权码 + PKCE）
  *   2. 取用户信息（/api/oauth/userinfo）
- *   3. 以真实用户身份向鉴权中心签发 station token 并返回给客户端
+ *   3. 向平台签发身份票据（/api/v1/identity/ticket，accountId 账户锚定）
+ *   4. 以真实用户身份 + 身份票据向鉴权中心签发 station token 并返回给客户端
  *
  * 安全设计：
  * - 客户端仅提交 code + codeVerifier，不提交任何用户信息（杜绝自报用户）；
@@ -14,7 +15,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { issueToken, getProductId } from '@/lib/auth-center/client';
-import { exchangeAuthorizationCode, fetchUserInfo } from '@/lib/platform-auth/client';
+import { exchangeAuthorizationCode, fetchUserInfo, requestIdentityTicket } from '@/lib/platform-auth/client';
 import { PlatformAuthClientError } from '@/lib/platform-auth/types';
 import { logInfo, logError } from '@/lib/api-station/logger';
 
@@ -76,16 +77,32 @@ export async function POST(request: NextRequest) {
       email: userInfo.email,
     };
 
+    // 3. 签发身份票据（账户锚定凭据，token-contract v1.4 §3.6）：
+    //    平台以 access token 校验用户后签发短时票据，accountId 以票据为准（产品不可自填）
+    const identityTicket = await requestIdentityTicket(tokenResult.access_token);
+
+    // 防御性校验：票据 accountId 必须与 userinfo sub 一致（平台签名背书的一致性）
+    if (identityTicket.accountId !== userInfo.sub) {
+      logError('[Auth:Issue] 身份票据与用户信息不一致', null, {
+        ticketAccountId: identityTicket.accountId,
+        sub: userInfo.sub,
+      });
+      return NextResponse.json(
+        { error: '身份票据与用户信息不一致', code: 'IDENTITY_TICKET_MISMATCH' },
+        { status: 500 },
+      );
+    }
+
     const membershipLevel = determineMembershipLevel(user);
 
     logInfo('[Auth:Issue] 开始签发 station token', {
-      userId: user.id,
+      userId: identityTicket.accountId,
       membershipLevel,
     });
 
-    // 3. 调用鉴权中心签发 station token
+    // 4. 调用鉴权中心签发 station token（携带身份票据完成 accountId 锚定）
     const result = await issueToken({
-      userId: user.id,
+      userId: identityTicket.accountId,
       productId: getProductId(),
       claims: {
         membershipLevel,
@@ -94,10 +111,11 @@ export async function POST(request: NextRequest) {
       },
       scope: ['api:chat', 'api:models'],
       ttl: 86400, // 24 小时
+      identityTicket: identityTicket.ticket,
     });
 
     logInfo('[Auth:Issue] Token 签发成功', {
-      userId: user.id,
+      userId: identityTicket.accountId,
       membershipLevel,
       expiresAt: result.expiresAt,
     });

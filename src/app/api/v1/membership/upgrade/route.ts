@@ -101,10 +101,13 @@ export async function POST(req: NextRequest) {
     const newClaims = strategy.apply(currentClaims);
 
     // 先签发新 token，再吊销旧 token（吊销失败不阻塞，签发成功即会话安全）
+    // v1.4：携带当前 token 作链式证据（evidenceToken）——鉴权中心以同产品现存
+    // 业务用户 token 的 accountId 为锚，保证换发不改变账户归属（无需重新 OAuth 授权）
     const issued = await issueToken({
       userId,
       productId: getProductId(),
       claims: newClaims,
+      evidenceToken: token,
     });
 
     try {
