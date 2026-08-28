@@ -40,13 +40,35 @@ export type TextBlocksContainerParams = {
   maxBlockCount?: number;
 };
 
+/**
+ * 模块卡片主色调（设计令牌键名，而非任意色值，保证视觉体系收敛）
+ */
+export type ModuleAccentTone = 'primary' | 'violet' | 'blue' | 'green' | 'amber';
+
+/**
+ * 首页自描述契约（可选）
+ *
+ * 功能插件通过该结构声明自己在首页的展示内容，
+ * 框架只负责透传与渲染，内容完全由插件方决定。
+ */
+export type PageModuleLandingMeta = {
+  /** 一句话价值主张（展示在描述下方的点睛文案） */
+  tagline?: string;
+  /** 亮点标签（展示为卡片内的短标签组，建议 2-4 个） */
+  highlights?: string[];
+  /** 卡片主色调，不填时默认 primary */
+  accent?: ModuleAccentTone;
+};
+
 export type PageModuleEntry = {
   /** 是否暴露为功能页面入口 */
   enabled: boolean;
   /** 排序权重（仅服务端使用） */
   order: number;
-  /** 图标名称（仅内部配置使用） */
+  /** 图标名称（lucide 图标，如 BookOpen） */
   icon?: string;
+  /** 首页自描述内容（可选） */
+  landing?: PageModuleLandingMeta;
 };
 
 // ============================================================
@@ -195,6 +217,10 @@ export type PageModulePublicMeta = {
   title: string;
   /** 页面描述（公开字段） */
   description?: string;
+  /** 图标名称（来自 entry.icon） */
+  icon?: string;
+  /** 首页自描述内容（来自 entry.landing） */
+  landing?: PageModuleLandingMeta;
 };
 
 /**

@@ -18,10 +18,17 @@ export const textBlocksParamsSchema = z.object({
   initialBlockCount: z.number().int().min(0).optional().default(1),
 });
 
+const pageModuleLandingSchema = z.object({
+  tagline: z.string().trim().min(1).optional(),
+  highlights: z.array(z.string().trim().min(1)).max(4).optional(),
+  accent: z.enum(['primary', 'violet', 'blue', 'green', 'amber']).optional(),
+});
+
 const pageModuleEntrySchema = z.object({
   enabled: z.boolean().default(true),
   icon: z.string().trim().min(1).optional(),
   order: z.number().int().default(0),
+  landing: pageModuleLandingSchema.optional(),
 });
 
 /**

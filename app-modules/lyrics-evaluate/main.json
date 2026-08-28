@@ -42,7 +42,12 @@
   "controlsConfig": "./controls.json",
   "entry": {
     "enabled": true,
-    "icon": "Music",
-    "order": 2
+    "icon": "Music2",
+    "order": 2,
+    "landing": {
+      "tagline": "剖析韵脚与声律，读懂字句背后的情绪律动",
+      "highlights": ["韵律剖析", "意境品鉴", "情感脉络"],
+      "accent": "blue"
+    }
   }
 }

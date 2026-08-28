@@ -56,7 +56,12 @@
   "controlsConfig": "./controls.json",
   "entry": {
     "enabled": true,
-    "icon": "BookOpen",
-    "order": 2
+    "icon": "Workflow",
+    "order": 2,
+    "landing": {
+      "tagline": "先立评审清单，再逐项深评，多步骤自动推进",
+      "highlights": ["多步推理", "评审清单", "迭代校验"],
+      "accent": "primary"
+    }
   }
 }

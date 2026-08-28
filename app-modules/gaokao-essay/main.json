@@ -35,7 +35,12 @@
   "controlsConfig": "./controls.json",
   "entry": {
     "enabled": true,
-    "icon": "GraduationCap",
-    "order": 3
+    "icon": "PenLine",
+    "order": 3,
+    "landing": {
+      "tagline": "从审题立意到成文诊断，给出可落地的提升路径",
+      "highlights": ["真题导向", "分档定级", "升格建议"],
+      "accent": "amber"
+    }
   }
 }

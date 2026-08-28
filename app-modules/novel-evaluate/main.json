@@ -41,7 +41,12 @@
   "controlsConfig": "./controls.json",
   "entry": {
     "enabled": true,
-    "icon": "BookOpen",
-    "order": 1
+    "icon": "BookMarked",
+    "order": 1,
+    "landing": {
+      "tagline": "以编辑之眼逐句细读，让每一处笔墨都被看见",
+      "highlights": ["多维评价视角", "深度批注", "可配置评审倾向"],
+      "accent": "violet"
+    }
   }
 }
