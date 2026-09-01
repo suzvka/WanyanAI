@@ -21,7 +21,6 @@ import { envLoadOptions, platformAuthEnvSchema } from '@/lib/env-schema';
 import { createLogger } from '@/lib/api-station/logger';
 import {
   PlatformAuthClientError,
-  type IdentityTicketResponse,
   type PlatformAuthError,
   type TokenResponse,
   type UserInfoResponse,
@@ -125,36 +124,4 @@ export async function fetchUserInfo(accessToken: string): Promise<UserInfoRespon
   }
 
   return JSON.parse(raw) as UserInfoResponse;
-}
-
-/**
- * 签发身份票据（账户锚定凭据）
- * POST /api/v1/identity/ticket（Bearer 用户 access token）
- *
- * token-contract v1.4 §3.6：票据由平台（用户中心）签发、短时有效（默认 300s），
- * 用于向鉴权中心签发业务用户 token——accountId 以票据为准，产品不可自填。
- * 错误信封为用户中心统一格式 { success, message }（与 OAuth 端点不同）。
- */
-export async function requestIdentityTicket(accessToken: string): Promise<IdentityTicketResponse> {
-  const { baseUrl } = getConfig();
-
-  const res = await fetch(`${baseUrl}/api/v1/identity/ticket`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-
-  const raw = await res.text();
-  if (!res.ok) {
-    let message = `HTTP ${res.status}`;
-    try {
-      const body = JSON.parse(raw) as { success?: boolean; message?: string };
-      if (typeof body?.message === 'string' && body.message) message = body.message;
-    } catch {
-      // 非 JSON 响应，使用默认错误信息
-    }
-    logger.error('[PlatformAuth] 身份票据签发失败', null, { status: res.status, message });
-    throw new PlatformAuthClientError('IDENTITY_TICKET_FAILED', message);
-  }
-
-  return JSON.parse(raw) as IdentityTicketResponse;
 }

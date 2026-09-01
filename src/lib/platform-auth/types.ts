@@ -4,7 +4,6 @@
  * 基于平台认证服务（当前实现者为用户中心）的 OAuth 2.0 端点契约：
  *   POST /api/oauth/token        — 授权码换 access token
  *   GET  /api/oauth/userinfo     — 用户信息（OIDC UserInfo）
- *   POST /api/v1/identity/ticket — 身份票据（账户锚定凭据，token-contract v1.4 §3.6）
  *
  * 服务凭证（client_id + client_secret）由鉴权中心统一签发，
  * 平台认证服务仅透传验证，本模块为纯消费者侧封装。
@@ -29,16 +28,6 @@ export interface UserInfoResponse {
   email?: string;
   email_verified?: boolean;
   updated_at?: number;
-}
-
-/**
- * 身份票据响应（POST /api/v1/identity/ticket，token-contract v1.4 §3.6）
- * accountId = 平台统一账户 id（= userinfo.sub 值空间）；票据短时有效（默认 300s）
- */
-export interface IdentityTicketResponse {
-  accountId: string;
-  ticket: string;
-  expiresIn: number;
 }
 
 /** 平台认证错误响应（OAuth 2.0 错误格式） */

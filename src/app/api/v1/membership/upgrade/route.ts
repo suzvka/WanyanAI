@@ -100,14 +100,17 @@ export async function POST(req: NextRequest) {
     // 由策略计算新 claims（token 绑定内容的唯一出口）
     const newClaims = strategy.apply(currentClaims);
 
+    // 账户锚点：换发不改变账户归属。登记表去账户化后（token-contract v1.6）不再经
+    // evidenceToken 派生 accountId，改由本路由自报——accountId 取自当前 token 的
+    // introspect 全量视图（已合并 publicClaims.accountId），回退 userId（同值空间）。
+    const accountId = (currentClaims.accountId as string | undefined) ?? userId;
+
     // 先签发新 token，再吊销旧 token（吊销失败不阻塞，签发成功即会话安全）
-    // v1.4：携带当前 token 作链式证据（evidenceToken）——鉴权中心以同产品现存
-    // 业务用户 token 的 accountId 为锚，保证换发不改变账户归属（无需重新 OAuth 授权）
     const issued = await issueToken({
       userId,
       productId: getProductId(),
       claims: newClaims,
-      evidenceToken: token,
+      publicClaims: { accountId },
     });
 
     try {
