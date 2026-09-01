@@ -103,12 +103,29 @@ export async function healthCheck(): Promise<HealthCheckResponse> {
  * claims 中可存放会员等级等自定义信息。
  */
 export async function issueToken(params: IssueTokenRequest): Promise<IssueTokenResponse> {
-  return request<IssueTokenResponse>('/api/v1/token/issue', {
+  // API 边界映射（反腐层）：本域 userId → 鉴权中心 opaque 槽位字段 tag
+  const { userId, productId, ...rest } = params;
+  const data = await request<{
+    token: string;
+    expiresAt: string;
+    tag: string;
+    productId: string;
+    scope: string[];
+  }>('/api/v1/token/issue', {
     body: {
-      ...params,
-      productId: params.productId || getConfig().productId,
+      ...rest,
+      tag: userId,
+      productId: productId || getConfig().productId,
     },
   });
+  // 响应边界映射：tag → 本域 userId
+  return {
+    token: data.token,
+    expiresAt: data.expiresAt,
+    userId: data.tag,
+    productId: data.productId,
+    scope: data.scope,
+  };
 }
 
 /**
@@ -119,9 +136,26 @@ export async function issueToken(params: IssueTokenRequest): Promise<IssueTokenR
 export async function introspectToken(
   params: IntrospectTokenRequest,
 ): Promise<IntrospectTokenResponse> {
-  return request<IntrospectTokenResponse>('/api/v1/token/introspect', {
+  // API 边界映射：鉴权中心返回 opaque 槽位 tag → 本域 userId
+  const data = await request<{
+    active: boolean;
+    tag?: string;
+    productId?: string;
+    scope?: string[];
+    claims?: Record<string, unknown>;
+    expiresAt?: string;
+  }>('/api/v1/token/introspect', {
     body: params,
   });
+  if (!data.active) return { active: false };
+  return {
+    active: true,
+    userId: data.tag ?? '',
+    productId: data.productId ?? '',
+    scope: data.scope ?? [],
+    claims: data.claims ?? {},
+    expiresAt: data.expiresAt ?? '',
+  };
 }
 
 /**
@@ -139,10 +173,13 @@ export async function refreshToken(params: RefreshTokenRequest): Promise<Refresh
  * 支持按 Token 值吊销单个，或按 userId 批量吊销。
  */
 export async function revokeToken(params: RevokeTokenRequest): Promise<RevokeTokenResponse> {
+  // API 边界映射：本域 userId → 鉴权中心槽位字段 tag（按槽位批量吊销）
+  const { userId, productId, ...rest } = params;
   return request<RevokeTokenResponse>('/api/v1/token/revoke', {
     body: {
-      ...params,
-      productId: params.productId || getConfig().productId,
+      ...rest,
+      tag: userId,
+      productId: productId || getConfig().productId,
     },
   });
 }
