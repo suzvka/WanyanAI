@@ -154,8 +154,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 授权码交换/用户信息获取失败（含无效 code、PKCE 不匹配等）
+    // 授权码交换/用户信息获取失败
     if (error instanceof PlatformAuthClientError) {
+      // 平台侧暂时性故障（上游 5xx / 网络不可达 / 超时）：
+      // 返回 502 而非 401——这不是用户凭证问题，前端应引导用户稍后重试
+      const upstreamUnavailable = error.upstreamStatus === 0 || error.upstreamStatus >= 500;
+      if (upstreamUnavailable) {
+        logError('[Auth:Issue] 平台认证服务暂时不可用', error, {
+          code: error.code,
+          upstreamStatus: error.upstreamStatus,
+        });
+        return NextResponse.json(
+          { error: '平台认证服务暂时不可用，请稍后重试；若持续失败请联系管理员', code: 'PLATFORM_UNAVAILABLE' },
+          { status: 502 },
+        );
+      }
+
+      // 4xx：无效 code / PKCE 不匹配 / 凭证错误等（不可重试，需重新走登录流程）
       return NextResponse.json(
         { error: error.message, code: 'OAUTH_EXCHANGE_FAILED' },
         { status: 401 },

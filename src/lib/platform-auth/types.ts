@@ -52,6 +52,13 @@ export class PlatformAuthClientError extends Error {
   constructor(
     public readonly code: string,
     message: string,
+    /**
+     * 上游 HTTP 状态码：
+     * - >= 500：平台认证服务内部错误（暂时性故障，可重试/引导用户稍后重试）
+     * - 0：未获得上游响应（网络不可达 / 请求超时）
+     * - 其他（400/401/403）：请求参数或凭证问题（不可重试）
+     */
+    public readonly upstreamStatus: number = 0,
   ) {
     super(message);
     this.name = 'PlatformAuthClientError';
