@@ -33,7 +33,12 @@ app-modules/<module-id>/
   "entry": {
     "enabled": true,
     "icon": "BookOpen",
-    "order": 1
+    "order": 1,
+    "landing": {
+      "tagline": "一句话价值主张，展示在首页卡片上",
+      "highlights": ["亮点标签一", "亮点标签二"],
+      "accent": "primary"
+    }
   }
 }
 ```
@@ -47,6 +52,20 @@ app-modules/<module-id>/
 | `outputMode` | 是 | 输出模式 ID（须已注册） |
 | `controlsConfig` | 否 | 控件配置文件路径或内联数组 |
 | `entry.enabled` | 否 | 是否在首页展示 |
+| `entry.icon` | 否 | 首页卡片图标（lucide 图标名，需在 `LandingClient` 的 `ICON_MAP` 中注册，未注册时回退默认图标） |
+| `entry.landing` | 否 | 首页自描述契约，见下节 |
+
+### 首页自描述契约（可选）
+
+首页内容由模块自己声明，框架只负责透传与渲染。`entry.landing` 支持：
+
+| 字段 | 说明 |
+|------|------|
+| `tagline` | 一句话价值主张，展示在卡片描述下方 |
+| `highlights` | 亮点标签数组（最多 4 个），展示为卡片内短标签 |
+| `accent` | 卡片主色调，可选值：`primary` / `violet` / `blue` / `green` / `amber`，默认 `primary` |
+
+所有字段均可缺省：缺省时首页卡片自动退化为「标题 + 描述」的简洁形态，不影响加载。
 
 ### 2. 定义控件（可选）
 

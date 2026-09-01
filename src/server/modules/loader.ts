@@ -298,6 +298,8 @@ export async function loadPageModuleRegistry(): Promise<PageModuleRegistry> {
       slug: module.manifest.slug,
       title: module.manifest.title,
       description: module.manifest.description,
+      icon: module.manifest.entry.icon,
+      landing: module.manifest.entry.landing,
     }));
 
   logger.debug('已注册的模块', { slugs: publicEntries.map((e) => e.slug) });
